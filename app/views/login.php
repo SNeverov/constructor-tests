@@ -1,7 +1,7 @@
 <h1><?= htmlspecialchars($title ?? 'Вход') ?></h1>
 
 <?php if (!empty($errors)): ?>
-    <div style="color:red; margin:10px 0;">
+    <div class="error-text">
         <ul>
             <?php foreach ($errors as $e): ?>
                 <li><?= htmlspecialchars($e) ?></li>
@@ -11,7 +11,7 @@
 <?php endif; ?>
 
 <form method="post" action="/login">
-    <div style="margin-bottom: 10px;">
+    <div class="form-row">
         <label>
             Логин или email<br>
             <input type="text" name="identity" value="<?= htmlspecialchars(
@@ -20,7 +20,7 @@
         </label>
     </div>
 
-    <div style="margin-bottom: 10px;">
+    <div class="form-row">
         <label>
             Пароль<br>
             <input type="password" name="password">

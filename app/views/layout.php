@@ -14,39 +14,35 @@
 
     <body>
 
-        <header class="header">
-            <div class="container">
-                <a class="logo" href="/">Конструктор тестов</a>
-                <nav class="nav">
+        <div class="container">
+            <header class="header">
+                <div class="header__left">
+                <a class="brand" href="/">Конструктор тестов</a>
 
-                    <?php if (auth_is_logged_in()): ?>
-                        <span>Привет, <?= htmlspecialchars(
-                            auth_user()['login'],
-                            ENT_QUOTES,
-                            'UTF-8',
-                        ) ?>
-                        </span>
+                <?php if (auth_is_logged_in()): ?>
+                    <span class="muted">Привет, <?= htmlspecialchars(auth_user()['login']) ?></span>
+                    <nav class="nav">
+                    <a href="/my/tests">Мои тесты</a>
+                    </nav>
+                <?php endif; ?>
+                </div>
 
-                        <a href="/my/tests">Мои тесты</a>
+                <div class="header__right">
+                <?php if (auth_is_logged_in()): ?>
+                    <form method="post" action="/logout" class="inline-form">
+                    <button type="submit" class="btn">Выйти</button>
+                    </form>
 
-                        <form method="post" action="/logout" style="display:inline">
-                            <button type="submit">Выйти</button>
-                        </form>
+                    <a href="/my/tests/create" class="btn btn--primary">Создать тест</a>
+                <?php else: ?>
+                    <a href="/login" class="btn">Войти</a>
+                    <a href="/register" class="btn btn--primary">Регистрация</a>
+                <?php endif; ?>
+                </div>
+            </header>
 
-                    <?php else: ?>
-                        <a href="/login">Войти</a>
-                        <a href="/register">Регистрация</a>
-                    <?php endif; ?>
-
-                    <a class="btn" href="/my/tests/create">Создать тест</a>
-                </nav>
-
-            </div>
-        </header>
-
-        <main class="container">
             <?= $content ?>
-        </main>
+        </div>
 
     </body>
 

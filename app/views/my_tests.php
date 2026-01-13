@@ -10,33 +10,25 @@
 <?php else: ?>
 
     <?php foreach ($tests as $test): ?>
-        <div style="border:1px solid #ddd; padding:12px; margin:12px 0; border-radius:8px;">
-            <div style="font-size:12px; color:#666;">
-                ID: <?= (int) $test['id'] ?> · Доступ:
-                <?= $test['access_level'] === 'registered'
-                    ? 'Только для зарегистрированных'
-                    : 'Доступен всем' ?>
+        <div class="card test-card">
+
+            <div class="test-meta">
+                ID: <?= (int)$test['id'] ?> · Доступ: <?= htmlspecialchars($test['access_level']) ?>
             </div>
 
-            <h3 style="margin:8px 0;">
-                <?= htmlspecialchars($test['title'], ENT_QUOTES, 'UTF-8') ?>
-            </h3>
+            <h3 class="test-title"><?= htmlspecialchars($test['title']) ?></h3>
 
-            <?php if (!empty($test['description'])): ?>
-                <p style="margin:8px 0;">
-                    <?= nl2br(htmlspecialchars($test['description'], ENT_QUOTES, 'UTF-8')) ?>
-                </p>
-            <?php endif; ?>
+            <p class="test-description"><?= htmlspecialchars($test['description']) ?></p>
 
-            <div style="margin-top:10px;">
-                <a href="/my/tests/<?= (int) $test['id'] ?>/edit">Редактировать</a>
-                <form method="post" action="/my/tests/<?= (int) $test[
-                    'id'
-                ] ?>/delete" style="display:inline">
-                    <button type="submit" onclick="return confirm('Удалить тест?')">Удалить</button>
+            <div class="test-actions">
+                <a href="/my/tests/<?= (int)$test['id'] ?>/edit" class="btn">Редактировать</a>
+
+                <form method="post" action="/my/tests/<?= (int)$test['id'] ?>/delete" class="inline-form">
+                <button type="submit" class="btn btn--danger">Удалить</button>
                 </form>
             </div>
         </div>
+
     <?php endforeach; ?>
 
 <?php endif; ?>

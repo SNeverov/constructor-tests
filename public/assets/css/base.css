@@ -1,28 +1,250 @@
+/* =========================================================
+   base.css — Конструктор тестов
+   Структура:
+   1) Reset / Base
+   2) Layout
+   3) Typography
+   4) Components
+   5) Forms
+   6) Pages
+   7) Utilities
+   ========================================================= */
+
+/* ========== 1) Reset / Base ========== */
 * {
     box-sizing: border-box;
 }
-
+html,
+body {
+    height: 100%;
+}
 body {
     margin: 0;
-    font-family: Arial, sans-serif;
-    color: #222;
+    padding: 0;
+    font-family:
+        system-ui,
+        -apple-system,
+        Segoe UI,
+        Roboto,
+        Arial,
+        sans-serif;
+    line-height: 1.4;
+    color: #111;
+    background: #fff;
 }
-
+img {
+    max-width: 100%;
+    height: auto;
+}
 a {
-    color: #0b57d0;
+    color: #0a58ca;
     text-decoration: none;
-    margin-right: 10px;
 }
-
 a:hover {
     text-decoration: underline;
 }
 
-header {
-    padding: 16px;
-    border-bottom: 1px solid #ddd;
+/* ========== 2) Layout ========== */
+.container {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 24px 16px;
 }
 
-main {
-    padding: 24px;
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.header__left,
+.header__right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.nav a {
+    margin-right: 10px;
+}
+
+.brand {
+    font-weight: 700;
+    font-size: 18px;
+    color: #111;
+    text-decoration: none;
+}
+.brand:hover {
+    text-decoration: none;
+}
+
+/* ========== 3) Typography ========== */
+h1,
+h2,
+h3 {
+    margin: 0 0 12px;
+    line-height: 1.2;
+}
+h1 {
+    font-size: 22px;
+}
+h2 {
+    font-size: 28px;
+    margin-bottom: 16px;
+}
+h3 {
+    font-size: 18px;
+}
+p {
+    margin: 0 0 12px;
+}
+.muted {
+    color: #666;
+}
+.page-title {
+    margin: 0 0 16px;
+}
+
+/* ========== 4) Components ========== */
+/* Card */
+.card {
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    padding: 16px;
+    background: #fff;
+}
+.card + .card {
+    margin-top: 16px;
+}
+
+/* Buttons */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #cfcfcf;
+    background: #f7f7f7;
+    color: #111;
+    cursor: pointer;
+    font: inherit;
+}
+.btn:hover {
+    background: #efefef;
+    text-decoration: none;
+}
+.btn:active {
+    transform: translateY(1px);
+}
+
+.btn--primary {
+    background: #0a58ca;
+    border-color: #0a58ca;
+    color: #fff;
+}
+.btn--primary:hover {
+    background: #084db3;
+}
+
+.btn--danger {
+    background: #fff;
+    border-color: #d33;
+    color: #b30000;
+}
+.btn--danger:hover {
+    background: #fff3f3;
+}
+
+/* Inline form (когда кнопка рядом с ссылкой) */
+.inline-form {
+    display: inline;
+}
+.inline-form button {
+    margin: 0;
+}
+
+/* ========== 5) Forms ========== */
+.form {
+    max-width: 420px;
+}
+
+.form-row {
+    margin-bottom: 12px;
+}
+
+.label {
+    display: inline-block;
+    margin-bottom: 6px;
+}
+
+.input,
+.select,
+.textarea {
+    width: 100%;
+    max-width: 320px;
+    padding: 8px 10px;
+    border: 1px solid #cfcfcf;
+    border-radius: 8px;
+    font: inherit;
+}
+
+.textarea {
+    max-width: 420px;
+}
+
+.help {
+    font-size: 12px;
+    color: #666;
+    margin-top: 6px;
+}
+
+.error-text {
+    color: #b30000;
+    background: #fff3f3;
+    border: 1px solid #ffd0d0;
+    padding: 10px 12px;
+    border-radius: 10px;
+    margin: 10px 0;
+}
+
+/* ========== 6) Pages ========== */
+/* My tests */
+.test-card {
+  border-color: #e6e6e6;
+}
+
+.test-meta {
+  font-size: 12px;
+  color: #777;
+  margin-bottom: 10px;
+}
+
+.test-title {
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+
+.test-description {
+  color: #222;
+  margin: 0 0 14px;
+}
+
+.test-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+
+/* ========== 7) Utilities ========== */
+.mt-0 {
+    margin-top: 0;
+}
+.mb-0 {
+    margin-bottom: 0;
 }

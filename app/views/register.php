@@ -1,7 +1,7 @@
 <h2>Регистрация</h2>
 
 <?php if (!empty($errors)): ?>
-  <div style="border:1px solid #d33; padding:12px; margin:12px 0;">
+  <div class="card">
     <b>Ошибки:</b>
     <ul>
       <?php foreach ($errors as $e): ?>
