@@ -32,3 +32,10 @@ config/local.php
 
 # SQL dumps
 *.sql
+
+# Excel / PDF (служебные)
+*.xlsx
+*.pdf
+~$*.xlsx
+*.docx
+~$*.docx
