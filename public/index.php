@@ -7,8 +7,10 @@ require __DIR__ . '/../app/core/helpers.php';
 require __DIR__ . '/../app/core/view.php';
 require __DIR__ . '/../app/controllers/HomeController.php';
 require __DIR__ . '/../app/controllers/AuthController.php';
+require __DIR__ . '/../app/controllers/TestsController.php';
 require __DIR__ . '/../app/core/auth.php';
 require_once __DIR__ . '/../app/core/db.php';
+require __DIR__ . '/../app/core/tests.php';
 
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '/';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -68,15 +70,18 @@ if ($path === '/user-insert-test') {
     exit();
 }
 
-if ($path === '/my/tests') {
-    auth_required();
-    echo 'TODO: Мои тесты';
+if ($path === '/my/tests' && $method === 'GET') {
+    my_tests_index();
     exit();
 }
 
-if ($path === '/my/tests/create') {
-    auth_required();
-    echo 'TODO: Создание теста';
+if ($path === '/my/tests/create' && $method === 'GET') {
+    my_tests_create_form();
+    exit();
+}
+
+if ($path === '/my/tests' && $method === 'POST') {
+    my_tests_store();
     exit();
 }
 
