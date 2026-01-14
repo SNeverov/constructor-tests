@@ -347,3 +347,47 @@ p {
 .mb-0 {
     margin-bottom: 0;
 }
+
+
+.question-card {
+    margin-top: 16px;
+    padding: 16px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 8px;
+    background: #fff;
+}
+
+.answers-block {
+    margin-top: 12px;
+}
+
+.answer-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+
+.correct-flag {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+
+.text-answers-block {
+    margin-top: 12px;
+}
+
+.text-answer-row {
+    margin-bottom: 8px;
+}
+
+.hint {
+    margin-top: 8px;
+    font-size: 13px;
+    opacity: 0.7;
+}

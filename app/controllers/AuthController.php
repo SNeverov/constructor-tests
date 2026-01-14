@@ -41,31 +41,31 @@ function auth_login_submit(): void
         return;
     }
 
-    $mysqli = db();
+    $pdo = db();
 
-    $stmt = $mysqli->prepare('
-    SELECT id, login, email, password_hash
-    FROM users
-    WHERE login = ? OR email = ?
-    LIMIT 1
-    ');
+    try {
+        $stmt = $pdo->prepare('
+            SELECT id, login, email, password_hash
+            FROM users
+            WHERE login = :login OR email = :email
+            LIMIT 1
+        ');
 
-    if (!$stmt) {
+        $stmt->execute([
+            ':login' => $identity,
+            ':email' => $identity,
+        ]);
+
+        $user = $stmt->fetch();
+    } catch (PDOException $e) {
         view_render('login', [
             'title' => 'Вход',
-            'errors' => ['Ошибка БД: ' . $mysqli->error],
+            'errors' => ['Ошибка БД: ' . $e->getMessage()],
             'old' => ['identity' => $identity],
         ]);
         return;
     }
 
-    $stmt->bind_param('ss', $identity, $identity);
-    $stmt->execute();
-
-    $res = $stmt->get_result();
-    $user = $res ? $res->fetch_assoc() : null;
-
-    $stmt->close();
 
     if (!$user) {
         view_render('login', [
@@ -126,45 +126,47 @@ function auth_register_submit(): void
         return;
     }
 
-    $mysqli = db();
+    $pdo = db();
 
-    // 1) Проверка уникальности
-    $stmt = $mysqli->prepare('SELECT id FROM users WHERE login = ? OR email = ? LIMIT 1');
-    if (!$stmt) {
-        auth_register_form(['Ошибка БД: ' . $mysqli->error], $old);
+    try {
+        // 1) Проверка уникальности
+        $stmt = $pdo->prepare('
+            SELECT id
+            FROM users
+            WHERE login = :login OR email = :email
+            LIMIT 1
+        ');
+        $stmt->execute([
+            ':login' => $login,
+            ':email' => $email,
+        ]);
+
+        $exists = $stmt->fetch();
+
+        if ($exists) {
+            auth_register_form(['Логин или email уже заняты.'], $old);
+            return;
+        }
+
+        // 2) INSERT
+        $hash = password_hash($pass, PASSWORD_DEFAULT);
+
+        $stmt = $pdo->prepare('
+            INSERT INTO users (login, email, password_hash)
+            VALUES (:login, :email, :hash)
+        ');
+        $stmt->execute([
+            ':login' => $login,
+            ':email' => $email,
+            ':hash' => $hash,
+        ]);
+
+        $userId = (int)$pdo->lastInsertId();
+    } catch (PDOException $e) {
+        auth_register_form(['Ошибка БД: ' . $e->getMessage()], $old);
         return;
     }
 
-    $stmt->bind_param('ss', $login, $email);
-    $stmt->execute();
-    $stmt->store_result();
-
-    if ($stmt->num_rows > 0) {
-        $stmt->close();
-        auth_register_form(['Логин или email уже заняты.'], $old);
-        return;
-    }
-    $stmt->close();
-
-    // 2) INSERT
-    $hash = password_hash($pass, PASSWORD_DEFAULT);
-
-    $stmt = $mysqli->prepare('INSERT INTO users (login, email, password_hash) VALUES (?, ?, ?)');
-    if (!$stmt) {
-        auth_register_form(['Ошибка БД: ' . $mysqli->error], $old);
-        return;
-    }
-
-    $stmt->bind_param('sss', $login, $email, $hash);
-
-    if (!$stmt->execute()) {
-        $stmt->close();
-        auth_register_form(['Ошибка БД: ' . $mysqli->error], $old);
-        return;
-    }
-
-    $userId = (int) $mysqli->insert_id;
-    $stmt->close();
 
     // 3) Логин “по-настоящему”
     auth_login([

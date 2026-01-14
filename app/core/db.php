@@ -1,12 +1,12 @@
 <?php
 declare(strict_types=1);
 
-function db(): mysqli
+function db(): PDO
 {
-    static $link;
+    static $pdo;
 
-    if ($link instanceof mysqli) {
-        return $link;
+    if ($pdo instanceof PDO) {
+        return $pdo;
     }
 
     $host = 'mysql-8.2';
@@ -14,13 +14,17 @@ function db(): mysqli
     $pass = '';
     $name = 'constructor_tests';
 
-    $link = mysqli_connect($host, $user, $pass, $name);
+    $dsn = "mysql:host={$host};dbname={$name};charset=utf8mb4";
 
-    if (!$link) {
-        die('DB CONNECT ERROR: ' . mysqli_connect_error());
+    try {
+        $pdo = new PDO($dsn, $user, $pass, [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false,
+        ]);
+    } catch (PDOException $e) {
+        die('DB CONNECT ERROR: ' . $e->getMessage());
     }
 
-    mysqli_set_charset($link, 'utf8mb4');
-
-    return $link;
+    return $pdo;
 }

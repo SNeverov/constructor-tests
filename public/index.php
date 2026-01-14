@@ -12,6 +12,20 @@ require __DIR__ . '/../app/core/auth.php';
 require_once __DIR__ . '/../app/core/db.php';
 require __DIR__ . '/../app/core/tests.php';
 
+set_exception_handler(function (Throwable $e): void {
+    if ($e instanceof PDOException) {
+        http_response_code(500);
+        view_render('error', [
+            'title' => 'Ошибка',
+            'message' => 'Ошибка БД. Попробуйте позже.',
+        ]);
+        return;
+    }
+
+    http_response_code(500);
+    echo 'Server error';
+});
+
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '/';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
@@ -42,31 +56,6 @@ if ($path === '/register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
 if ($path === '/logout' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     auth_logout_submit();
-    exit();
-}
-
-if ($path === '/db-test') {
-    $res = mysqli_query(db(), 'SELECT NOW() AS now');
-    $row = mysqli_fetch_assoc($res);
-    echo 'OK ' . $row['now'];
-    exit();
-}
-
-if ($path === '/user-insert-test') {
-    $hash = password_hash('12345678', PASSWORD_DEFAULT);
-
-    $stmt = mysqli_prepare(
-        db(),
-        'INSERT INTO users (login, email, password_hash) VALUES (?, ?, ?)',
-    );
-    mysqli_stmt_bind_param($stmt, 'sss', $login, $email, $hash);
-
-    $login = 'test_user';
-    $email = 'test@test.ru';
-
-    mysqli_stmt_execute($stmt);
-
-    echo 'INSERT OK, id=' . mysqli_insert_id(db());
     exit();
 }
 
