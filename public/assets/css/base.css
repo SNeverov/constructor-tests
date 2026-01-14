@@ -48,15 +48,35 @@ a:hover {
 .container {
     max-width: 980px;
     margin: 0 auto;
-    padding: 24px 16px;
+    padding: 0px 16px;
 }
+
+main.container {
+    padding-top: 24px;
+}
+
+.site-header{
+    width: 100%;
+    padding: 15px 0;
+
+    background: rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(1px);
+
+    border-bottom: 1px solid rgba(0,0,0,0.08);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.06);
+
+    position: relative;
+    z-index: 50;
+}
+
+
+
 
 .header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    margin-bottom: 24px;
 }
 
 .header__left,
@@ -239,6 +259,85 @@ p {
   gap: 10px;
   align-items: center;
 }
+
+/* 404 */
+.nf {
+    min-height: calc(100vh - 140px);
+    display: grid;
+    place-items: center;
+    padding: 24px 0;
+    position: relative;
+    overflow: hidden;
+}
+
+.nf__bg {
+    position: fixed;
+    inset: -60%;
+    z-index: 0;
+    pointer-events: none;
+
+    transform: rotate(-25deg);
+
+    background-image: url("/assets/img/404-pattern.svg");
+    background-repeat: repeat;
+    background-size: 300px 180px; /* меняй плотность тут */
+}
+
+
+.nf__card {
+    max-width: 760px;
+    padding: 48px 56px;
+    position: relative;
+    z-index: 1;
+
+    border-radius: 16px;
+    border: 1px solid #e6e6e6;
+    background: rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(1px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.06);
+}
+
+.nf__code {
+    margin-bottom: 24px;
+    font-size: 120px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -0.06em;
+    text-align: center;
+
+    color: rgba(0, 0, 0, 0.06);
+    user-select: none;
+    pointer-events: none;
+}
+
+
+.nf__title,
+.nf__text,
+.nf__actions {
+    z-index: 1;
+}
+
+
+.nf__title {
+    position: relative;
+    margin-bottom: 12px;
+    font-size: 28px;
+}
+
+.nf__text {
+    position: relative;
+    max-width: 520px;
+    font-size: 15px;
+    color: #666;
+}
+
+.nf__actions {
+    position: relative;
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
 
 
 /* ========== 7) Utilities ========== */

@@ -13,7 +13,7 @@
         <div class="card test-card">
 
             <div class="test-meta">
-                ID: <?= (int)$test['id'] ?> · Доступ: <?= htmlspecialchars($test['access_level']) ?>
+                ID: <?= (int)$test['id'] ?> - <?= $test['access_level'] === 'public' ? 'Доступен всем' : 'Только для зарегистрированных'?>
             </div>
 
             <h3 class="test-title"><?= htmlspecialchars($test['title']) ?></h3>

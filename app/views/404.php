@@ -1,4 +1,19 @@
-<h2>Страница не найдена</h2>
-<p>Похоже, ты ушёл не туда. Проверь адрес или вернись на главную.</p>
+<div class="nf">
 
-<p><a href="/">← На главную</a></p>
+    <div class="nf__bg" aria-hidden="true"></div>
+    <div class="card nf__card">
+
+        <h2 class="nf__title">Страница не найдена</h2>
+        <p class="nf__text">
+            Похоже, ты ушёл не туда. Проверь адрес или вернись на главную.
+        </p>
+
+        <div class="nf__actions">
+            <a class="btn" href="/">← На главную</a>
+            <button class="btn" type="button" data-nf-back>Назад</button>
+            <a class="btn btn--primary" href="/my/tests/create">Создать тест</a>
+        </div>
+    </div>
+</div>
+
+<script src="/assets/js/404.js" defer></script>

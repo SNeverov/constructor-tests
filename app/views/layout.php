@@ -12,38 +12,41 @@
         <link rel="stylesheet" href="/assets/css/base.css">
     </head>
 
-    <body>
+        <body>
 
-        <div class="container">
-            <header class="header">
-                <div class="header__left">
-                <a class="brand" href="/">Конструктор тестов</a>
+            <header class="site-header">
+                <div class="container header">
+                    <div class="header__left">
+                        <a class="brand" href="/">Конструктор тестов</a>
 
-                <?php if (auth_is_logged_in()): ?>
-                    <span class="muted">Привет, <?= htmlspecialchars(auth_user()['login']) ?></span>
-                    <nav class="nav">
-                    <a href="/my/tests">Мои тесты</a>
-                    </nav>
-                <?php endif; ?>
-                </div>
+                        <?php if (auth_is_logged_in()): ?>
+                            <span class="muted">Привет, <?= htmlspecialchars(auth_user()['login']) ?></span>
+                            <nav class="nav">
+                                <a href="/my/tests">Мои тесты</a>
+                            </nav>
+                        <?php endif; ?>
+                    </div>
 
-                <div class="header__right">
-                <?php if (auth_is_logged_in()): ?>
-                    <form method="post" action="/logout" class="inline-form">
-                    <button type="submit" class="btn">Выйти</button>
-                    </form>
+                    <div class="header__right">
+                        <?php if (auth_is_logged_in()): ?>
+                            <form method="post" action="/logout" class="inline-form">
+                                <button type="submit" class="btn">Выйти</button>
+                            </form>
 
-                    <a href="/my/tests/create" class="btn btn--primary">Создать тест</a>
-                <?php else: ?>
-                    <a href="/login" class="btn">Войти</a>
-                    <a href="/register" class="btn btn--primary">Регистрация</a>
-                <?php endif; ?>
+                            <a href="/my/tests/create" class="btn btn--primary">Создать тест</a>
+                        <?php else: ?>
+                            <a href="/login" class="btn">Войти</a>
+                            <a href="/register" class="btn btn--primary">Регистрация</a>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </header>
 
-            <?= $content ?>
-        </div>
+            <main class="container">
+                <?= $content ?>
+            </main>
 
-    </body>
+        </body>
+
 
 </html>
