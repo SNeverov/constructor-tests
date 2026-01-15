@@ -33,13 +33,32 @@ function my_tests_store(): void
     $errors = [];
 
     $title = trim($_POST['title'] ?? '');
-    $questions = $_POST['questions'] ?? [];
-
-
-
-    if (!is_array($questions) || count($questions) === 0) {
-        $errors[] = 'Добавьте хотя бы один вопрос';
+    if ($title === '') {
+        $errors[] = 'Название теста обязательно';
+    } elseif (mb_strlen($title) < 10 || mb_strlen($title) > 200) {
+        $errors[] = 'Название теста должно быть от 10 до 200 символов';
     }
+
+    $accessLevel = $_POST['access_level'] ?? '';
+    if (!in_array($accessLevel, ['public', 'registered'], true)) {
+        $errors[] = 'Некорректный уровень доступа теста';
+    }
+
+    $description = trim($_POST['description'] ?? '');
+    $descLen = mb_strlen($description);
+    if ($descLen < 30 || $descLen > 500) {
+        $errors[] = 'Описание теста должно быть не меньше 30 символов и не больше 500 символов';
+    }
+
+
+
+
+    $questions = $_POST['questions'] ?? [];
+    if (!is_array($questions) || count($questions) < 1) {
+        $errors[] = 'Добавь хотя бы один вопрос';
+        $questions = [];
+    }
+
 
 
     if (is_array($questions)) {
@@ -47,12 +66,20 @@ function my_tests_store(): void
             $num = $i + 1;
 
             $qText = trim($q['text'] ?? '');
-            $qType = $q['type'] ?? '';
+            $qType = (string)($q['type'] ?? '');
+
+            $qLen = mb_strlen($qText);
 
             if ($qText === '') {
                 $errors[] = "Вопрос #{$num}: текст вопроса обязателен";
                 continue;
             }
+
+            if ($qLen < 5 || $qLen > 1000) {
+                $errors[] = "Вопрос #{$num}: текст вопроса должен быть от 5 до 1000 символов";
+                continue;
+            }
+
 
             if (!in_array($qType, ['radio', 'checkbox', 'input'], true)) {
                 $errors[] = "Вопрос #{$num}: неверный тип вопроса";
@@ -67,7 +94,19 @@ function my_tests_store(): void
 
                 if (count($answers) < 1) {
                     $errors[] = "Вопрос #{$num}: укажи хотя бы один правильный текстовый ответ";
+                    continue;
                 }
+
+                foreach ($answers as $a) {
+                    $aText = trim((string)$a);
+                    $aLen = mb_strlen($aText);
+
+                    if ($aLen < 1 || $aLen > 200) {
+                        $errors[] = "Вопрос #{$num}: текстовый ответ должен быть от 1 до 200 символов";
+                        break;
+                    }
+                }
+
             } else {
                 $options = $q['options'] ?? [];
                 if (!is_array($options)) $options = [];
@@ -80,6 +119,42 @@ function my_tests_store(): void
                     continue;
                 }
 
+                $seen = [];
+                foreach ($options as $o) {
+                    $t = trim((string)($o['text'] ?? ''));
+                    $t = preg_replace('/\s+/u', ' ', $t);
+                    $t = mb_strtolower($t);
+
+                    if ($t === '') {
+                        continue;
+                    }
+
+                    if (isset($seen[$t])) {
+                        $errors[] = "Вопрос #{$num}: варианты ответа не должны повторяться";
+                        continue 2; // выйти из foreach и сразу к следующему вопросу
+                    }
+
+                    $seen[$t] = true;
+                }
+
+
+                $correctCount = 0;
+                foreach ($options as $o) {
+                    $isCorrect = (int)($o['is_correct'] ?? 0);
+                    if ($isCorrect === 1) $correctCount++;
+                }
+
+                foreach ($options as $o) {
+                    $optText = trim((string)($o['text'] ?? ''));
+                    $len = mb_strlen($optText);
+
+                    if ($len < 1 || $len > 1000) {
+                        $errors[] = "Вопрос #{$num}: вариант ответа должен быть от 1 до 1000 символов";
+                        break;
+                    }
+                }
+
+
                 $correctCount = 0;
                 foreach ($options as $o) {
                     $isCorrect = (int)($o['is_correct'] ?? 0);
@@ -88,21 +163,31 @@ function my_tests_store(): void
 
                 if ($qType === 'radio' && $correctCount !== 1) {
                     $errors[] = "Вопрос #{$num}: при radio должен быть ровно 1 правильный вариант";
+                    continue;
                 }
 
                 if ($qType === 'checkbox' && $correctCount < 1) {
                     $errors[] = "Вопрос #{$num}: при checkbox отметь хотя бы 1 правильный вариант";
+                    continue;
                 }
             }
         }
     }
 
     if (!empty($errors)) {
-            echo '<pre>';
-            print_r($errors);
-            echo '</pre>';
-            exit;
+        view_render('test_create', [
+            'title'  => 'Создать тест',
+            'errors' => $errors,
+            'old'    => [
+                'title'        => $_POST['title'] ?? '',
+                'description'  => $_POST['description'] ?? '',
+                'access_level' => $_POST['access_level'] ?? 'public',
+                'questions'    => $_POST['questions'] ?? [],
+            ],
+        ]);
+        exit();
     }
+
 
 
 
@@ -110,17 +195,75 @@ function my_tests_store(): void
     $userId = (int) $user['id'];
 
     $title = trim($_POST['title'] ?? '');
-    $description = trim($_POST['description'] ?? '');
-    $accessLevel = $_POST['access_level'] ?? 'public';
 
-    if ($title === '') {
-        die('Название теста обязательно');
+
+
+    $testId = tests_create($userId, $title, $description, $accessLevel);
+
+    // Отправка вопросов в БД
+    $questions = array_values($questions);
+
+    foreach ($questions as $qIndex => $q) {
+        $qType = (string)($q['type'] ?? '');
+        $qText = trim((string)($q['text'] ?? ''));
+        $qPos  = $qIndex + 1;
+
+        $questionId = questions_create($testId, $qType, $qText, $qPos);
+
+        // 19.2 — варианты (radio/checkbox)
+        if ($qType === 'radio' || $qType === 'checkbox') {
+            $options = $q['options'] ?? [];
+            if (!is_array($options)) {
+                $options = [];
+            }
+
+            // убираем пустые варианты
+            $options = array_values(array_filter(
+                $options,
+                fn($o) => trim((string)($o['text'] ?? '')) !== ''
+            ));
+
+            foreach ($options as $i => $opt) {
+                $optText = trim((string)($opt['text'] ?? ''));
+                if ($optText === '') {
+                    continue;
+                }
+
+                $pos = $i + 1;
+                $isCorrect = (int)($opt['is_correct'] ?? 0);
+
+                options_create($questionId, $optText, $isCorrect, $pos);
+            }
+        }
+
+        // 19.3 — текстовые ответы (input)
+        if ($qType === 'input') {
+            $answers = $q['answers'] ?? [];
+            if (!is_array($answers)) {
+                $answers = [];
+            }
+
+            $answers = array_values(array_filter(
+                $answers,
+                fn($a) => trim((string)$a) !== ''
+            ));
+
+            foreach ($answers as $ansText) {
+                $text = trim((string)$ansText);
+                if ($text === '') {
+                    continue;
+                }
+
+                question_text_answers_create($questionId, $text);
+            }
+        }
     }
 
-    tests_create($userId, $title, $description, $accessLevel);
+
+    // временно: чтобы убедиться, что question_id реально создаётся
+    // echo "test_id={$testId}, question_id={$questionId}"; exit;
 
     header('Location: /my/tests');
     exit();
-}
 
-?>
+}

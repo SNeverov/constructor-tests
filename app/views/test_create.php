@@ -1,27 +1,44 @@
 <h2>Создать тест</h2>
 
+<?php if (!empty($errors) && is_array($errors)): ?>
+    <div class="alert alert-error" style="margin: 12px 0; padding: 12px; border: 1px solid #f5c2c7; background: #f8d7da;">
+        <div style="font-weight: 700; margin-bottom: 8px;">Не получилось сохранить тест:</div>
+        <ul style="margin: 0; padding-left: 18px;">
+            <?php foreach ($errors as $e): ?>
+                <li><?= htmlspecialchars((string)$e, ENT_QUOTES, 'UTF-8') ?></li>
+            <?php endforeach; ?>
+        </ul>
+    </div>
+<?php endif; ?>
+
+
 <form method="post" action="/my/tests" class="form">
     <div class="form-row">
         <label>
             Название теста<br>
-            <input type="text" name="title" required class="input">
+            <input type="text" name="title" required class="input"
+                value="<?= htmlspecialchars((string)($old['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+            >
+
         </label>
     </div>
 
     <div class="form-row">
         <label>
             Описание<br>
-            <textarea name="description" rows="4" class="textarea"></textarea>
+            <textarea name="description" rows="4" class="textarea"><?= htmlspecialchars((string)($old['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea>
         </label>
     </div>
 
     <div class="form-row">
         <label>
             Доступ<br>
+            <?php $access = (string)($old['access_level'] ?? 'public'); ?>
             <select name="access_level" class="select">
-                <option value="public">Доступен всем</option>
-                <option value="registered">Только для зарегистрированных</option>
+                <option value="public" <?= $access === 'public' ? 'selected' : '' ?>>Доступен всем</option>
+                <option value="registered" <?= $access === 'registered' ? 'selected' : '' ?>>Только для зарегистрированных</option>
             </select>
+
         </label>
     </div>
 
@@ -63,6 +80,8 @@
                                 class="input"
                                 placeholder="Вариант ответа 1"
                             >
+
+                            <button type="button" data-remove-option>Удалить</button>
                         </div>
 
 
@@ -81,6 +100,9 @@
                                 class="input"
                                 placeholder="Вариант ответа 2"
                             >
+
+                            <button type="button" data-remove-option>Удалить</button>
+
                         </div>
 
 
@@ -135,5 +157,9 @@
 
     <button type="submit" class="btn btn--primary">Сохранить тест</button>
 </form>
+
+<script>
+    window.__OLD_QUESTIONS__ = <?= json_encode(array_values($old['questions'] ?? []), JSON_UNESCAPED_UNICODE) ?>;
+</script>
 
 <script src="/assets/js/test-create.js"></script>
