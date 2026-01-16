@@ -9,6 +9,9 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title><?= htmlspecialchars($title ?? 'Конструктор тестов', ENT_QUOTES, 'UTF-8') ?></title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <link rel="stylesheet" href="/assets/css/base.css">
         <?php if (!empty($styles) && is_array($styles)): ?>
             <?php foreach ($styles as $href): ?>
@@ -36,7 +39,7 @@
                     <div class="header__right">
                         <?php if (auth_is_logged_in()): ?>
                             <?= form_open('/logout', 'post', ['class' => 'inline-form']) ?>
-                                <button type="submit" class="btn">Выйти</button>
+                                <button type="submit" class="btn btn--ghost">Выйти</button>
                             </form>
 
                             <a href="/my/tests/create" class="btn btn--primary">Создать тест</a>

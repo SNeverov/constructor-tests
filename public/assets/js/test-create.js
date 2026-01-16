@@ -45,6 +45,21 @@ function reindexAnswers(q) {
     });
 }
 
+function reindexQuestions() {
+    const questions = document.querySelectorAll('[data-question]');
+    questions.forEach((q, i) => {
+        setQuestionIndex(q, i);
+
+        const title = q.querySelector('[data-question-title]') || q.querySelector('.question-card__title');
+        if (title) title.textContent = `Вопрос #${i + 1}`;
+
+        reindexOptions(q);
+        reindexAnswers(q);
+        updateAddOptionVisibility(q);
+        updateAddAnswerVisibility(q);
+    });
+}
+
 function updateAddAnswerVisibility(q) {
     const textBlock = q.querySelector('[data-block="text"]');
     const addAnswerBtn = q.querySelector('[data-add-answer]');
@@ -60,9 +75,16 @@ function updateAddOptionVisibility(q) {
     const addOptionBtn = q.querySelector('[data-add-option]');
     if (!optionsBlock || !addOptionBtn) return;
 
+    const typeSelect = q.querySelector('[data-question-type]');
+    const isInput = typeSelect && typeSelect.value === 'input';
+    if (isInput) {
+        addOptionBtn.style.display = 'none';
+        return;
+    }
+
     const count = optionsBlock.querySelectorAll('[data-option]').length;
 
-    // если 10 или больше — скрываем кнопку
+    // если 10 или больше - скрываем кнопку
     addOptionBtn.style.display = count >= MAX_OPTIONS ? 'none' : '';
 }
 
@@ -110,6 +132,17 @@ function initQuestion(q) {
             sync(); // чтобы радио-группа/видимость блоков корректно обновились
             updateAddOptionVisibility(q);
         });
+
+        optionsBlock.addEventListener('change', (e) => {
+            const correctInput = e.target.closest('.option-correct');
+            if (!correctInput) return;
+            if (typeSelect.value !== 'radio') return;
+            if (!correctInput.checked) return;
+
+            q.querySelectorAll('.option-correct').forEach((el) => {
+                if (el !== correctInput) el.checked = false;
+            });
+        });
     }
 
     // удаление текстового ответа (input)
@@ -144,17 +177,29 @@ function initQuestion(q) {
 
         if (optionsBlock) optionsBlock.style.display = isInput ? 'none' : '';
         if (textBlock) textBlock.style.display = isInput ? '' : 'none';
+        if (addOptionBtn) addOptionBtn.style.display = isInput ? 'none' : '';
 
-        q.querySelectorAll('.option-kind').forEach((el) => {
-            el.type = type === 'checkbox' ? 'checkbox' : 'radio';
-
-            // радио должны работать как группа внутри одного вопроса
-            if (el.type === 'radio') {
-                el.name = 'kind_' + q.dataset.qid;
+        const correctInputs = q.querySelectorAll('.option-correct');
+        correctInputs.forEach((el) => {
+            if (type === 'radio') {
+                el.type = 'radio';
             } else {
-                el.removeAttribute('name');
+                el.type = 'checkbox';
             }
         });
+
+        if (type === 'radio') {
+            let firstChecked = null;
+            correctInputs.forEach((el) => {
+                if (el.checked) {
+                    if (!firstChecked) {
+                        firstChecked = el;
+                    } else {
+                        el.checked = false;
+                    }
+                }
+            });
+        }
         updateAddOptionVisibility(q);
         updateAddAnswerVisibility(q);
     }
@@ -167,6 +212,7 @@ function initQuestion(q) {
             const count = optionsBlock.querySelectorAll('[data-option]').length;
             if (count >= MAX_OPTIONS) return;
 
+            const optionsList = optionsBlock.querySelector('.answers');
             const option = optionsBlock.querySelector('[data-option]');
             if (!option) return;
 
@@ -177,7 +223,11 @@ function initQuestion(q) {
                 if (input.type === 'checkbox' || input.type === 'radio') input.checked = false;
             });
 
-            optionsBlock.insertBefore(clone, addOptionBtn);
+            if (optionsList) {
+                optionsList.appendChild(clone);
+            } else {
+                optionsBlock.insertBefore(clone, addOptionBtn);
+            }
             reindexOptions(q);
             sync();
             updateAddOptionVisibility(q);
@@ -215,7 +265,7 @@ function initQuestion(q) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    const wrap = document.querySelector('#questions');
+    const wrap = document.querySelector('#questionsList') || document.querySelector('#questions');
     const baseTemplate = wrap ? wrap.querySelector('[data-question]') : null;
     const questionTemplate = baseTemplate ? baseTemplate.cloneNode(true) : null;
 
@@ -251,6 +301,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const addOptionBtn = q.querySelector('[data-add-option]');
 
                 const incomingOptions = Array.isArray(qData.options) ? qData.options : [];
+                const optionsList = optionsBlock ? optionsBlock.querySelector('.answers') : null;
                 if (optionsBlock && addOptionBtn && incomingOptions.length > 0) {
                     // оставляем только 1 строку-шаблон, остальные удаляем
                     const rows = optionsBlock.querySelectorAll('[data-option]');
@@ -266,7 +317,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (input.type === 'checkbox' || input.type === 'radio') input.checked = false;
                         });
 
-                        optionsBlock.insertBefore(cloneRow, addOptionBtn);
+                        if (optionsList) {
+                            optionsList.appendChild(cloneRow);
+                        } else {
+                            optionsBlock.insertBefore(cloneRow, addOptionBtn);
+                        }
                     }
 
                     // переиндексируем name'ы options[0..n]
@@ -280,8 +335,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         const textInput = row.querySelector(`input[name="questions[${idx}][options][${i}][text]"]`);
                         if (textInput) textInput.value = opt.text ?? '';
 
-                        const correctCheckbox = row.querySelector(`input[type="checkbox"][name="questions[${idx}][options][${i}][is_correct]"]`);
-                        if (correctCheckbox) correctCheckbox.checked = String(opt.is_correct ?? '0') === '1';
+                        const correctInput = row.querySelector(`input.option-correct[name="questions[${idx}][options][${i}][is_correct]"]`);
+                        if (correctInput) correctInput.checked = String(opt.is_correct ?? '0') === '1';
                     });
                 }
 
@@ -327,16 +382,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    const questions = document.querySelectorAll('[data-question]');
-    questions.forEach((q, i) => setQuestionIndex(q, i));
-
     document.querySelectorAll('[data-question]').forEach(initQuestion);
+    reindexQuestions();
 
-    const addQuestionBtn = document.querySelector('[data-add-question]');
-    if (addQuestionBtn) {
-        addQuestionBtn.addEventListener('click', () => {
-            const questionsWrap = document.querySelector('#questions');
-            if (!questionsWrap || !questionTemplate) return;
+    document.addEventListener('click', (e) => {
+        const addAfterBtn = e.target.closest('[data-action="add-question-after"]');
+        if (addAfterBtn) {
+            const current = addAfterBtn.closest('[data-question]');
+            if (!current || !questionTemplate) return;
 
             const clone = questionTemplate.cloneNode(true);
             clone.removeAttribute('data-qid');
@@ -353,14 +406,27 @@ document.addEventListener('DOMContentLoaded', () => {
             const select = clone.querySelector('[data-question-type]');
             if (select) select.value = 'radio';
 
-            questionsWrap.appendChild(clone);
-
-            const newIndex = questionsWrap.querySelectorAll('[data-question]').length - 1;
-            setQuestionIndex(clone, newIndex);
-
+            current.after(clone);
             initQuestion(clone);
-        });
-    }
+            reindexQuestions();
+            return;
+        }
+
+        const removeBtn = e.target.closest('[data-action="remove-question"]');
+        if (removeBtn) {
+            const current = removeBtn.closest('[data-question]');
+            if (!current) return;
+
+            const allQuestions = document.querySelectorAll('[data-question]');
+            if (allQuestions.length <= 1) {
+                alert('Нельзя удалить последний вопрос');
+                return;
+            }
+
+            current.remove();
+            reindexQuestions();
+        }
+    });
 });
 
 let formDirty = false;

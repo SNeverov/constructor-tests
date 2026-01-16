@@ -1,12 +1,47 @@
-/* test-create.css — только страница создания теста */
+/* test-create.css - только страница создания теста */
+:root {
+  --c-bg: #f6f7fb;
+  --c-card: rgba(255,255,255,.85);
+  --c-card2: rgba(255,255,255,.65);
+  --c-border: rgba(15,23,42,.08);
+  --c-text: #0f172a;
+  --c-muted: rgba(15,23,42,.65);
+
+  --c-primary: #2f6fed;
+  --c-primary2: #2563eb;
+  --c-primary-soft: rgba(37,99,235,.12);
+
+  --c-danger: #ef4444;
+  --c-danger-soft: rgba(239,68,68,.08);
+
+  --r-12: 12px;
+  --r-16: 16px;
+  --r-18: 18px;
+}
 .test-create .form {
-  max-width: 980px;           /* убиваем узость на 420px */
+  max-width: 980px;
+  margin: 0 auto;
 }
 
-.test-create .hr {
-  margin: 12px 0;
-  border: 0;
-  border-top: 1px solid rgba(0,0,0,0.08);
+.test-create .page-title {
+  font-size: 32px;
+  font-weight: 700;
+  margin: 0 auto;
+  max-width: 980px;
+}
+
+.test-create .section {
+  margin-top: 16px;
+}
+
+.test-create .section > .card {
+  padding: 16px;
+}
+
+.test-create .alert {
+  max-width: 980px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 /* Верхний блок (название/описание/доступ) делаем компактнее и шире */
@@ -22,55 +57,36 @@
 
 /* Вопросы: карточки жирнее и читабельнее */
 .test-create .form-section {
-  background: #f9fafb;
-  border: 1px solid rgba(0,0,0,0.08);
-  border-radius: 12px;
-  padding: 12px;
-  margin-bottom: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px;
+  margin-bottom: 16px;
 }
 
 .test-create .section-title {
   font-weight: 700;
-  font-size: 14px;
-  margin-bottom: 8px;
-  color: #222;
+  font-size: 15px;
+  margin-bottom: 10px;
+  color: var(--text-main);
 }
 
 .test-create .question-card {
-  border-radius: 12px;
-  padding: 10px 12px;
-  margin-top: 8px;
-  border: 1px solid rgba(0,0,0,0.10);
-  box-shadow: 0 6px 20px rgba(0,0,0,0.04);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-top: 12px;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-card);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.04);
 }
 
 .test-create .form-label {
   font-weight: 700;
-  margin-bottom: 4px;
-}
-
-/* Строки вариантов ответа: grid вместо “всё в одну линию” */
-.test-create .answer-row,
-.test-create .text-answer-row {
-  display: grid;
-  grid-template-columns: 18px auto 1fr auto;
-  gap: 8px;
-  align-items: center;
   margin-bottom: 6px;
+  color: var(--text-main);
 }
 
-/* Для input-ответов не нужен первый “кружок” */
-.test-create .text-answer-row {
-  grid-template-columns: 1fr auto;
-}
-
-/* “правильный” сделать компактным и не ломать строку */
-.test-create .correct-flag {
-  gap: 6px;
-  font-size: 13px;
-  color: #333;
-  user-select: none;
-}
 
 /* Маленькие кнопки */
 .test-create .btn--sm {
@@ -82,16 +98,313 @@
 /* Кнопки добавления внутри вопросов */
 .test-create [data-add-option],
 .test-create [data-add-answer] {
-  margin-top: 4px;
+  margin-top: 0;
 }
 
-/* Кнопки действий внизу — нормальный отступ */
+/* Кнопки действий внизу - нормальный отступ */
 .test-create [data-add-question] {
-  margin-top: 8px;
+  margin-top: 0;
 }
 
-/* “Сохранить тест” пусть будет заметнее и не липнет к контенту */
+/* "Сохранить тест" пусть будет заметнее и не липнет к контенту */
 .test-create button[type="submit"].btn--primary {
+  margin-top: 16px;
+  padding: 10px 16px;
+  margin-left: auto;
+  display: block;
+}
+
+.test-create .answers-block,
+.test-create .text-answers-block {
   margin-top: 12px;
-  padding: 8px 12px;
+}
+
+.test-create .hint {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* Questions layout */
+.test-create .page-title {
+  margin: 18px auto;
+  max-width: 980px;
+  padding: 0 24px;
+}
+
+.test-create .questions {
+  margin-top: 18px;
+}
+
+.test-create .questions__list {
+  display: grid;
+  gap: 18px;
+}
+
+
+/* Question card */
+.test-create .question-card {
+  background: var(--c-card);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-18);
+  box-shadow: 0 16px 40px rgba(2, 6, 23, .08);
+  padding: 18px;
+}
+
+.test-create .question-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.test-create .question-card__title {
+  font-weight: 800;
+  font-size: 22px;
+  color: var(--c-text);
+}
+
+
+.test-create .question-card__body {
+  background: rgba(255,255,255,.55);
+  border: 1px solid rgba(15,23,42,.06);
+  border-radius: var(--r-16);
+  padding: 14px;
+  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.06);
+}
+
+.test-create .question-card label {
+  display: block;
+  font-weight: 700;
+  color: var(--c-text);
+  /* margin: 0 0 8px; */
+}
+
+.test-create .question-card input[type="text"],
+.test-create .question-card textarea,
+.test-create .question-card select {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(15,23,42,.10);
+  background: rgba(255,255,255,.8);
+  padding: 12px 14px;
+  font-size: 16px;
+  outline: none;
+  transition: box-shadow .15s ease, border-color .15s ease;
+}
+
+
+/* Answers list */
+.test-create .answers {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.test-create .answer-row {
+  display: grid;
+  grid-template-columns: 22px 1fr 40px;
+  gap: 10px;
+  align-items: center;
+}
+
+.test-create .text-answer-row {
+  display: grid;
+  grid-template-columns: 1fr 40px;
+  gap: 10px;
+  align-items: center;
+}
+
+.test-create .answer-row input[type="radio"],
+.test-create .answer-row input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(37,99,235,.35);
+  background: var(--c-primary-soft);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform .12s ease, background .12s ease, border-color .12s ease;
+  border-radius: 999px;
+}
+
+.test-create .correct-flag {
+  margin: 0;
+  display: grid;
+  place-items: center;
+}
+
+.test-create .answer-row input[type="checkbox"] {
+  border-radius: 6px;
+}
+
+.test-create .answer-row input[type="radio"]::after,
+.test-create .answer-row input[type="checkbox"]::after {
+  content: "";
+  width: 10px;
+  height: 10px;
+  transform: scale(0);
+  transition: transform .12s ease;
+  background: var(--c-primary2);
+  border-radius: 999px;
+}
+
+.test-create .answer-row input[type="checkbox"]::after {
+  border-radius: 3px;
+}
+
+.test-create .answer-row input[type="radio"]:checked,
+.test-create .answer-row input[type="checkbox"]:checked {
+  border-color: rgba(37,99,235,.8);
+  background: rgba(37,99,235,.14);
+  transform: translateY(-1px);
+}
+
+.test-create .answer-row input[type="radio"]:checked::after,
+.test-create .answer-row input[type="checkbox"]:checked::after {
+  transform: scale(1);
+}
+
+/* Delete variant button */
+.test-create .btn-del-variant {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(239,68,68,.25);
+  background: var(--c-danger-soft);
+  color: var(--c-danger);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: transform .12s ease, background .12s ease, border-color .12s ease;
+  padding: 0;
+}
+
+.test-create .btn-del-variant:hover {
+  background: rgba(239,68,68,.12);
+  border-color: rgba(239,68,68,.35);
+  transform: translateY(-1px);
+}
+
+.test-create .btn-del-variant img {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
+/* Add buttons */
+.test-create .btn-add-variant {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 14px;
+  padding: 11px 14px;
+  border: 1px solid rgba(37,99,235,.18);
+  background: rgba(37,99,235,.08);
+  color: var(--c-text);
+  cursor: pointer;
+  transition: transform .12s ease, background .12s ease, border-color .12s ease;
+}
+
+.test-create .btn-add-variant:hover {
+  background: rgba(37,99,235,.12);
+  border-color: rgba(37,99,235,.26);
+  transform: translateY(-1px);
+}
+
+.test-create .question-actions {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  align-items: stretch;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.test-create .question-actions .btn {
+  flex: 1 1 0;
+  padding: 10px 12px;
+  font-size: 14px;
+  border-radius: var(--radius-sm);
+  justify-content: center;
+}
+
+
+/* Кастомный checkbox/radio по твоему классу option-correct */
+.option-correct {
+  -webkit-appearance: none;
+  appearance: none;
+
+  width: 18px;
+  height: 18px;
+  margin: 0;
+
+  border: 2px solid rgba(37,99,235,.35);
+  background: rgba(37,99,235,.10);
+  border-radius: 999px; /* radio look by default */
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform .12s ease, background .12s ease, border-color .12s ease;
+}
+
+.option-correct[type="checkbox"] { border-radius: 6px; }
+
+.option-correct::after{
+  content:"";
+  width: 10px;
+  height: 10px;
+  transform: scale(0);
+  transition: transform .12s ease;
+  background: rgba(37,99,235,1);
+  border-radius: 999px;
+}
+
+.option-correct[type="checkbox"]::after { border-radius: 3px; }
+
+.option-correct:checked{
+  border-color: rgba(37,99,235,.8);
+  background: rgba(37,99,235,.14);
+  transform: translateY(-1px);
+}
+.option-correct:checked::after{ transform: scale(1); }
+
+/* Инпут внутри строки — без лишних марджинов */
+.answer-row .input { margin: 0; width: 100%; }
+
+/* Кнопка удалить — квадратная “иконка”, текст прячем */
+.answer-row .btn-del-variant {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 12px;
+
+  border: 1px solid rgba(239,68,68,.22);
+  background: rgba(239,68,68,.08);
+  color: rgb(239,68,68);
+
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+
+  transition: transform .12s ease, background .12s ease, border-color .12s ease;
+}
+
+
+.answer-row .btn-del-variant:hover{
+  background: rgba(239,68,68,.12);
+  border-color: rgba(239,68,68,.32);
+  transform: translateY(-1px);
+}
+
+/* “Добавить вариант / правильный ответ” — аккуратная secondary */
+.btn-add-variant {
+  margin-top: 10px;
+  border-radius: 14px;
+  padding: 11px 14px;
+  border: 1px solid rgba(37,99,235,.18);
+  background: rgba(37,99,235,.08);
 }
