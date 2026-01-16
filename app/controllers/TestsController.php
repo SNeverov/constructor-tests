@@ -78,14 +78,19 @@ function my_tests_store(): void
 
     if (count($questions) > $MAX_QUESTIONS) {
         $errors[] = "Слишком много вопросов: максимум {$MAX_QUESTIONS}";
+        $questions = array_slice($questions, 0, $MAX_QUESTIONS);
     }
-
-
 
 
     if (is_array($questions)) {
         foreach ($questions as $i => $q) {
             $num = $i + 1;
+
+            if (!is_array($q)) {
+                $errors[] = "Вопрос #{$num}: некорректные данные";
+                continue;
+            }
+
 
             $qText = trim($q['text'] ?? '');
             $qType = (string)($q['type'] ?? '');
@@ -174,7 +179,7 @@ function my_tests_store(): void
                 $seen = [];
                 foreach ($options as $o) {
                     $t = trim((string)($o['text'] ?? ''));
-                    $t = preg_replace('/\s+/u', ' ', $t);
+                    $t = preg_replace('/\s+/u', ' ', $t) ?? $t;
                     $t = mb_strtolower($t);
 
                     if ($t === '') {
@@ -189,12 +194,6 @@ function my_tests_store(): void
                     $seen[$t] = true;
                 }
 
-
-                $correctCount = 0;
-                foreach ($options as $o) {
-                    $isCorrect = (int)($o['is_correct'] ?? 0);
-                    if ($isCorrect === 1) $correctCount++;
-                }
 
                 foreach ($options as $o) {
                     $optText = trim((string)($o['text'] ?? ''));
@@ -242,7 +241,6 @@ function my_tests_store(): void
 
 
 
-
     $user = auth_user();
     $userId = (int) $user['id'];
 
@@ -254,10 +252,13 @@ function my_tests_store(): void
 
     // Отправка вопросов в БД
     $questions = array_values($questions);
-    $questions = array_slice($questions, 0, $MAX_QUESTIONS);
 
 
     foreach ($questions as $qIndex => $q) {
+        if (!is_array($q)) {
+            continue;
+        }
+
         $qType = (string)($q['type'] ?? '');
         $qText = trim((string)($q['text'] ?? ''));
         $qPos  = $qIndex + 1;
@@ -277,7 +278,6 @@ function my_tests_store(): void
                 fn($o) => trim((string)($o['text'] ?? '')) !== ''
             ));
 
-            $options = array_slice($options, 0, $MAX_OPTIONS);
 
             foreach ($options as $i => $opt) {
                 $optText = trim((string)($opt['text'] ?? ''));
@@ -304,7 +304,6 @@ function my_tests_store(): void
                 fn($a) => trim((string)$a) !== ''
             ));
 
-            $answers = array_slice($answers, 0, $MAX_INPUT_ANSWERS);
 
             foreach ($answers as $ansText) {
                 $text = trim((string)$ansText);
