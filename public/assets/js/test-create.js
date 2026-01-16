@@ -1,3 +1,6 @@
+const MAX_OPTIONS = 10;
+
+
 function setQuestionIndex(q, index) {
     q.dataset.index = String(index);
 
@@ -27,6 +30,18 @@ function reindexOptions(q) {
         });
     });
 }
+
+function updateAddOptionVisibility(q) {
+    const optionsBlock = q.querySelector('[data-block="options"]');
+    const addOptionBtn = q.querySelector('[data-add-option]');
+    if (!optionsBlock || !addOptionBtn) return;
+
+    const count = optionsBlock.querySelectorAll('[data-option]').length;
+
+    // если 10 или больше — скрываем кнопку
+    addOptionBtn.style.display = count >= MAX_OPTIONS ? 'none' : '';
+}
+
 
 function initQuestion(q) {
     const typeSelect = q.querySelector('[data-question-type]');
@@ -66,6 +81,7 @@ function initQuestion(q) {
             opt.remove();
             reindexOptions(q);
             sync(); // чтобы радио-группа/видимость блоков корректно обновились
+            updateAddOptionVisibility(q);
         });
     }
 
@@ -86,6 +102,7 @@ function initQuestion(q) {
                 el.removeAttribute('name');
             }
         });
+        updateAddOptionVisibility(q);
     }
 
     typeSelect.addEventListener('change', sync);
@@ -93,6 +110,9 @@ function initQuestion(q) {
 
     if (addOptionBtn && optionsBlock) {
         addOptionBtn.addEventListener('click', () => {
+            const count = optionsBlock.querySelectorAll('[data-option]').length;
+            if (count >= MAX_OPTIONS) return;
+
             const option = optionsBlock.querySelector('[data-option]');
             if (!option) return;
 
@@ -106,10 +126,13 @@ function initQuestion(q) {
             optionsBlock.insertBefore(clone, addOptionBtn);
             reindexOptions(q);
             sync();
+            updateAddOptionVisibility(q);
         });
     }
 
+
     reindexOptions(q);
+    updateAddOptionVisibility(q);
 }
 
 document.addEventListener('DOMContentLoaded', () => {

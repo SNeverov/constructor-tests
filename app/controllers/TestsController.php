@@ -1,6 +1,21 @@
 <?php
 declare(strict_types=1);
 
+function normalize_input_answer(string $s): string
+{
+    $s = trim($s);
+    if ($s === '') {
+        return '';
+    }
+
+    $s = preg_replace('/\s+/u', ' ', $s) ?? $s;
+    $s = mb_strtolower($s);
+    $s = str_replace('ё', 'е', $s);
+
+    return $s;
+}
+
+
 function my_tests_index(): void
 {
     auth_required();
@@ -51,13 +66,20 @@ function my_tests_store(): void
     }
 
 
-
-
     $questions = $_POST['questions'] ?? [];
     if (!is_array($questions) || count($questions) < 1) {
         $errors[] = 'Добавь хотя бы один вопрос';
         $questions = [];
     }
+
+    $MAX_QUESTIONS = 100;
+    $MAX_OPTIONS = 10;
+    $MAX_INPUT_ANSWERS = 10;
+
+    if (count($questions) > $MAX_QUESTIONS) {
+        $errors[] = "Слишком много вопросов: максимум {$MAX_QUESTIONS}";
+    }
+
 
 
 
@@ -97,6 +119,30 @@ function my_tests_store(): void
                     continue;
                 }
 
+                if (count($answers) > $MAX_INPUT_ANSWERS) {
+                    $errors[] = "Вопрос #{$num}: максимум {$MAX_INPUT_ANSWERS} текстовых ответов";
+                    continue;
+                }
+
+                // дедуп по нормализованному виду
+                $seenAnswers = [];
+                foreach ($answers as $a) {
+                    $norm = normalize_input_answer((string) $a);
+
+                    if ($norm === '') {
+                        continue;
+                    }
+
+                    if (isset($seenAnswers[$norm])) {
+                        $errors[] = "Вопрос #{$num}: текстовые ответы не должны повторяться (регистр/пробелы/ё→е)";
+                        continue 2; // сразу к следующему вопросу
+                    }
+
+                    $seenAnswers[$norm] = true;
+                }
+
+
+
                 foreach ($answers as $a) {
                     $aText = trim((string)$a);
                     $aLen = mb_strlen($aText);
@@ -118,6 +164,12 @@ function my_tests_store(): void
                     $errors[] = "Вопрос #{$num}: минимум два варианта ответа";
                     continue;
                 }
+
+                if (count($options) > $MAX_OPTIONS) {
+                    $errors[] = "Вопрос #{$num}: максимум {$MAX_OPTIONS} вариантов ответа";
+                    continue;
+                }
+
 
                 $seen = [];
                 foreach ($options as $o) {
@@ -202,6 +254,8 @@ function my_tests_store(): void
 
     // Отправка вопросов в БД
     $questions = array_values($questions);
+    $questions = array_slice($questions, 0, $MAX_QUESTIONS);
+
 
     foreach ($questions as $qIndex => $q) {
         $qType = (string)($q['type'] ?? '');
@@ -222,6 +276,8 @@ function my_tests_store(): void
                 $options,
                 fn($o) => trim((string)($o['text'] ?? '')) !== ''
             ));
+
+            $options = array_slice($options, 0, $MAX_OPTIONS);
 
             foreach ($options as $i => $opt) {
                 $optText = trim((string)($opt['text'] ?? ''));
@@ -247,6 +303,8 @@ function my_tests_store(): void
                 $answers,
                 fn($a) => trim((string)$a) !== ''
             ));
+
+            $answers = array_slice($answers, 0, $MAX_INPUT_ANSWERS);
 
             foreach ($answers as $ansText) {
                 $text = trim((string)$ansText);

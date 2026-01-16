@@ -78,7 +78,7 @@
                                 type="text"
                                 name="questions[0][options][0][text]"
                                 class="input"
-                                placeholder="Вариант ответа 1"
+                                placeholder="Вариант ответа"
                             >
 
                             <button type="button" data-remove-option>Удалить</button>
@@ -98,7 +98,7 @@
                                 type="text"
                                 name="questions[0][options][1][text]"
                                 class="input"
-                                placeholder="Вариант ответа 2"
+                                placeholder="Вариант ответа"
                             >
 
                             <button type="button" data-remove-option>Удалить</button>
