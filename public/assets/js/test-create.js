@@ -1,4 +1,5 @@
 const MAX_OPTIONS = 10;
+const MAX_INPUT_ANSWERS = 10;
 
 
 function setQuestionIndex(q, index) {
@@ -31,6 +32,29 @@ function reindexOptions(q) {
     });
 }
 
+function reindexAnswers(q) {
+    const rows = q.querySelectorAll('[data-answer]');
+    rows.forEach((row, i) => {
+        row.querySelectorAll('[name]').forEach((el) => {
+            const name = el.getAttribute('name');
+            if (!name) return;
+
+            const updated = name.replace(/\[answers]\[\d+]/, `[answers][${i}]`);
+            el.setAttribute('name', updated);
+        });
+    });
+}
+
+function updateAddAnswerVisibility(q) {
+    const textBlock = q.querySelector('[data-block="text"]');
+    const addAnswerBtn = q.querySelector('[data-add-answer]');
+    if (!textBlock || !addAnswerBtn) return;
+
+    const count = textBlock.querySelectorAll('[data-answer]').length;
+    addAnswerBtn.style.display = count >= MAX_INPUT_ANSWERS ? 'none' : '';
+}
+
+
 function updateAddOptionVisibility(q) {
     const optionsBlock = q.querySelector('[data-block="options"]');
     const addOptionBtn = q.querySelector('[data-add-option]');
@@ -44,6 +68,8 @@ function updateAddOptionVisibility(q) {
 
 
 function initQuestion(q) {
+    if (q.dataset.inited === '1') return;
+    q.dataset.inited = '1';
     const typeSelect = q.querySelector('[data-question-type]');
 
     // уникальный id вопроса (для radio-группы)
@@ -56,6 +82,7 @@ function initQuestion(q) {
     const optionsBlock = q.querySelector('[data-block="options"]');
     const textBlock = q.querySelector('[data-block="text"]');
     const addOptionBtn = q.querySelector('[data-add-option]');
+    const addAnswerBtn = q.querySelector('[data-add-answer]');
 
     // удаление варианта ответа
     if (optionsBlock) {
@@ -85,6 +112,32 @@ function initQuestion(q) {
         });
     }
 
+    // удаление текстового ответа (input)
+    if (textBlock) {
+        textBlock.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-remove-answer]');
+            if (!btn) return;
+
+            const row = btn.closest('[data-answer]');
+            if (!row) return;
+
+            const all = textBlock.querySelectorAll('[data-answer]');
+
+            // не даём удалить последний — очищаем
+            if (all.length <= 1) {
+                row.querySelectorAll('input').forEach((input) => {
+                    if (input.type === 'text') input.value = '';
+                });
+                return;
+            }
+
+            row.remove();
+            reindexAnswers(q);
+            updateAddAnswerVisibility(q);
+        });
+    }
+
+
     function sync() {
         const type = typeSelect.value;
         const isInput = type === 'input';
@@ -103,6 +156,7 @@ function initQuestion(q) {
             }
         });
         updateAddOptionVisibility(q);
+        updateAddAnswerVisibility(q);
     }
 
     typeSelect.addEventListener('change', sync);
@@ -130,9 +184,34 @@ function initQuestion(q) {
         });
     }
 
+    // добавление текстового ответа (input)
+    if (addAnswerBtn && textBlock) {
+        addAnswerBtn.addEventListener('click', () => {
+            const count = textBlock.querySelectorAll('[data-answer]').length;
+            if (count >= MAX_INPUT_ANSWERS) return;
+
+            const row = textBlock.querySelector('[data-answer]');
+            if (!row) return;
+
+            const clone = row.cloneNode(true);
+
+            clone.querySelectorAll('input').forEach((input) => {
+                if (input.type === 'text') input.value = '';
+            });
+
+            textBlock.insertBefore(clone, addAnswerBtn);
+            reindexAnswers(q);
+            updateAddAnswerVisibility(q);
+        });
+    }
+
+
 
     reindexOptions(q);
     updateAddOptionVisibility(q);
+
+    reindexAnswers(q);
+    updateAddAnswerVisibility(q);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -201,15 +280,39 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // 4) текстовые ответы (input)
-                const textBlock = q.querySelector('[data-block="text"]');
-                const incomingAnswers = Array.isArray(qData.answers) ? qData.answers : [];
+                    const textBlock = q.querySelector('[data-block="text"]');
+                    const addAnswerBtn = q.querySelector('[data-add-answer]');
+                    const incomingAnswers = Array.isArray(qData.answers) ? qData.answers : [];
 
-                if (textBlock && incomingAnswers.length > 0) {
-                    incomingAnswers.forEach((val, i) => {
-                        const inp = textBlock.querySelector(`input[name="questions[${idx}][answers][${i}]"]`);
-                        if (inp) inp.value = val ?? '';
-                    });
-                }
+                    if (textBlock && addAnswerBtn && incomingAnswers.length > 0) {
+                        // оставляем только 1 строку-шаблон, остальные удаляем
+                        const rows = textBlock.querySelectorAll('[data-answer]');
+                        rows.forEach((row, i) => { if (i > 0) row.remove(); });
+
+                        // создаём нужное количество строк
+                        for (let i = 1; i < incomingAnswers.length; i++) {
+                            const firstRow = textBlock.querySelector('[data-answer]');
+                            const cloneRow = firstRow.cloneNode(true);
+
+                            cloneRow.querySelectorAll('input').forEach((input) => {
+                                if (input.type === 'text') input.value = '';
+                            });
+
+                            textBlock.insertBefore(cloneRow, addAnswerBtn);
+                        }
+
+                        // переиндексируем name'ы answers[0..n]
+                        reindexAnswers(q);
+
+                        // заполняем значения
+                        const answerRows = textBlock.querySelectorAll('[data-answer]');
+                        answerRows.forEach((row, i) => {
+                            const val = incomingAnswers[i] ?? '';
+                            const inp = row.querySelector(`input[name="questions[${idx}][answers][${i}]"]`);
+                            if (inp) inp.value = val ?? '';
+                        });
+                    }
+
 
                 wrap.appendChild(q);
                 initQuestion(q); // важно: после заполнения

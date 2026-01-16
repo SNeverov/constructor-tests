@@ -116,25 +116,28 @@
                     <div class="text-answers-block" data-block="text">
                         <div class="form-label">Правильные ответы (текст)</div>
 
-                        <div class="text-answer-row">
+                        <div class="text-answer-row" data-answer>
                             <input
                                 type="text"
                                 name="questions[0][answers][0]"
                                 class="input"
                                 placeholder="Например: молоко"
                             >
+                            <button type="button" data-remove-answer>Удалить</button>
                         </div>
 
-                        <div class="text-answer-row">
+                        <div class="text-answer-row" data-answer>
                             <input
                                 type="text"
                                 name="questions[0][answers][1]"
                                 class="input"
                                 placeholder="Альтернативный вариант (если нужен)"
                             >
+                            <button type="button" data-remove-answer>Удалить</button>
                         </div>
 
-                        <button type="button" class="btn btn-small">
+
+                        <button type="button" class="btn btn-small" data-add-answer>
                             + Добавить правильный ответ
                         </button>
 
