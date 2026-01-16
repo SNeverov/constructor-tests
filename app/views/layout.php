@@ -10,6 +10,12 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title><?= htmlspecialchars($title ?? 'Конструктор тестов', ENT_QUOTES, 'UTF-8') ?></title>
         <link rel="stylesheet" href="/assets/css/base.css">
+        <?php if (!empty($styles) && is_array($styles)): ?>
+            <?php foreach ($styles as $href): ?>
+                <link rel="stylesheet" href="<?= htmlspecialchars((string) $href, ENT_QUOTES, 'UTF-8') ?>">
+            <?php endforeach; ?>
+        <?php endif; ?>
+
     </head>
 
         <body>

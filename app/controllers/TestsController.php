@@ -37,6 +37,7 @@ function my_tests_create_form(): void
 
     view_render('test_create', [
         'title' => 'Создать тест',
+        'styles' => ['/assets/css/test-create.css'],
     ]);
 }
 
@@ -228,6 +229,7 @@ function my_tests_store(): void
     if (!empty($errors)) {
         view_render('test_create', [
             'title'  => 'Создать тест',
+            'styles' => ['/assets/css/test-create.css'],
             'errors' => $errors,
             'old'    => [
                 'title'        => $_POST['title'] ?? '',

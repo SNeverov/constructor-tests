@@ -179,6 +179,12 @@ p {
 .btn--danger:hover {
     background: #fff3f3;
 }
+.btn-small {
+    padding: 6px 10px;
+    font-size: 13px;
+    border-radius: 8px;
+}
+
 
 /* Inline form (когда кнопка рядом с ссылкой) */
 .inline-form {
