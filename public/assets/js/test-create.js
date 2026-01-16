@@ -215,19 +215,25 @@ function initQuestion(q) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    const wrap = document.querySelector('#questions');
+    const baseTemplate = wrap ? wrap.querySelector('[data-question]') : null;
+    const questionTemplate = baseTemplate ? baseTemplate.cloneNode(true) : null;
+
+    if (questionTemplate) {
+        questionTemplate.removeAttribute('data-qid');
+        questionTemplate.removeAttribute('data-inited');
+    }
+
     const oldQuestions = window.__OLD_QUESTIONS__ || [];
 
     if (Array.isArray(oldQuestions) && oldQuestions.length > 0) {
-        const wrap = document.querySelector('#questions');
-        const tpl = wrap ? wrap.querySelector('[data-question]') : null;
-
-        if (wrap && tpl) {
-            const template = tpl.cloneNode(true); // <-- сохраняем шаблон ДО очистки
+        if (wrap && questionTemplate) {
             wrap.innerHTML = '';
 
             oldQuestions.forEach((qData, idx) => {
-                const q = template.cloneNode(true);
+                const q = questionTemplate.cloneNode(true);
                 q.removeAttribute('data-qid');
+                q.removeAttribute('data-inited');
 
                 // поставить индекс (чтобы name'ы были questions[idx]...)
                 setQuestionIndex(q, idx);
@@ -330,11 +336,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (addQuestionBtn) {
         addQuestionBtn.addEventListener('click', () => {
             const questionsWrap = document.querySelector('#questions');
-            const question = questionsWrap.querySelector('[data-question]');
-            if (!question) return;
+            if (!questionsWrap || !questionTemplate) return;
 
-            const clone = question.cloneNode(true);
+            const clone = questionTemplate.cloneNode(true);
             clone.removeAttribute('data-qid');
+            clone.removeAttribute('data-inited');
 
             clone.querySelectorAll('input, textarea').forEach((el) => {
                 if (el.type === 'checkbox' || el.type === 'radio') {
