@@ -11,32 +11,32 @@
   </div>
 <?php endif; ?>
 
-<form method="post" action="/register">
-  <div>
-    <label>Логин</label><br>
-    <input type="text" name="login" value="<?= htmlspecialchars(
-        $old['login'] ?? '',
-        ENT_QUOTES,
-        'UTF-8',
-    ) ?>" required>
-  </div>
-  <br>
+<?= form_open('/register') ?>
+    <div>
+        <label>Логин</label><br>
+        <input type="text" name="login" value="<?= htmlspecialchars(
+            $old['login'] ?? '',
+            ENT_QUOTES,
+            'UTF-8',
+        ) ?>" required>
+    </div>
+    <br>
 
-  <div>
-    <label>Email</label><br>
-    <input type="email" name="email" value="<?= htmlspecialchars(
-        $old['email'] ?? '',
-        ENT_QUOTES,
-        'UTF-8',
-    ) ?>" required>
-  </div>
-  <br>
+    <div>
+        <label>Email</label><br>
+        <input type="email" name="email" value="<?= htmlspecialchars(
+            $old['email'] ?? '',
+            ENT_QUOTES,
+            'UTF-8',
+        ) ?>" required>
+        </div>
+    <br>
 
-  <div>
-    <label>Пароль</label><br>
-    <input type="password" name="password" required>
-  </div>
-  <br>
+    <div>
+        <label>Пароль</label><br>
+        <input type="password" name="password" required>
+    </div>
+    <br>
 
-  <button type="submit">Зарегистрироваться</button>
+<button type="submit">Зарегистрироваться</button>
 </form>

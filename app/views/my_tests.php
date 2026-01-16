@@ -23,8 +23,8 @@
             <div class="test-actions">
                 <a href="/my/tests/<?= (int)$test['id'] ?>/edit" class="btn">Редактировать</a>
 
-                <form method="post" action="/my/tests/<?= (int)$test['id'] ?>/delete" class="inline-form">
-                <button type="submit" class="btn btn--danger">Удалить</button>
+                <?= form_open('/my/tests/' . (int) $test['id'] . '/delete', 'post', ['class' => 'inline-form']) ?>
+                    <button type="submit" class="btn btn--danger">Удалить</button>
                 </form>
             </div>
         </div>

@@ -29,7 +29,7 @@
 
                     <div class="header__right">
                         <?php if (auth_is_logged_in()): ?>
-                            <form method="post" action="/logout" class="inline-form">
+                            <?= form_open('/logout', 'post', ['class' => 'inline-form']) ?>
                                 <button type="submit" class="btn">Выйти</button>
                             </form>
 

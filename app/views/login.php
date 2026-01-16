@@ -10,7 +10,7 @@
     </div>
 <?php endif; ?>
 
-<form method="post" action="/login">
+<?= form_open('/login') ?>
     <div class="form-row">
         <label>
             Логин или email<br>

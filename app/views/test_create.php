@@ -12,7 +12,7 @@
 <?php endif; ?>
 
 
-<form method="post" action="/my/tests" class="form">
+<?= form_open('/my/tests', 'post', ['class' => 'form']) ?>
     <div class="form-row">
         <label>
             Название теста<br>
@@ -26,7 +26,7 @@
     <div class="form-row">
         <label>
             Описание<br>
-            <textarea name="description" rows="4" class="textarea"><?= htmlspecialchars((string)($old['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea>
+            <textarea placeholder="Кратко опишите о чём или для чего данный тест." name="description" rows="4" class="textarea"><?= htmlspecialchars((string)($old['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea>
         </label>
     </div>
 
