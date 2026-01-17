@@ -28,6 +28,8 @@ function my_tests_index(): void
     view_render('my_tests', [
         'title' => 'Мои тесты',
         'tests' => $tests,
+		'scripts' => ['/assets/js/copy-link.js'],
+		'styles' => ['/assets/css/my-tests.css'],
     ]);
 }
 
@@ -351,6 +353,7 @@ function test_show(int $testId): void
         'test' => $test,
         'questions_count' => $questionsCount,
         'styles' => ['/assets/css/test-show.css'],
+		'scripts' => ['/assets/js/copy-link.js'],
     ]);
 }
 
@@ -387,6 +390,7 @@ function test_pass(int $testId): void
         'optionsByQuestionId' => $optionsByQuestionId,
         'styles' => ['/assets/css/test-pass.css'],
         'scripts' => ['/assets/js/test-pass.js'],
+		'scripts' => ['/assets/js/copy-link.js'],
     ]);
 }
 

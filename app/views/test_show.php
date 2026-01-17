@@ -9,7 +9,21 @@ declare(strict_types=1);
     <div class="test-show__card">
         <div class="test-show__top">
             <div class="test-show__meta">
-                <span class="badge">ID: <?= (int)($test['id'] ?? 0) ?></span>
+                <button
+					type="button"
+					class="badge badge--copy badge--copy-link"
+					data-copy="/tests/<?= (int)($test['id'] ?? 0) ?>"
+					title="Скопировать ссылку на тест"
+				>
+					<img
+						src="/assets/img/link-svgrepo-com.svg"
+						alt=""
+						class="badge__icon"
+						aria-hidden="true"
+					>
+					<span data-copy-label>ID: <?= (int)($test['id'] ?? 0) ?></span>
+				</button>
+
                 <span class="badge <?= (($test['access_level'] ?? '') === 'public') ? 'badge--ok' : 'badge--warn' ?>">
                     <?= (($test['access_level'] ?? '') === 'public') ? 'Доступен всем' : 'Только для зарегистрированных' ?>
                 </span>

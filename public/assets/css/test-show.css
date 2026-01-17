@@ -30,6 +30,17 @@
     color: #334155;
 }
 
+button.badge {
+    appearance: none;
+    -webkit-appearance: none;
+    border: 0;
+    background: #f1f5f9;
+    cursor: pointer;
+    line-height: 1;
+}
+
+
+
 .badge--ok {
     background: #dcfce7;
     color: #166534;
@@ -95,3 +106,18 @@
     background: transparent;
     color: #2563eb;
 }
+
+.badge--copy-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+}
+
+.badge--copy:hover {
+    background: #e2e8f0;
+}
+
+.badge__icon { width: 14px; height: 14px; opacity: 0.75; pointer-events: none; }
+.badge--copy:hover .badge__icon { opacity: 1; }
+.badge--copied { background: #dbeafe; color: #1d4ed8; }
