@@ -80,6 +80,28 @@ if ($path === '/my/tests' && $method === 'POST') {
     exit();
 }
 
+if ($method === 'POST' && preg_match('~^/tests/(\d+)/finish$~', $path, $m)) {
+    test_finish((int)$m[1]);
+    exit();
+}
+
+if ($method === 'GET' && preg_match('~^/attempts/(\d+)$~', $path, $m)) {
+    attempt_show((int)$m[1]);
+    exit();
+}
+
+
+if ($method === 'GET' && preg_match('~^/tests/(\d+)/pass$~', $path, $m)) {
+    test_pass((int)$m[1]);
+    exit();
+}
+
+if ($method === 'GET' && preg_match('~^/tests/(\d+)$~', $path, $m)) {
+    test_show((int)$m[1]);
+    exit();
+}
+
+
 http_response_code(404);
 view_render('404', [
     'title' => '404',

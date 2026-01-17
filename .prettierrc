@@ -1,6 +1,6 @@
 {
   "tabWidth": 4,
-  "useTabs": false,
+  "useTabs": true,
   "printWidth": 100,
   "singleQuote": true,
   "plugins": ["@prettier/plugin-php"]

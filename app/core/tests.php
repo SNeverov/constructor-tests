@@ -104,3 +104,271 @@ function question_text_answers_create(int $questionId, string $answerText): int
     return (int)$pdo->lastInsertId();
 }
 
+function questions_count_by_test_id(int $testId): int
+{
+    $pdo = db();
+
+    $stmt = $pdo->prepare(
+        'SELECT COUNT(*) FROM questions WHERE test_id = :test_id'
+    );
+
+    $stmt->execute([
+        ':test_id' => $testId,
+    ]);
+
+    return (int) $stmt->fetchColumn();
+}
+
+function tests_find_by_id(int $testId): ?array
+{
+    $pdo = db();
+
+    $stmt = $pdo->prepare("
+        SELECT id, user_id, title, description, access_level, created_at, updated_at
+        FROM tests
+        WHERE id = :id
+        LIMIT 1
+    ");
+
+    $stmt->execute([
+        ':id' => $testId,
+    ]);
+
+    $row = $stmt->fetch();
+
+    return $row !== false ? $row : null;
+}
+
+function questions_list_by_test_id(int $testId): array
+{
+    $pdo = db();
+
+    $stmt = $pdo->prepare("
+        SELECT id, test_id, type, question_text, position
+        FROM questions
+        WHERE test_id = :test_id
+        ORDER BY position ASC, id ASC
+    ");
+
+    $stmt->execute([
+        ':test_id' => $testId,
+    ]);
+
+    return $stmt->fetchAll();
+}
+
+function options_list_by_question_ids(array $questionIds): array
+{
+    $questionIds = array_values(array_filter(array_map('intval', $questionIds), fn($v) => $v > 0));
+    if (count($questionIds) === 0) {
+        return [];
+    }
+
+    $pdo = db();
+
+    $placeholders = implode(',', array_fill(0, count($questionIds), '?'));
+
+    // ВАЖНО: is_correct НЕ выбираем, чтобы на странице прохождения не было спойлеров
+    $stmt = $pdo->prepare("
+        SELECT id, question_id, option_text, position
+        FROM options
+        WHERE question_id IN ($placeholders)
+        ORDER BY question_id ASC, position ASC, id ASC
+    ");
+
+    $stmt->execute($questionIds);
+
+    $rows = $stmt->fetchAll();
+
+    // сгруппируем по question_id для удобства в шаблоне
+    $grouped = [];
+    foreach ($rows as $row) {
+        $qid = (int)($row['question_id'] ?? 0);
+        if ($qid <= 0) continue;
+        $grouped[$qid][] = $row;
+    }
+
+    return $grouped;
+}
+
+function options_correct_ids_by_question_ids(array $questionIds): array
+{
+    $questionIds = array_values(array_filter(array_map('intval', $questionIds), fn($v) => $v > 0));
+    if (count($questionIds) === 0) {
+        return [];
+    }
+
+    $pdo = db();
+
+    $placeholders = implode(',', array_fill(0, count($questionIds), '?'));
+
+    $stmt = $pdo->prepare("
+        SELECT question_id, id
+        FROM options
+        WHERE question_id IN ($placeholders) AND is_correct = 1
+        ORDER BY question_id ASC, position ASC, id ASC
+    ");
+
+    $stmt->execute($questionIds);
+
+    $rows = $stmt->fetchAll();
+
+    $grouped = [];
+    foreach ($rows as $row) {
+        $qid = (int)($row['question_id'] ?? 0);
+        $oid = (int)($row['id'] ?? 0);
+        if ($qid <= 0 || $oid <= 0) continue;
+        $grouped[$qid][] = $oid;
+    }
+
+    return $grouped;
+}
+
+function text_answers_by_question_ids(array $questionIds): array
+{
+    $questionIds = array_values(array_filter(array_map('intval', $questionIds), fn($v) => $v > 0));
+    if (count($questionIds) === 0) {
+        return [];
+    }
+
+    $pdo = db();
+
+    $placeholders = implode(',', array_fill(0, count($questionIds), '?'));
+
+    $stmt = $pdo->prepare("
+        SELECT question_id, answer_text
+        FROM question_text_answers
+        WHERE question_id IN ($placeholders)
+        ORDER BY question_id ASC, id ASC
+    ");
+
+    $stmt->execute($questionIds);
+
+    $rows = $stmt->fetchAll();
+
+    $grouped = [];
+    foreach ($rows as $row) {
+        $qid = (int)($row['question_id'] ?? 0);
+        $a = (string)($row['answer_text'] ?? '');
+        if ($qid <= 0) continue;
+        $grouped[$qid][] = $a;
+    }
+
+    return $grouped;
+}
+
+function attempt_create(int $testId, ?int $userId): int
+{
+    $pdo = db();
+
+    $stmt = $pdo->prepare("
+        INSERT INTO attempts (test_id, user_id, started_at)
+        VALUES (:test_id, :user_id, CURRENT_TIMESTAMP)
+    ");
+
+    $stmt->execute([
+        ':test_id' => $testId,
+        ':user_id' => $userId,
+    ]);
+
+    return (int)$pdo->lastInsertId();
+}
+
+function attempt_finish_update(int $attemptId, int $correctCount, int $wrongCount, float $percent): void
+{
+    $pdo = db();
+
+    $stmt = $pdo->prepare("
+        UPDATE attempts
+        SET finished_at = CURRENT_TIMESTAMP,
+            correct_count = :correct_count,
+            wrong_count = :wrong_count,
+            percent = :percent
+        WHERE id = :id
+        LIMIT 1
+    ");
+
+    $stmt->execute([
+        ':correct_count' => $correctCount,
+        ':wrong_count' => $wrongCount,
+        ':percent' => $percent,
+        ':id' => $attemptId,
+    ]);
+}
+
+/**
+ * $rows формат:
+ * [
+ *   ['question_id' => 1, 'option_id' => 10, 'text_answer' => null],
+ *   ['question_id' => 2, 'option_id' => null, 'text_answer' => 'молоко'],
+ * ]
+ */
+function answers_insert_batch(int $attemptId, array $rows): void
+{
+    if (empty($rows)) {
+        return;
+    }
+
+    $pdo = db();
+
+    $values = [];
+    $params = [];
+
+    foreach ($rows as $i => $row) {
+        $values[] = "(?, ?, ?, ?, CURRENT_TIMESTAMP)";
+        $params[] = $attemptId;
+        $params[] = (int)($row['question_id'] ?? 0);
+
+        $optionId = $row['option_id'] ?? null;
+        $params[] = ($optionId === null || $optionId === '') ? null : (int)$optionId;
+
+        $text = $row['text_answer'] ?? null;
+        $params[] = ($text === null) ? null : (string)$text;
+    }
+
+    $sql = "
+        INSERT INTO answers (attempt_id, question_id, option_id, text_answer, created_at)
+        VALUES " . implode(",\n", $values) . "
+    ";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+}
+
+function attempt_find_by_id(int $attemptId): ?array
+{
+    $pdo = db();
+
+    $stmt = $pdo->prepare("
+        SELECT id, test_id, user_id, started_at, finished_at, correct_count, wrong_count, percent
+        FROM attempts
+        WHERE id = :id
+        LIMIT 1
+    ");
+
+    $stmt->execute([
+        ':id' => $attemptId,
+    ]);
+
+    $row = $stmt->fetch();
+
+    return ($row !== false) ? $row : null;
+}
+
+function answers_list_by_attempt_id(int $attemptId): array
+{
+    $pdo = db();
+
+    $stmt = $pdo->prepare("
+        SELECT id, attempt_id, question_id, option_id, text_answer, created_at
+        FROM answers
+        WHERE attempt_id = :attempt_id
+        ORDER BY id ASC
+    ");
+
+    $stmt->execute([
+        ':attempt_id' => $attemptId,
+    ]);
+
+    return $stmt->fetchAll();
+}

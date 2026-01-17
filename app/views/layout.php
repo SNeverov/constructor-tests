@@ -57,6 +57,13 @@
                 </div>
             </main>
 
+            <?php if (!empty($scripts) && is_array($scripts)): ?>
+                <?php foreach ($scripts as $src): ?>
+                    <script src="<?= htmlspecialchars((string) $src, ENT_QUOTES, 'UTF-8') ?>"></script>
+                <?php endforeach; ?>
+            <?php endif; ?>
+
+
         </body>
 
 

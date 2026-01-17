@@ -326,3 +326,281 @@ function my_tests_store(): void
     exit();
 
 }
+
+function test_show(int $testId): void
+{
+    $test = tests_find_by_id($testId);
+
+    if ($test === null) {
+        http_response_code(404);
+        view_render('404', [
+            'title' => '404',
+        ]);
+        return;
+    }
+
+    if (($test['access_level'] ?? '') === 'registered' && !auth_is_logged_in()) {
+        $_SESSION['redirect_to'] = '/tests/' . $testId;
+        redirect('/login');
+    }
+
+    $questionsCount = questions_count_by_test_id($testId);
+
+    view_render('test_show', [
+        'title' => (string)($test['title'] ?? 'Тест'),
+        'test' => $test,
+        'questions_count' => $questionsCount,
+        'styles' => ['/assets/css/test-show.css'],
+    ]);
+}
+
+function test_pass(int $testId): void
+{
+    $test = tests_find_by_id($testId);
+
+    if ($test === null) {
+        http_response_code(404);
+        view_render('404', [
+            'title' => '404',
+        ]);
+        return;
+    }
+
+    if (($test['access_level'] ?? '') === 'registered' && !auth_is_logged_in()) {
+        $_SESSION['redirect_to'] = '/tests/' . $testId . '/pass';
+        redirect('/login');
+    }
+
+    $questions = questions_list_by_test_id($testId);
+
+    $questionIds = [];
+    foreach ($questions as $q) {
+        $questionIds[] = (int)($q['id'] ?? 0);
+    }
+
+    $optionsByQuestionId = options_list_by_question_ids($questionIds);
+
+    view_render('test_pass', [
+        'title' => (string)($test['title'] ?? 'Прохождение теста'),
+        'test' => $test,
+        'questions' => $questions,
+        'optionsByQuestionId' => $optionsByQuestionId,
+        'styles' => ['/assets/css/test-pass.css'],
+        'scripts' => ['/assets/js/test-pass.js'],
+    ]);
+}
+
+function test_finish(int $testId): void
+{
+    $test = tests_find_by_id($testId);
+
+    if ($test === null) {
+        http_response_code(404);
+        view_render('404', [
+            'title' => '404',
+        ]);
+        return;
+    }
+
+    if (($test['access_level'] ?? '') === 'registered' && !auth_is_logged_in()) {
+        $_SESSION['redirect_to'] = '/tests/' . $testId;
+        redirect('/login');
+    }
+
+    $userId = null;
+    if (auth_is_logged_in()) {
+        $u = auth_user();
+        $userId = isset($u['id']) ? (int)$u['id'] : null;
+    }
+
+    $pdo = db();
+
+    try {
+        $pdo->beginTransaction();
+
+        $attemptId = attempt_create($testId, $userId);
+
+        $questions = questions_list_by_test_id($testId);
+        $questionIds = [];
+        foreach ($questions as $q) {
+            $questionIds[] = (int)($q['id'] ?? 0);
+        }
+
+        $correctOptionIdsByQ = options_correct_ids_by_question_ids($questionIds);
+        $correctTextAnswersByQ = text_answers_by_question_ids($questionIds);
+
+        $posted = $_POST['answers'] ?? [];
+        if (!is_array($posted)) {
+            $posted = [];
+        }
+
+        $total = count($questions);
+        $correctCount = 0;
+        $wrongCount = 0;
+
+        $answerRows = [];
+
+        foreach ($questions as $q) {
+            $qid = (int)($q['id'] ?? 0);
+            $type = (string)($q['type'] ?? 'radio');
+
+            $isCorrect = false;
+
+            if ($type === 'input') {
+                $userTextRaw = '';
+                if (isset($posted[$qid]) && !is_array($posted[$qid])) {
+                    $userTextRaw = (string)$posted[$qid];
+                }
+
+                $userNorm = normalize_input_answer($userTextRaw);
+
+                $variants = $correctTextAnswersByQ[$qid] ?? [];
+                $variantsNorm = [];
+                foreach ($variants as $v) {
+                    $variantsNorm[] = normalize_input_answer((string)$v);
+                }
+
+                $isCorrect = ($userNorm !== '') && in_array($userNorm, $variantsNorm, true);
+
+                // сохраняем текстовый ответ одной строкой
+                $answerRows[] = [
+                    'question_id' => $qid,
+                    'option_id' => null,
+                    'text_answer' => $userTextRaw,
+                ];
+            } elseif ($type === 'checkbox') {
+                $userOptIds = [];
+                if (isset($posted[$qid])) {
+                    if (is_array($posted[$qid])) {
+                        $userOptIds = array_values(array_filter(array_map('intval', $posted[$qid]), fn($v) => $v > 0));
+                    } else {
+                        $one = (int)$posted[$qid];
+                        if ($one > 0) $userOptIds = [$one];
+                    }
+                }
+
+                $correctIds = $correctOptionIdsByQ[$qid] ?? [];
+
+                sort($userOptIds);
+                $correctSorted = array_values(array_map('intval', $correctIds));
+                sort($correctSorted);
+
+                $isCorrect = (!empty($correctSorted) || !empty($userOptIds)) && ($userOptIds === $correctSorted);
+
+                // сохраняем каждую галочку отдельной строкой
+                foreach ($userOptIds as $oid) {
+                    $answerRows[] = [
+                        'question_id' => $qid,
+                        'option_id' => $oid,
+                        'text_answer' => null,
+                    ];
+                }
+            } else { // radio по умолчанию
+                $userOptId = 0;
+                if (isset($posted[$qid]) && !is_array($posted[$qid])) {
+                    $userOptId = (int)$posted[$qid];
+                }
+
+                $correctIds = $correctOptionIdsByQ[$qid] ?? [];
+                $isCorrect = ($userOptId > 0) && in_array($userOptId, array_map('intval', $correctIds), true);
+
+                // сохраняем выбранный option_id одной строкой (или 0 не пишем)
+                if ($userOptId > 0) {
+                    $answerRows[] = [
+                        'question_id' => $qid,
+                        'option_id' => $userOptId,
+                        'text_answer' => null,
+                    ];
+                }
+            }
+
+            if ($isCorrect) {
+                $correctCount++;
+            } else {
+                $wrongCount++;
+            }
+        }
+
+        $percent = ($total > 0) ? round(($correctCount / $total) * 100, 2) : 0.0;
+
+        answers_insert_batch($attemptId, $answerRows);
+        attempt_finish_update($attemptId, $correctCount, $wrongCount, $percent);
+
+        $pdo->commit();
+
+        redirect('/attempts/' . $attemptId);
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        http_response_code(500);
+        view_render('error', [
+            'title' => 'Ошибка',
+            'message' => 'Не удалось сохранить результат прохождения теста.',
+        ]);
+        return;
+    }
+}
+
+function attempt_show(int $attemptId): void
+{
+    $attempt = attempt_find_by_id($attemptId);
+
+    if ($attempt === null) {
+        http_response_code(404);
+        view_render('404', [
+            'title' => '404',
+        ]);
+        return;
+    }
+
+    $testId = (int)($attempt['test_id'] ?? 0);
+    $test = tests_find_by_id($testId);
+
+    if ($test === null) {
+        http_response_code(404);
+        view_render('404', [
+            'title' => '404',
+        ]);
+        return;
+    }
+
+    // Доступ: если тест "только для зарегистрированных", то и результат смотреть только после входа
+    if (($test['access_level'] ?? '') === 'registered' && !auth_is_logged_in()) {
+        $_SESSION['redirect_to'] = '/attempts/' . $attemptId;
+        redirect('/login');
+    }
+
+    $questions = questions_list_by_test_id($testId);
+    $questionIds = [];
+    foreach ($questions as $q) {
+        $questionIds[] = (int)($q['id'] ?? 0);
+    }
+
+    $optionsByQuestionId = options_list_by_question_ids($questionIds); // без is_correct — нам тексты нужны
+    $correctOptionIdsByQ = options_correct_ids_by_question_ids($questionIds);
+    $correctTextAnswersByQ = text_answers_by_question_ids($questionIds);
+
+    $userAnswers = answers_list_by_attempt_id($attemptId);
+
+    // сгруппуем ответы пользователя по вопросу
+    $userByQ = [];
+    foreach ($userAnswers as $a) {
+        $qid = (int)($a['question_id'] ?? 0);
+        if ($qid <= 0) continue;
+        $userByQ[$qid][] = $a;
+    }
+
+    view_render('attempt_show', [
+        'title' => 'Результат: ' . (string)($test['title'] ?? 'Тест'),
+        'attempt' => $attempt,
+        'test' => $test,
+        'questions' => $questions,
+        'optionsByQuestionId' => $optionsByQuestionId,
+        'correctOptionIdsByQ' => $correctOptionIdsByQ,
+        'correctTextAnswersByQ' => $correctTextAnswersByQ,
+        'userByQ' => $userByQ,
+        'styles' => ['/assets/css/attempt-show.css'],
+    ]);
+}
