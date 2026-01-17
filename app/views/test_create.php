@@ -1,6 +1,8 @@
 <div class="test-create">
 
-    <h2 class="page-title">Создать тест</h2>
+    <div class="page-head">
+        <h1>Создать тест</h1>
+    </div>
 
     <?php if (!empty($errors) && is_array($errors)): ?>
         <div class="alert alert--danger">
@@ -117,43 +119,39 @@
 
                                     <div class="text-answers-block" data-block="text">
                                         <div class="form-label">Правильные ответы (текст)</div>
+                                        <div class="answers">
+                                            <div class="text-answer-row" data-answer>
+                                                <input
+                                                    type="text"
+                                                    name="questions[0][answers][0]"
+                                                    class="input"
+                                                    placeholder="Например: молоко"
+                                                >
+                                                <button type="button" class="btn btn--danger btn--sm btn-del-variant" data-remove-answer>
+                                                    <img src="/assets/img/delete-svgrepo-com.svg" alt="Удалить">
+                                                </button>
+                                            </div>
 
-                                        <div class="text-answer-row" data-answer>
-                                            <input
-                                                type="text"
-                                                name="questions[0][answers][0]"
-                                                class="input"
-                                                placeholder="Например: молоко"
-                                            >
-                                            <button type="button" class="btn btn--danger btn--sm btn-del-variant" data-remove-answer>
-                                                <img src="/assets/img/delete-svgrepo-com.svg" alt="Удалить">
-                                            </button>
-                                        </div>
-
-                                        <div class="text-answer-row" data-answer>
-                                            <input
-                                                type="text"
-                                                name="questions[0][answers][1]"
-                                                class="input"
-                                                placeholder="Альтернативный вариант (если нужен)"
-                                            >
-                                            <button type="button" class="btn btn--danger btn--sm btn-del-variant" data-remove-answer>
-                                                <img src="/assets/img/delete-svgrepo-com.svg" alt="Удалить">
-                                            </button>
-                                        </div>
-
-                                        <button type="button" class="btn btn--ghost btn-add-variant" data-add-answer>
-                                            + Добавить правильный ответ
-                                        </button>
-
-                                        <div class="hint">
-                                            Для проверки мы потом будем нормализовать ответ (регистр, пробелы, ё�е).
+                                            <div class="text-answer-row" data-answer>
+                                                <input
+                                                    type="text"
+                                                    name="questions[0][answers][1]"
+                                                    class="input"
+                                                    placeholder="Альтернативный вариант (если нужен)"
+                                                >
+                                                <button type="button" class="btn btn--danger btn--sm btn-del-variant" data-remove-answer>
+                                                    <img src="/assets/img/delete-svgrepo-com.svg" alt="Удалить">
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
 
                                     <div class="question-actions">
                                         <button type="button" class="btn btn--ghost btn-add-variant" data-add-option>
                                             + Добавить вариант
+                                        </button>
+                                        <button type="button" class="btn btn--ghost btn-add-variant" data-add-answer>
+                                            + Добавить правильный ответ
                                         </button>
                                         <button type="button" class="btn btn--ghost btn-add-question" data-action="add-question-after" data-add-question>
                                             + Добавить вопрос

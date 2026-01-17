@@ -24,8 +24,8 @@
         <body>
 
             <header class="site-header">
-                <div class="container header">
-                    <div class="header__left">
+                <div class="container site-header__inner">
+                    <div class="site-header__left">
                         <a class="brand" href="/">Конструктор тестов</a>
 
                         <?php if (auth_is_logged_in()): ?>
@@ -36,7 +36,7 @@
                         <?php endif; ?>
                     </div>
 
-                    <div class="header__right">
+                    <div class="site-header__right">
                         <?php if (auth_is_logged_in()): ?>
                             <?= form_open('/logout', 'post', ['class' => 'inline-form']) ?>
                                 <button type="submit" class="btn btn--ghost">Выйти</button>
@@ -44,15 +44,17 @@
 
                             <a href="/my/tests/create" class="btn btn--primary">Создать тест</a>
                         <?php else: ?>
-                            <a href="/login" class="btn">Войти</a>
+                            <a href="/login" class="btn btn--ghost">Войти</a>
                             <a href="/register" class="btn btn--primary">Регистрация</a>
                         <?php endif; ?>
                     </div>
                 </div>
             </header>
 
-            <main class="container">
-                <?= $content ?>
+            <main class="page">
+                <div class="container">
+                    <?= $content ?>
+                </div>
             </main>
 
         </body>

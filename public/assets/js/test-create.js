@@ -65,6 +65,13 @@ function updateAddAnswerVisibility(q) {
     const addAnswerBtn = q.querySelector('[data-add-answer]');
     if (!textBlock || !addAnswerBtn) return;
 
+    const typeSelect = q.querySelector('[data-question-type]');
+    const isInput = typeSelect && typeSelect.value === 'input';
+    if (!isInput) {
+        addAnswerBtn.style.display = 'none';
+        return;
+    }
+
     const count = textBlock.querySelectorAll('[data-answer]').length;
     addAnswerBtn.style.display = count >= MAX_INPUT_ANSWERS ? 'none' : '';
 }
@@ -249,7 +256,12 @@ function initQuestion(q) {
                 if (input.type === 'text') input.value = '';
             });
 
-            textBlock.insertBefore(clone, addAnswerBtn);
+            const answersList = textBlock.querySelector('.answers');
+            if (answersList) {
+                answersList.appendChild(clone);
+            } else {
+                textBlock.appendChild(clone);
+            }
             reindexAnswers(q);
             updateAddAnswerVisibility(q);
         });
@@ -342,10 +354,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // 4) текстовые ответы (input)
                     const textBlock = q.querySelector('[data-block="text"]');
-                    const addAnswerBtn = q.querySelector('[data-add-answer]');
                     const incomingAnswers = Array.isArray(qData.answers) ? qData.answers : [];
+                    const answersList = textBlock ? textBlock.querySelector('.answers') : null;
 
-                    if (textBlock && addAnswerBtn && incomingAnswers.length > 0) {
+                    if (textBlock && incomingAnswers.length > 0) {
                         // оставляем только 1 строку-шаблон, остальные удаляем
                         const rows = textBlock.querySelectorAll('[data-answer]');
                         rows.forEach((row, i) => { if (i > 0) row.remove(); });
@@ -359,7 +371,11 @@ document.addEventListener('DOMContentLoaded', () => {
                                 if (input.type === 'text') input.value = '';
                             });
 
-                            textBlock.insertBefore(cloneRow, addAnswerBtn);
+                            if (answersList) {
+                                answersList.appendChild(cloneRow);
+                            } else {
+                                textBlock.appendChild(cloneRow);
+                            }
                         }
 
                         // переиндексируем name'ы answers[0..n]

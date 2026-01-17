@@ -65,12 +65,16 @@ a:hover {
 
 /* ========== 2) Layout ========== */
 .container {
-    max-width: 1100px;
+    max-width: 1200px;
     margin: 0 auto;
     padding: 0 24px;
 }
 
-main.container {
+.container--narrow {
+    max-width: 640px;
+}
+
+.page {
     padding-top: 24px;
     padding-bottom: 40px;
 }
@@ -95,19 +99,24 @@ main.container {
 
 
 
-.header {
+.site-header__inner {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
+    flex-wrap: wrap;
 }
 
-.header__left,
-.header__right {
+.site-header__left,
+.site-header__right {
     display: flex;
     align-items: center;
     gap: 12px;
     flex-wrap: wrap;
+}
+.site-header__right {
+    justify-content: flex-end;
+    margin-left: auto;
 }
 
 .nav a {
@@ -147,8 +156,13 @@ p {
 .muted {
     color: rgba(255, 255, 255, 0.72);
 }
-.page-title {
-    margin: 0 0 16px;
+.page-head {
+    margin: 0 0 18px;
+}
+.page-head h1 {
+    margin: 0;
+    font-size: 28px;
+    line-height: 1.2;
 }
 
 /* ========== 4) Components ========== */
@@ -224,7 +238,7 @@ p {
     border-radius: var(--radius-sm);
 }
 
-.site-header .btn--ghost {
+.site-header .btn--ghost{
     background: transparent;
     color: #fff;
     border: 1px solid rgba(255, 255, 255, 0.25);

@@ -2,7 +2,9 @@
 /** @var array $tests */
 ?>
 
-<h2>Мои тесты</h2>
+<div class="page-head">
+    <h1>Мои тесты</h1>
+</div>
 
 <?php if (empty($tests)): ?>
     <p>Вы ещё не создали ни одного теста</p>
