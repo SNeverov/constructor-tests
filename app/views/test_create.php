@@ -4,16 +4,17 @@
         <h1>Создать тест</h1>
     </div>
 
-    <?php if (!empty($errors) && is_array($errors)): ?>
-        <div class="alert alert--danger">
-            <div class="alert__title">Не получилось сохранить тест:</div>
-            <ul>
-                <?php foreach ($errors as $e): ?>
-                    <li><?= htmlspecialchars((string)$e, ENT_QUOTES, 'UTF-8') ?></li>
-                <?php endforeach; ?>
-            </ul>
-        </div>
-    <?php endif; ?>
+    <?php if (!empty($errors)): ?>
+		<div class="form-errors">
+			<div class="form-errors__title">Не получилось сохранить тест</div>
+			<ul>
+				<?php foreach ($errors as $error): ?>
+					<li><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></li>
+				<?php endforeach; ?>
+			</ul>
+		</div>
+	<?php endif; ?>
+
 
 
     <?= form_open('/my/tests', 'post', ['class' => 'form']) ?>

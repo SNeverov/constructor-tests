@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="140" viewBox="0 18 240 142" fill="none">
+  <defs>
+    <linearGradient id="g" x1="40" y1="20" x2="200" y2="150" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F172A" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#0F172A" stop-opacity="0.02"/>
+    </linearGradient>
+    <filter id="s" x="0" y="0" width="240" height="160" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#0F172A" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+
+  <!-- subtle background blob -->
+  <path d="M40 92c0-36 28-62 68-62 26 0 40 10 54 22 14 12 24 18 42 18 22 0 36 16 36 38 0 36-26 56-70 56H96c-34 0-56-18-56-52Z" fill="url(#g)"/>
+
+  <!-- card -->
+  <g filter="url(#s)">
+    <rect x="60" y="34" width="120" height="92" rx="16" fill="#FFFFFF" fill-opacity="0.9"/>
+    <rect x="60" y="34" width="120" height="92" rx="16" stroke="#0F172A" stroke-opacity="0.08"/>
+  </g>
+
+  <!-- header strip -->
+  <rect x="72" y="46" width="72" height="10" rx="5" fill="#0F172A" fill-opacity="0.10"/>
+  <rect x="72" y="64" width="96" height="8" rx="4" fill="#0F172A" fill-opacity="0.07"/>
+
+  <!-- checklist lines -->
+  <rect x="92" y="82" width="76" height="8" rx="4" fill="#0F172A" fill-opacity="0.07"/>
+  <rect x="92" y="98" width="64" height="8" rx="4" fill="#0F172A" fill-opacity="0.07"/>
+
+  <!-- checkboxes -->
+  <rect x="72" y="80" width="12" height="12" rx="3" stroke="#0F172A" stroke-opacity="0.18"/>
+  <path d="M74.6 86.2 77.3 88.8 82.6 83.2" stroke="#0F172A" stroke-opacity="0.26" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="72" y="96" width="12" height="12" rx="3" stroke="#0F172A" stroke-opacity="0.18"/>
+
+  <!-- plus badge -->
+  <circle cx="176" cy="52" r="14" fill="#FFFFFF" fill-opacity="0.95"/>
+  <circle cx="176" cy="52" r="14" stroke="#0F172A" stroke-opacity="0.10"/>
+  <path d="M176 46v12M170 52h12" stroke="#0F172A" stroke-opacity="0.40" stroke-width="2" stroke-linecap="round"/>
+</svg>

@@ -204,13 +204,13 @@ p {
     color: var(--text-main);
 
     cursor: pointer;
-	font: inherit;
-	font-size: 14px;
-	line-height: 1;
-	appearance: none;
-	-webkit-appearance: none;
-	white-space: nowrap;
-	text-decoration: none;
+    font: inherit;
+    font-size: 14px;
+    line-height: 1;
+    appearance: none;
+    -webkit-appearance: none;
+    white-space: nowrap;
+    text-decoration: none;
 
 }
 
@@ -335,6 +335,7 @@ p {
     font: inherit;
     background: var(--bg-card);
     color: var(--text-main);
+    transition: box-shadow .15s ease, border-color .15s ease;
 }
 
 .textarea {
@@ -413,6 +414,71 @@ p {
     padding-left: 18px;
 }
 
+
+/* ========== Form errors (unified) ========== */
+.form-errors{
+    position: relative;
+    padding: 20px 22px;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    background: var(--bg-card);
+    box-shadow: var(--shadow);
+    overflow: hidden; /* watermark не вылезает */
+    margin: 12px 0 16px;
+}
+
+/* watermark */
+.form-errors::before{
+    content: "";
+    position: absolute;
+    right: 28px;
+    top: 50%;
+    width: 110px;
+    height: 110px;
+    transform: translateY(-50%) rotate(-10deg);
+    background: url("/assets/img/warning-svgrepo-com.svg") no-repeat center / contain;
+    opacity: 0.16;
+    pointer-events: none;
+    z-index: 0;
+}
+
+
+/* поверх watermark весь контент */
+.form-errors > *{
+    position: relative;
+    z-index: 1;
+}
+
+.form-errors__title{
+    font-weight: 700;
+    margin: 0 0 10px;
+}
+
+/* список — без точек */
+.form-errors ul{
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.form-errors li{
+    margin: 6px 0;
+    padding-left: 18px;
+    color: var(--text-muted);
+    position: relative;
+}
+
+.form-errors li::before{
+    content: "—";
+    position: absolute;
+    left: 0;
+    color: var(--text-muted);
+    opacity: 0.9;
+}
+
+
+
+
 .section {
     background: var(--bg-card);
     border: 1px solid var(--border-soft);
@@ -474,7 +540,7 @@ p {
 
 
 .nf__card {
-	width: 100%;
+    width: 100%;
     max-width: 640px;
     padding: 48px 56px;
     position: relative;
@@ -543,7 +609,7 @@ p {
     border-radius: 16px;
     padding: 26px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-	width: 100%;
+    width: 100%;
     max-width: 640px;
 }
 
@@ -562,7 +628,7 @@ p {
 }
 
 .error-page {
-    min-height: calc(100vh - 250px);
+    min-height: calc(100vh - 300px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -606,4 +672,54 @@ p {
 
 .site-footer__nav a {
     color: inherit;
+}
+
+
+/* Empty state */
+.empty-state{
+    display: flex;
+    justify-content: center;
+    padding: 40px 0;
+}
+
+.empty-state__card{
+    max-width: 520px;
+    width: 100%;
+    text-align: center;
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 24px 28px 32px;
+	animation: fadeUp 0.35s ease-out;
+}
+@keyframes fadeUp{
+    from{
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to{
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+
+.empty-state__icon{
+    width: 240px;
+    height: 140px;
+    margin: 0 auto 8px;
+    background: url("/assets/img/empty-tests.svg") no-repeat center / contain;
+    opacity: 0.95;
+}
+
+
+
+
+.empty-state__title{
+    margin: 6px 0 8px;
+}
+
+.empty-state__text{
+    color: var(--text-muted);
+    margin-bottom: 20px;
 }

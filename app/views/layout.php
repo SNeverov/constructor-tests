@@ -8,7 +8,34 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title><?= htmlspecialchars($title ?? 'Конструктор тестов', ENT_QUOTES, 'UTF-8') ?></title>
+		<meta name="description" content="Q-Platform — конструктор онлайн-тестов: создавайте тесты, проходите их и сохраняйте результаты.">
+		<meta name="robots" content="index, follow">
+		<meta name="color-scheme" content="light dark">
+
+        <?php
+			$baseTitle = 'Q-Platform';
+			$pageTitle = trim((string)($title ?? ''));
+			$fullTitle = $pageTitle !== '' && $pageTitle !== $baseTitle
+				? $pageTitle . ' — ' . $baseTitle
+				: $baseTitle;
+		?>
+		<title><?= htmlspecialchars($fullTitle, ENT_QUOTES, 'UTF-8') ?></title>
+		<meta property="og:site_name" content="Q-Platform">
+		<meta property="og:title" content="<?= htmlspecialchars($fullTitle, ENT_QUOTES, 'UTF-8') ?>">
+		<meta property="og:type" content="website">
+
+		<!-- Favicons -->
+		<link rel="icon" href="/assets/img/favicon/favicon.ico" sizes="any">
+		<link rel="icon" type="image/svg+xml" href="/assets/img/favicon/favicon.svg">
+		<link rel="icon" type="image/png" sizes="96x96" href="/assets/img/favicon/favicon-96x96.png">
+		<link rel="apple-touch-icon" sizes="180x180" href="/assets/img/favicon/apple-touch-icon.png">
+
+		<!-- PWA -->
+		<link rel="manifest" href="/assets/img/favicon/site.webmanifest">
+
+		<!-- Theme -->
+		<meta name="theme-color" content="#0B1220">
+
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">

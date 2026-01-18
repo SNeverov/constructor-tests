@@ -65,15 +65,6 @@
   color: var(--text-main);
 }
 
-.test-create .question-card {
-  border-radius: var(--radius);
-  padding: 16px 18px;
-  margin-top: 12px;
-  border: 1px solid var(--border-soft);
-  background: var(--bg-card);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.04);
-}
-
 .test-create .form-label {
   font-weight: 700;
   margin-bottom: 6px;

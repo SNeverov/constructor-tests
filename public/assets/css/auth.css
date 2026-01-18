@@ -80,26 +80,3 @@
 .auth-hint a:hover {
     border-bottom-color: rgba(15, 23, 42, 0.35);
 }
-
-.alert {
-    border-radius: 14px;
-    padding: 12px 14px;
-    margin: 12px 0 16px;
-    border: 1px solid transparent;
-}
-
-.alert--error {
-    background: #fef2f2 !important;
-    border-color: #fecaca !important;
-    color: #991b1b !important;
-}
-
-.alert__list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-}
-
-.alert__list li {
-    margin: 6px 0;
-}

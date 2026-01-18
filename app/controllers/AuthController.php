@@ -27,11 +27,11 @@ function auth_login_submit(): void
     $errors = [];
 
     if ($identity === '') {
-        $errors[] = 'Введи логин или email';
+        $errors[] = 'Введите логин или email';
     }
 
     if ($password === '') {
-        $errors[] = 'Введи пароль';
+        $errors[] = 'Введите пароль';
     }
 
     if ($errors) {
