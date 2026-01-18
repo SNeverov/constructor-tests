@@ -7,6 +7,7 @@ function auth_register_form(array $errors = [], array $old = []): void
         'title' => 'Регистрация',
         'errors' => $errors,
         'old' => $old,
+		'styles' => ['/assets/css/auth.css'],
     ]);
 }
 
@@ -14,6 +15,7 @@ function auth_login_form(): void
 {
     view_render('login', [
         'title' => 'Вход',
+		'styles' => ['/assets/css/auth.css'],
     ]);
 }
 
@@ -37,6 +39,7 @@ function auth_login_submit(): void
             'title' => 'Вход',
             'errors' => $errors,
             'old' => ['identity' => $identity],
+			'styles' => ['/assets/css/auth.css'],
         ]);
         return;
     }
@@ -62,6 +65,7 @@ function auth_login_submit(): void
             'title' => 'Вход',
             'errors' => ['Ошибка БД: ' . $e->getMessage()],
             'old' => ['identity' => $identity],
+			'styles' => ['/assets/css/auth.css'],
         ]);
         return;
     }
@@ -72,6 +76,7 @@ function auth_login_submit(): void
             'title' => 'Вход',
             'errors' => ['Пользователь не найден'],
             'old' => ['identity' => $identity],
+			'styles' => ['/assets/css/auth.css'],
         ]);
         return;
     }
@@ -81,6 +86,7 @@ function auth_login_submit(): void
             'title' => 'Вход',
             'errors' => ['Неверный логин/email или пароль'],
             'old' => ['identity' => $identity],
+			'styles' => ['/assets/css/auth.css'],
         ]);
         return;
     }
@@ -112,10 +118,10 @@ function auth_register_submit(): void
     $errors = [];
 
     if ($login === '' || mb_strlen($login) < 3 || mb_strlen($login) > 32) {
-        $errors[] = 'Логин: 3–32 символа.';
+        $errors[] = 'Логин: от 3 до 32 символов.';
     }
     if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $errors[] = 'Email некорректный.';
+        $errors[] = 'Email указан некорректно.';
     }
     if ($pass === '' || mb_strlen($pass) < 6) {
         $errors[] = 'Пароль: минимум 6 символов.';

@@ -31,8 +31,8 @@ if (!function_exists('csrf_verify')) {
         if (!is_string($sessionToken) || $sessionToken === '' || !is_string($postedToken) || $postedToken === '') {
             http_response_code(403);
             view_render('error', [
-                'title' => '403',
-                'message' => 'CSRF-токен отсутствует.',
+                'title' => 'Ошибка 403',
+                'message' => 'CSRF-токен отсутствует. Обновите страницу и повторите действие.',
             ]);
             exit();
         }
@@ -40,8 +40,8 @@ if (!function_exists('csrf_verify')) {
         if (!hash_equals($sessionToken, $postedToken)) {
             http_response_code(403);
             view_render('error', [
-                'title' => '403',
-                'message' => 'CSRF-токен неверный.',
+                'title' => 'Ошибка 403',
+                'message' => 'CSRF-токен неверный. Обнови страницу и повтори действие.',
             ]);
             exit();
         }

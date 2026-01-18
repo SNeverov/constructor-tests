@@ -231,12 +231,13 @@ p {
     background: var(--danger-soft);
     border-color: rgba(220, 38, 38, 0.5);
 }
-.btn--sm,
-.btn-small {
-    padding: 6px 10px;
-    font-size: 13px;
-    border-radius: var(--radius-sm);
+
+.btn--sm {
+	padding: 6px 10px;
+	font-size: 13px;
+	border-radius: var(--radius-sm);
 }
+
 
 .site-header .btn--ghost{
     background: transparent;
@@ -398,10 +399,10 @@ p {
 
 /* 404 */
 .nf {
-    min-height: calc(100vh - 140px);
+    min-height: calc(100vh - 140px - 32px);
     display: grid;
     place-items: center;
-    padding: 24px 0;
+    padding: 16px 0;
     position: relative;
     overflow: hidden;
 }
@@ -421,14 +422,15 @@ p {
 
 
 .nf__card {
-    max-width: 760px;
+	width: 100%;
+    max-width: 640px;
     padding: 48px 56px;
     position: relative;
     z-index: 1;
 
     border-radius: 16px;
     border: 1px solid #e6e6e6;
-    background: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.6);
     backdrop-filter: blur(1px);
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.06);
 }
@@ -483,3 +485,39 @@ p {
 .mb-0 {
     margin-bottom: 0;
 }
+
+.error-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 26px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+	width: 100%;
+    max-width: 640px;
+}
+
+.error-code {
+    font-size: 40px;
+    line-height: 1;
+    margin: 0 0 10px;
+    color: #0f172a;
+}
+
+.error-message {
+    margin: 0;
+    color: #475569;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.error-page {
+    min-height: calc(100vh - 250px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 16px;
+    box-sizing: border-box;
+    max-width: 920px;
+    margin: 40px auto;
+}
+
+
