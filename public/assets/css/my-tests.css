@@ -75,24 +75,7 @@
 	display: flex;
 	gap: 8px;
 }
-.btn {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	padding: 10px 18px;
-	border-radius: 10px;
-	font-size: 14px;
-	text-decoration: none;
-	cursor: pointer;
-	/* border: 0; */
-}
-.btn--ghost {
-	background: transparent;
-	color: #2563eb;
-}
-.btn--ghost:hover {
-	background: #e2e8f0;
-}
+
 
 .badge--copy-link {
     gap: 6px;

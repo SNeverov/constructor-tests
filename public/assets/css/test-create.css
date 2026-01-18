@@ -81,12 +81,6 @@
 }
 
 
-/* Маленькие кнопки */
-.test-create .btn--sm {
-  padding: 6px 10px;
-  border-radius: 8px;
-  font-size: 13px;
-}
 
 /* Кнопки добавления внутри вопросов */
 .test-create [data-add-option],

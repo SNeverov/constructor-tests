@@ -19,9 +19,10 @@
     --border-soft: rgba(0, 0, 0, 0.08);
     --border-hard: rgba(0, 0, 0, 0.15);
 
-    --primary: #2563eb;
-    --primary-hover: #1d4ed8;
-    --primary-soft: rgba(37, 99, 235, 0.15);
+    --primary: #111827;
+    --primary-hover: #1f2937;
+    --primary-soft: rgba(17, 24, 39, 0.14);
+
 
     --success: #16a34a;
     --success-soft: rgba(22, 163, 74, 0.12);
@@ -43,6 +44,13 @@ body {
     height: 100%;
 }
 body {
+    display: flex;
+    flex-direction: column;
+}
+.page {
+    flex: 1 0 auto;
+}
+body {
     margin: 0;
     padding: 0;
     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -56,12 +64,15 @@ img {
     height: auto;
 }
 a {
-    color: var(--primary);
-    text-decoration: none;
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: rgba(17, 24, 39, 0.35);
+    text-underline-offset: 3px;
 }
 a:hover {
-    text-decoration: underline;
+    text-decoration-color: rgba(17, 24, 39, 0.65);
 }
+
 
 /* ========== 2) Layout ========== */
 .container {
@@ -76,7 +87,7 @@ a:hover {
 
 .page {
     padding-top: 24px;
-    padding-bottom: 40px;
+    padding-bottom: 24px;
 }
 
 .site-header {
@@ -184,42 +195,55 @@ p {
     align-items: center;
     justify-content: center;
     gap: 8px;
-    padding: 10px 14px;
+
+    padding: 10px 18px;
     border-radius: var(--radius);
     border: 1px solid var(--border-soft);
+
     background: #fff;
     color: var(--text-main);
+
     cursor: pointer;
-    font: inherit;
+	font: inherit;
+	font-size: 14px;
+	line-height: 1;
+	appearance: none;
+	-webkit-appearance: none;
+	white-space: nowrap;
+	text-decoration: none;
+
 }
+
 .btn:hover {
     background: rgba(0, 0, 0, 0.03);
     text-decoration: none;
 }
+
 .btn:active {
     transform: translateY(1px);
 }
 
 .btn--primary {
-    background: #1f2937;
-    border-color: #1f2937;
+    background: var(--primary);
+    border-color: var(--primary);
     color: #ffffff;
-    border-radius: 10px;
-    padding: 10px 18px;
     font-weight: 500;
 }
+
 .btn--primary:hover {
-    background: #36466a;
-    border-color: #36466a;
+    background: var(--primary-hover);
+    border-color: var(--primary-hover);
 }
 
+
 .btn--ghost {
-    background: #fff;
-    border-color: var(--border-soft);
+    background: #f1f5f9;
+    border-color: rgba(15, 23, 42, 0.08);
     color: var(--text-main);
 }
+
 .btn--ghost:hover {
-    background: rgba(0, 0, 0, 0.04);
+    background: #e2e8f0;
 }
 
 .btn--danger {
@@ -227,27 +251,55 @@ p {
     border-color: rgba(220, 38, 38, 0.35);
     color: var(--danger);
 }
+
 .btn--danger:hover {
     background: var(--danger-soft);
     border-color: rgba(220, 38, 38, 0.5);
 }
 
-.btn--sm {
-	padding: 6px 10px;
-	font-size: 13px;
-	border-radius: var(--radius-sm);
+.btn--link {
+    background: transparent;
+    border-color: transparent;
+    color: var(--primary);
+    padding: 10px 6px;
 }
 
+.btn--link:hover {
+    background: transparent;
+    text-decoration: underline;
+}
 
-.site-header .btn--ghost{
+.btn--sm {
+    padding: 6px 10px;
+    font-size: 13px;
+    border-radius: var(--radius-sm);
+}
+
+.site-header .btn {
     background: transparent;
     color: #fff;
-    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.25);
 }
-.site-header .btn--ghost:hover {
+
+.site-header .btn:hover {
     background: rgba(255, 255, 255, 0.10);
     border-color: rgba(255, 255, 255, 0.35);
 }
+
+/* Make primary buttons in header look like header buttons (no fill) */
+.site-header .btn--primary {
+    background: transparent;
+    border-color: rgba(255, 255, 255, 0.25);
+    color: #fff;
+}
+
+.site-header .btn--primary:hover {
+    background: rgba(255, 255, 255, 0.10);
+    border-color: rgba(255, 255, 255, 0.35);
+}
+
+
+
 
 
 /* Inline form (когда кнопка рядом с ссылкой) */
@@ -521,3 +573,37 @@ p {
 }
 
 
+/* Footer */
+.site-footer {
+    padding: 20px 0;
+    border-top: 1px solid var(--border-soft);
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+
+.site-footer__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+}
+
+.site-footer__brand {
+    font-weight: 500;
+    color: var(--text-main);
+}
+
+.site-footer__copy {
+    margin-top: 4px;
+    font-size: 13px;
+}
+
+.site-footer__nav {
+    display: flex;
+    gap: 16px;
+}
+
+.site-footer__nav a {
+    color: inherit;
+}

@@ -65,16 +65,6 @@
     flex: 0 0 auto;
 }
 
-.btn--ghost {
-    background: #f1f5f9;
-    color: #0f172a;
-    border-color: rgba(15, 23, 42, 0.08);
-}
-
-.btn--ghost:hover {
-    background: #e2e8f0;
-}
-
 .auth-hint {
     margin-left: auto;
     font-size: 13px;
