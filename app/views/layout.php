@@ -48,7 +48,8 @@
 
     </head>
 
-        <body>
+        <?php $bodyClass = trim((string)($bodyClass ?? '')); ?>
+        <body<?= $bodyClass !== '' ? ' class="' . htmlspecialchars($bodyClass, ENT_QUOTES, 'UTF-8') . '"' : '' ?>>
 
             <header class="site-header">
                 <div class="container site-header__inner">
@@ -78,7 +79,7 @@
                 </div>
             </header>
 
-            <main class="page">
+            <main class="page page--full">
                 <div class="container">
                     <?= $content ?>
                 </div>
