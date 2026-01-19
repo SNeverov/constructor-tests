@@ -40,6 +40,7 @@
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <link rel="stylesheet" href="/assets/css/base.css">
+		<link rel="stylesheet" href="/assets/css/ui.css">
         <?php if (!empty($styles) && is_array($styles)): ?>
             <?php foreach ($styles as $href): ?>
                 <link rel="stylesheet" href="<?= htmlspecialchars((string) $href, ENT_QUOTES, 'UTF-8') ?>">
@@ -48,8 +49,20 @@
 
     </head>
 
-        <?php $bodyClass = trim((string)($bodyClass ?? '')); ?>
-        <body<?= $bodyClass !== '' ? ' class="' . htmlspecialchars($bodyClass, ENT_QUOTES, 'UTF-8') . '"' : '' ?>>
+        <?php
+			$bodyClass = trim((string)($bodyClass ?? ''));
+			$toast = flash_get('toast', null);
+			$toastAttr = '';
+
+			if (is_array($toast) && !empty($toast['text'])) {
+				$toastJson = json_encode($toast, JSON_UNESCAPED_UNICODE);
+				if (is_string($toastJson)) {
+					$toastAttr = " data-toast='" . htmlspecialchars($toastJson, ENT_QUOTES, 'UTF-8') . "'";
+				}
+			}
+		?>
+		<body<?= $bodyClass !== '' ? ' class="' . htmlspecialchars($bodyClass, ENT_QUOTES, 'UTF-8') . '"' : '' ?><?= $toastAttr ?>>
+
 
             <header class="site-header">
                 <div class="container site-header__inner">
@@ -84,6 +97,9 @@
                     <?= $content ?>
                 </div>
             </main>
+
+			<script src="/assets/js/ui.js"></script>
+
 
             <?php if (!empty($scripts) && is_array($scripts)): ?>
                 <?php foreach ($scripts as $src): ?>

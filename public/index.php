@@ -4,6 +4,7 @@ declare(strict_types=1);
 session_start();
 
 require __DIR__ . '/../app/core/helpers.php';
+require __DIR__ . '/../app/core/flash.php';
 require __DIR__ . '/../app/core/view.php';
 require __DIR__ . '/../app/controllers/HomeController.php';
 require __DIR__ . '/../app/controllers/AuthController.php';
@@ -79,6 +80,12 @@ if ($path === '/my/tests' && $method === 'POST') {
     my_tests_store();
     exit();
 }
+
+if ($method === 'POST' && preg_match('~^/my/tests/(\d+)/delete$~', $path, $m)) {
+    my_tests_delete((int)$m[1]);
+    exit();
+}
+
 
 if ($method === 'POST' && preg_match('~^/tests/(\d+)/finish$~', $path, $m)) {
     test_finish((int)$m[1]);

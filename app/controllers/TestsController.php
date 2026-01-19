@@ -329,6 +329,29 @@ function my_tests_store(): void
 
 }
 
+function my_tests_delete(int $testId): void
+{
+    auth_required();
+
+    $user = auth_user();
+    $userId = (int) ($user['id'] ?? 0);
+
+    $deleted = tests_delete_by_id_and_user_id($testId, $userId);
+
+    if (!$deleted) {
+        http_response_code(403);
+        view_render('error', [
+            'title' => 'Ошибка 403',
+            'message' => 'Нельзя удалить этот тест (нет прав или тест не найден).',
+        ]);
+        return;
+    }
+
+	flash_set('toast', ['type' => 'success', 'text' => 'Тест удалён']);
+    redirect('/my/tests');
+}
+
+
 function test_show(int $testId): void
 {
     $test = tests_find_by_id($testId);

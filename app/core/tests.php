@@ -139,6 +139,25 @@ function tests_find_by_id(int $testId): ?array
     return $row !== false ? $row : null;
 }
 
+function tests_delete_by_id_and_user_id(int $testId, int $userId): bool
+{
+    $pdo = db();
+
+    $stmt = $pdo->prepare("
+        DELETE FROM tests
+        WHERE id = :id AND user_id = :user_id
+        LIMIT 1
+    ");
+
+    $stmt->execute([
+        ':id' => $testId,
+        ':user_id' => $userId,
+    ]);
+
+    return $stmt->rowCount() === 1;
+}
+
+
 function questions_list_by_test_id(int $testId): array
 {
     $pdo = db();
