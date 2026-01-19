@@ -17,7 +17,7 @@
 
 
 
-    <?= form_open('/my/tests', 'post', ['class' => 'form']) ?>
+    <?= form_open('/my/tests', 'post', ['class' => 'form', 'id' => 'testCreateForm']) ?>
         <div class="form-section section">
             <div class="section-title">Параметры теста</div>
             <div class="form-row">
@@ -39,14 +39,22 @@
 
             <div class="form-row">
                 <label>
-                    Доступ<br>
-                    <?php $access = (string)($old['access_level'] ?? 'public'); ?>
-                    <select name="access_level" class="select">
-                        <option value="public" <?= $access === 'public' ? 'selected' : '' ?>>Доступен всем</option>
-                        <option value="registered" <?= $access === 'registered' ? 'selected' : '' ?>>Только для зарегистрированных</option>
-                    </select>
+					Доступ<br>
+					<?php $access = (string)($old['access_level'] ?? 'public'); ?>
 
-                </label>
+					<div class="segmented" role="radiogroup" aria-label="Доступ к тесту">
+						<label class="segmented__item">
+							<input type="radio" name="access_level" value="public" <?= $access === 'public' ? 'checked' : '' ?>>
+							<span>Доступен всем</span>
+						</label>
+
+						<label class="segmented__item">
+							<input type="radio" name="access_level" value="registered" <?= $access === 'registered' ? 'checked' : '' ?>>
+							<span>Только для зарегистрированных</span>
+						</label>
+					</div>
+				</label>
+
             </div>
         </div>
 
@@ -68,11 +76,32 @@
 
                                 <div class="form-row">
                                     <label class="form-label">Тип вопроса</label>
-                                    <select name="questions[0][type]" class="input" data-question-type>
-                                        <option value="radio">Один вариант (radio)</option>
-                                        <option value="checkbox">Несколько вариантов (checkbox)</option>
-                                        <option value="input">Ввод текста (input)</option>
-                                    </select>
+
+									<!-- Технический select для текущей логики JS + отправки в БД -->
+									<select name="questions[0][type]" class="input u-hidden" data-question-type aria-hidden="true" tabindex="-1">
+										<option value="radio">Один вариант (radio)</option>
+										<option value="checkbox">Несколько вариантов (checkbox)</option>
+										<option value="input">Ввод текста (input)</option>
+									</select>
+
+									<!-- Нормальный UI для человека -->
+									<div class="segmented" data-question-type-ui role="radiogroup" aria-label="Тип вопроса">
+										<label class="segmented__item">
+											<input type="radio" value="radio" data-question-type-radio checked>
+											<span>Один</span>
+										</label>
+
+										<label class="segmented__item">
+											<input type="radio" value="checkbox" data-question-type-radio>
+											<span>Несколько</span>
+										</label>
+
+										<label class="segmented__item">
+											<input type="radio" value="input" data-question-type-radio>
+											<span>Текст</span>
+										</label>
+									</div>
+
 
                                     <div class="answers-block" data-block="options">
                                         <div class="form-label">Варианты ответа</div>

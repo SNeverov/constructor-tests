@@ -354,6 +354,80 @@ p {
         0 8px 24px rgba(37, 99, 235, 0.12);
 }
 
+/* Segmented control (radio-like buttons) */
+.segmented {
+    display: flex;
+    gap: 8px;
+    padding: 6px;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    background: rgba(0, 0, 0, 0.03);
+}
+
+.segmented__item {
+    flex: 1 1 0;
+    position: relative;
+}
+
+.segmented__item input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.segmented__item span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 10px 12px;
+    border-radius: calc(var(--radius) - 4px);
+
+    cursor: pointer;
+    user-select: none;
+
+    font-weight: 600;
+    color: var(--text-main);
+
+    transition:
+        background-color 160ms ease,
+        box-shadow 160ms ease,
+        transform 120ms ease;
+}
+
+
+.segmented__item input:checked + span {
+    background: #fff;
+    border: 1px solid var(--border-hard);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.08);
+}
+
+.segmented__item input:checked + span {
+    background: #fff;
+    border: 1px solid var(--border-hard);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.08);
+    /* transform: translateY(-1px); */
+}
+
+.segmented__item span:hover {
+    transform: translateY(-1px);
+}
+
+
+.segmented__item input:focus-visible + span {
+    outline: none;
+    box-shadow:
+        0 0 0 2px var(--primary-soft),
+        0 8px 22px rgba(0, 0, 0, 0.08);
+}
+
+/* Utility */
+.u-hidden {
+    display: none !important;
+}
+/*====================*/
+
+
 .is-error {
     border-color: var(--danger);
     background: var(--danger-soft);

@@ -101,6 +101,30 @@ function initQuestion(q) {
     q.dataset.inited = '1';
     const typeSelect = q.querySelector('[data-question-type]');
 
+	// UI-радио для выбора типа вопроса (человек кликает по радио, а JS работает через select)
+	const typeUi = q.querySelector('[data-question-type-ui]');
+	const typeRadios = q.querySelectorAll('[data-question-type-radio]');
+
+	function syncTypeUIFromSelect() {
+		if (!typeUi) return;
+		typeRadios.forEach((r) => {
+			r.checked = (r.value === typeSelect.value);
+		});
+	}
+
+	if (typeUi) {
+		typeUi.addEventListener('change', (e) => {
+			const r = e.target.closest('[data-question-type-radio]');
+			if (!r) return;
+
+			typeSelect.value = r.value;
+
+			// важно: дёргаем change, чтобы существующий sync() отработал как раньше
+			typeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+		});
+	}
+
+
     // уникальный id вопроса (для radio-группы)
     if (!q.dataset.qid) {
         q.dataset.qid = String(Date.now()) + String(Math.floor(Math.random() * 10000));
@@ -179,6 +203,8 @@ function initQuestion(q) {
 
 
     function sync() {
+		syncTypeUIFromSelect();
+
         const type = typeSelect.value;
         const isInput = type === 'input';
 
@@ -483,11 +509,15 @@ document.addEventListener('change', (e) => {
 
 document.addEventListener('submit', (e) => {
   const form = e.target;
-  if (form && form.tagName === 'FORM') {
+  if (!form || form.tagName !== 'FORM') return;
+
+  // Глушим предупреждение только для формы создания теста
+  if (form.id === 'testCreateForm') {
     isSubmitting = true;
     formDirty = false;
   }
 }, true);
+
 
 window.addEventListener('pageshow', () => {
   isSubmitting = false;
@@ -496,8 +526,13 @@ window.addEventListener('pageshow', () => {
 
 
 window.addEventListener('beforeunload', (e) => {
-    if (!formDirty || isSubmitting) return;
+  if (!formDirty) return;
 
-    e.preventDefault();
-    e.returnValue = '';
+  // если прямо сейчас сабмитится форма создания теста — не предупреждаем
+  const active = document.activeElement;
+  if (active && active.closest && active.closest('form#testCreateForm')) return;
+
+  e.preventDefault();
+  /** @type {any} */ (e).returnValue = '';
 });
+

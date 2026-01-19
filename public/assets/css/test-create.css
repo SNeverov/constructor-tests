@@ -13,6 +13,9 @@
 
   --c-danger: #ef4444;
   --c-danger-soft: rgba(239,68,68,.08);
+  --c-success: #185b31b1;
+  --c-success-soft: rgba(34, 197, 94, 0.14);
+
 
   --r-12: 12px;
   --r-16: 16px;
@@ -193,17 +196,18 @@
 
 .test-create .answer-row input[type="radio"],
 .test-create .answer-row input[type="checkbox"] {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  border: 2px solid rgba(37,99,235,.35);
-  background: var(--c-primary-soft);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  transition: transform .12s ease, background .12s ease, border-color .12s ease;
-  border-radius: 999px;
+	-webkit-appearance: none;
+	appearance: none;
+	width: 18px;
+	height: 18px;
+	border: 2px solid rgba(17, 24, 39, 0.35);
+	background: rgba(17, 24, 39, 0.08);
+
+	display: grid;
+	place-items: center;
+	cursor: pointer;
+	transition: transform .12s ease, background .12s ease, border-color .12s ease;
+	border-radius: 999px;
 }
 
 .test-create .correct-flag {
@@ -223,7 +227,7 @@
   height: 10px;
   transform: scale(0);
   transition: transform .12s ease;
-  background: var(--c-primary2);
+  background: var(--c-text);
   border-radius: 999px;
 }
 
@@ -233,14 +237,18 @@
 
 .test-create .answer-row input[type="radio"]:checked,
 .test-create .answer-row input[type="checkbox"]:checked {
-  border-color: rgba(37,99,235,.8);
-  background: rgba(37,99,235,.14);
-  transform: translateY(-1px);
+	border-color: rgba(26, 88, 49, 0.7);
+	background: var(--c-success-soft);
+
+
+	transform: translateY(-1px);
 }
 
 .test-create .answer-row input[type="radio"]:checked::after,
 .test-create .answer-row input[type="checkbox"]:checked::after {
   transform: scale(1);
+  background: var(--c-success);
+
 }
 
 /* Delete variant button */
@@ -310,20 +318,21 @@
 
 /* Кастомный checkbox/radio по твоему классу option-correct */
 .option-correct {
-  -webkit-appearance: none;
-  appearance: none;
+	-webkit-appearance: none;
+	appearance: none;
 
-  width: 18px;
-  height: 18px;
-  margin: 0;
+	width: 18px;
+	height: 18px;
+	margin: 0;
 
-  border: 2px solid rgba(37,99,235,.35);
-  background: rgba(37,99,235,.10);
-  border-radius: 999px; /* radio look by default */
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  transition: transform .12s ease, background .12s ease, border-color .12s ease;
+	border: 2px solid rgba(17, 24, 39, 0.35);
+	background: rgba(17, 24, 39, 0.08);
+
+	border-radius: 999px; /* radio look by default */
+	display: grid;
+	place-items: center;
+	cursor: pointer;
+	transition: transform .12s ease, background .12s ease, border-color .12s ease;
 }
 
 .option-correct[type="checkbox"] { border-radius: 6px; }
@@ -334,16 +343,16 @@
   height: 10px;
   transform: scale(0);
   transition: transform .12s ease;
-  background: rgba(37,99,235,1);
+  background: var(--primary);
   border-radius: 999px;
 }
 
 .option-correct[type="checkbox"]::after { border-radius: 3px; }
 
 .option-correct:checked{
-  border-color: rgba(37,99,235,.8);
-  background: rgba(37,99,235,.14);
-  transform: translateY(-1px);
+	border-color: rgba(17, 24, 39, 0.80);
+	background: rgba(17, 24, 39, 0.14);
+	transform: translateY(-1px);
 }
 .option-correct:checked::after{ transform: scale(1); }
 
