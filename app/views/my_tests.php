@@ -6,6 +6,7 @@
     <h1>Мои тесты</h1>
 </div>
 
+
 <?php if (empty($tests)): ?>
     <div class="empty-state">
         <div class="empty-state__card">

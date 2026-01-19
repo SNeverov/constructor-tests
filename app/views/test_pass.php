@@ -6,7 +6,7 @@ declare(strict_types=1);
 /** @var array $optionsByQuestionId */
 ?>
 
-<div class="test-pass">
+<div class="test-pass" data-test-id="<?= (int)$test['id'] ?>">
     <div class="test-pass__header">
         <div class="test-pass__meta">
             <button

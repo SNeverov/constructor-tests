@@ -22,8 +22,8 @@
             <div class="section-title">Параметры теста</div>
             <div class="form-row">
                 <label>
-                    Название теста<br>
-                    <input type="text" name="title" required class="input"
+					<label class="sr-only" for="test_title">Название теста</label>
+                    <input placeholder="Название теста" type="text" name="title" required class="input"
                         value="<?= htmlspecialchars((string)($old['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                     >
 
@@ -31,15 +31,11 @@
             </div>
 
             <div class="form-row">
-                <label>
-                    Описание<br>
-                    <textarea placeholder="Кратко опишите о чём или для чего данный тест." name="description" rows="4" class="textarea"><?= htmlspecialchars((string)($old['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea>
-                </label>
+				<textarea placeholder="Кратко описание, например, о чём или для чего данный тест." name="description" rows="4" class="textarea"><?= htmlspecialchars((string)($old['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea>
             </div>
 
             <div class="form-row">
                 <label>
-					Доступ<br>
 					<?php $access = (string)($old['access_level'] ?? 'public'); ?>
 
 					<div class="segmented" role="radiogroup" aria-label="Доступ к тесту">

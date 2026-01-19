@@ -155,7 +155,7 @@ button.badge {
     transform: scale(0);
     transition: transform .12s ease;
 
-    background: #0e3d1fbe;
+    background: #185b31b1;
     border-radius: 999px;
 }
 
@@ -197,9 +197,9 @@ button.badge {
     outline: none;
 }
 
-.input:focus {
+/* .input:focus {
     border-color: #2563eb;
-}
+} */
 
 .muted {
     font-size: 13px;
@@ -247,3 +247,22 @@ button.badge {
 .badge__icon { width: 14px; height: 14px; opacity: 0.75; pointer-events: none; }
 .badge--copy:hover .badge__icon { opacity: 1; }
 .badge--copied { background: #dbeafe; color: #1d4ed8; }
+
+/* Neutral highlight for selected option */
+.test-pass .opt {
+	cursor: pointer;
+	transition:
+		background-color .14s ease,
+		box-shadow .14s ease,
+		transform .12s ease;
+}
+
+.test-pass .opt:has(input:checked) {
+	background: rgba(15, 23, 42, 0.04);
+	box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+	transform: translateY(-1px);
+}
+
+.test-pass .opt:hover {
+	background: rgba(15, 23, 42, 0.025);
+}

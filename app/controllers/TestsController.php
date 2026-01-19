@@ -389,8 +389,12 @@ function test_pass(int $testId): void
         'questions' => $questions,
         'optionsByQuestionId' => $optionsByQuestionId,
         'styles' => ['/assets/css/test-pass.css'],
-        'scripts' => ['/assets/js/test-pass.js'],
-		'scripts' => ['/assets/js/copy-link.js'],
+		'scripts' => [
+			'/assets/js/test-pass.js',
+			'/assets/js/test-pass-guard.js',
+			'/assets/js/copy-link.js',
+],
+
     ]);
 }
 
