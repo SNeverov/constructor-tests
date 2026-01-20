@@ -390,6 +390,20 @@ function attempt_create(int $testId, ?int $userId): int
 {
     $pdo = db();
 
+	// snapshots (на момент старта попытки)
+	$stmt = $pdo->prepare("
+		SELECT title, access_level
+		FROM tests
+		WHERE id = :test_id
+		LIMIT 1
+	");
+	$stmt->execute([':test_id' => $testId]);
+	$testRow = $stmt->fetch();
+
+	$testTitleSnapshot  = (string)($testRow['title'] ?? '');
+	$testAccessSnapshot = (string)($testRow['access_level'] ?? '');
+
+
     // 1. Получаем номер следующей попытки
     $stmt = $pdo->prepare("
         SELECT COALESCE(MAX(attempt_no), 0) + 1
@@ -406,29 +420,76 @@ function attempt_create(int $testId, ?int $userId): int
 
     // 2. Создаём попытку с зафиксированным attempt_no
     $stmt = $pdo->prepare("
-        INSERT INTO attempts (test_id, user_id, attempt_no, started_at)
-        VALUES (:test_id, :user_id, :attempt_no, CURRENT_TIMESTAMP)
-    ");
+		INSERT INTO attempts (test_id, test_title_snapshot, test_access_snapshot, user_id, attempt_no, started_at)
+		VALUES (:test_id, :test_title_snapshot, :test_access_snapshot, :user_id, :attempt_no, CURRENT_TIMESTAMP)
+	");
+
 
     $stmt->execute([
-        ':test_id'    => $testId,
-        ':user_id'    => $userId,
-        ':attempt_no' => $attemptNo,
-    ]);
+		':test_id' => $testId,
+		':test_title_snapshot' => $testTitleSnapshot,
+		':test_access_snapshot' => $testAccessSnapshot,
+		':user_id' => $userId,
+		':attempt_no' => $attemptNo,
+	]);
+
 
     return (int)$pdo->lastInsertId();
 }
 
-
-
-function attempt_finish_update(int $attemptId, int $correctCount, int $wrongCount, float $percent): void
+function test_snapshot_hash_by_test_id(int $testId): string
 {
     $pdo = db();
 
-	$stmt = $pdo->prepare("
+    $stmt = $pdo->prepare("
+        SELECT
+            t.updated_at AS updated_at,
+            (SELECT COUNT(*) FROM questions q WHERE q.test_id = t.id) AS questions_count,
+            (
+                SELECT COUNT(*)
+                FROM options o
+                JOIN questions q2 ON q2.id = o.question_id
+                WHERE q2.test_id = t.id
+            ) AS options_count
+        FROM tests t
+        WHERE t.id = :test_id
+        LIMIT 1
+    ");
+
+    $stmt->execute([
+        ':test_id' => $testId,
+    ]);
+
+    $row = $stmt->fetch();
+    if ($row === false) {
+        return hash('sha256', 'missing-test|' . $testId);
+    }
+
+    $updatedAt = (string)($row['updated_at'] ?? '');
+    $qCount = (int)($row['questions_count'] ?? 0);
+    $oCount = (int)($row['options_count'] ?? 0);
+
+    return hash('sha256', $testId . '|' . $updatedAt . '|' . $qCount . '|' . $oCount);
+}
+
+
+function attempt_finish_update(
+    int $attemptId,
+    int $correctCount,
+    int $wrongCount,
+    float $percent,
+    int $totalQuestions,
+    string $testSnapshotHash
+): void
+{
+    $pdo = db();
+
+    $stmt = $pdo->prepare("
         UPDATE attempts
         SET finished_at = CURRENT_TIMESTAMP,
             duration_sec = TIMESTAMPDIFF(SECOND, started_at, CURRENT_TIMESTAMP),
+            total_questions = :total_questions,
+            test_snapshot_hash = :test_snapshot_hash,
             correct_count = :correct_count,
             wrong_count = :wrong_count,
             percent = :percent
@@ -437,14 +498,16 @@ function attempt_finish_update(int $attemptId, int $correctCount, int $wrongCoun
         LIMIT 1
     ");
 
-
     $stmt->execute([
+        ':total_questions' => $totalQuestions,
+        ':test_snapshot_hash' => $testSnapshotHash,
         ':correct_count' => $correctCount,
         ':wrong_count' => $wrongCount,
         ':percent' => $percent,
         ':id' => $attemptId,
     ]);
 }
+
 
 /**
  * $rows формат:
@@ -465,7 +528,7 @@ function answers_insert_batch(int $attemptId, array $rows): void
     $params = [];
 
     foreach ($rows as $i => $row) {
-        $values[] = "(?, ?, ?, ?, CURRENT_TIMESTAMP)";
+        $values[] = "(?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)";
         $params[] = $attemptId;
         $params[] = (int)($row['question_id'] ?? 0);
 
@@ -474,10 +537,26 @@ function answers_insert_batch(int $attemptId, array $rows): void
 
         $text = $row['text_answer'] ?? null;
         $params[] = ($text === null) ? null : (string)$text;
+		$params[] = (string)($row['question_type_snapshot'] ?? '');
+		$params[] = (string)($row['question_text_snapshot'] ?? '');
+		$params[] = array_key_exists('option_text_snapshot', $row) ? $row['option_text_snapshot'] : null;
+		$params[] = (int)($row['is_correct_snapshot'] ?? 0);
+
     }
 
     $sql = "
-        INSERT INTO answers (attempt_id, question_id, option_id, text_answer, created_at)
+        INSERT INTO answers (
+			attempt_id,
+			question_id,
+			option_id,
+			text_answer,
+			question_type_snapshot,
+			question_text_snapshot,
+			option_text_snapshot,
+			is_correct_snapshot,
+			created_at
+		)
+
         VALUES " . implode(",\n", $values) . "
     ";
 
@@ -510,11 +589,21 @@ function answers_list_by_attempt_id(int $attemptId): array
     $pdo = db();
 
     $stmt = $pdo->prepare("
-        SELECT id, attempt_id, question_id, option_id, text_answer, created_at
-        FROM answers
-        WHERE attempt_id = :attempt_id
-        ORDER BY id ASC
-    ");
+		SELECT
+			id,
+			attempt_id,
+			question_id,
+			option_id,
+			text_answer,
+			question_type_snapshot,
+			question_text_snapshot,
+			option_text_snapshot,
+			is_correct_snapshot,
+			created_at
+		FROM answers
+		WHERE attempt_id = :attempt_id
+		ORDER BY id ASC
+	");
 
     $stmt->execute([
         ':attempt_id' => $attemptId,

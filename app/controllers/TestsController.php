@@ -557,10 +557,16 @@ function test_finish(int $testId): void
 
                 // сохраняем текстовый ответ одной строкой
                 $answerRows[] = [
-                    'question_id' => $qid,
-                    'option_id' => null,
-                    'text_answer' => $userTextRaw,
-                ];
+					'question_id' => $qid,
+					'option_id' => null,
+					'text_answer' => $userTextRaw,
+
+					'question_type_snapshot' => $type,
+					'question_text_snapshot' => (string)($q['question_text'] ?? ''),
+					'option_text_snapshot' => null,
+					'is_correct_snapshot' => $isCorrect ? 1 : 0,
+				];
+
             } elseif ($type === 'checkbox') {
                 $userOptIds = [];
                 if (isset($posted[$qid])) {
@@ -583,10 +589,16 @@ function test_finish(int $testId): void
                 // сохраняем каждую галочку отдельной строкой
                 foreach ($userOptIds as $oid) {
                     $answerRows[] = [
-                        'question_id' => $qid,
-                        'option_id' => $oid,
-                        'text_answer' => null,
-                    ];
+						'question_id' => $qid,
+						'option_id' => $oid,
+						'text_answer' => null,
+
+						'question_type_snapshot' => $type,
+						'question_text_snapshot' => (string)($q['question_text'] ?? ''),
+						'option_text_snapshot' => (string)($optionTextById[$oid] ?? ''),
+						'is_correct_snapshot' => $isCorrect ? 1 : 0,
+					];
+
                 }
             } else { // radio по умолчанию
                 $userOptId = 0;
@@ -600,10 +612,16 @@ function test_finish(int $testId): void
                 // сохраняем выбранный option_id одной строкой (или 0 не пишем)
                 if ($userOptId > 0) {
                     $answerRows[] = [
-                        'question_id' => $qid,
-                        'option_id' => $userOptId,
-                        'text_answer' => null,
-                    ];
+						'question_id' => $qid,
+						'option_id' => $userOptId,
+						'text_answer' => null,
+
+						'question_type_snapshot' => $type,
+						'question_text_snapshot' => (string)($q['question_text'] ?? ''),
+						'option_text_snapshot' => (string)($optionTextById[$userOptId] ?? ''),
+						'is_correct_snapshot' => $isCorrect ? 1 : 0,
+					];
+
                 }
             }
 
@@ -616,9 +634,14 @@ function test_finish(int $testId): void
 
         $percent = ($total > 0) ? round(($correctCount / $total) * 100, 2) : 0.0;
 
-        answers_insert_batch($attemptId, $answerRows);
-        attempt_finish_update($attemptId, $correctCount, $wrongCount, $percent);
+		answers_insert_batch($attemptId, $answerRows);
+
+		$totalQuestions = $total;
+		$testSnapshotHash = test_snapshot_hash_by_test_id($testId);
+		attempt_finish_update($attemptId, $correctCount, $wrongCount, $percent, $totalQuestions, $testSnapshotHash);
+
 		unset($_SESSION['active_attempt_id_by_test'][$testId]);
+
 
         $pdo->commit();
 
@@ -676,7 +699,30 @@ function attempt_show(int $attemptId): void
     $correctOptionIdsByQ = options_correct_ids_by_question_ids($questionIds);
     $correctTextAnswersByQ = text_answers_by_question_ids($questionIds);
 
+	$optionsByQ = options_list_by_question_ids($questionIds);
+
+	// карта option_id => option_text
+	$optionTextById = [];
+	foreach ($optionsByQ as $qidTmp => $opts) {
+		foreach ($opts as $opt) {
+			$oidTmp = (int)($opt['id'] ?? 0);
+			if ($oidTmp <= 0) continue;
+			$optionTextById[$oidTmp] = (string)($opt['option_text'] ?? '');
+		}
+	}
+
+
     $userAnswers = answers_list_by_attempt_id($attemptId);
+
+	// snapshot-mode: если в answers есть снапшоты, результат не зависит от текущего теста
+	$snapshotMode = false;
+	foreach ($userAnswers as $a) {
+		if (!empty($a['question_type_snapshot'])) {
+			$snapshotMode = true;
+			break;
+		}
+	}
+
 
     // сгруппуем ответы пользователя по вопросу
     $userByQ = [];
@@ -685,6 +731,79 @@ function attempt_show(int $attemptId): void
         if ($qid <= 0) continue;
         $userByQ[$qid][] = $a;
     }
+
+	if ($snapshotMode) {
+		// В snapshot-mode игнорируем "живые" вопросы/варианты и строим данные из answers снапшотов
+
+		// 1) Заголовок результата — из attempts снапшота (если вдруг тест переименован)
+		$snapshotTitle = (string)($attempt['test_title_snapshot'] ?? '');
+		if ($snapshotTitle !== '') {
+			$test['title'] = $snapshotTitle;
+		}
+
+		// 2) Доступ результата — из attempts снапшота (на будущее, пока оставим как есть)
+		$snapshotAccess = (string)($attempt['test_access_snapshot'] ?? '');
+		if ($snapshotAccess !== '') {
+			$test['access_level'] = $snapshotAccess;
+		}
+
+		// 3) Собираем "questions" из снапшотов
+		$questions = [];
+		$optionsByQuestionId = [];
+		$correctOptionIdsByQ = [];      // в snapshot-mode это не нужно
+		$correctTextAnswersByQ = [];     // в snapshot-mode это не нужно
+
+		// Для отображения вариантов в UI (чтобы не было пустых плашек) — берём тексты вариантов из "живого" контента
+		$questionIds = [];
+		foreach ($userAnswers as $a) {
+			$qid = (int)($a['question_id'] ?? 0);
+			if ($qid > 0) {
+				$questionIds[$qid] = true;
+			}
+		}
+		$questionIds = array_keys($questionIds);
+
+		if (!empty($questionIds)) {
+			$optionsByQuestionId = options_list_by_question_ids($questionIds);
+			$correctOptionIdsByQ = options_correct_ids_by_question_ids($questionIds);
+			$correctTextAnswersByQ = text_answers_by_question_ids($questionIds);
+		}
+
+
+		// сгруппуем ответы пользователя по вопросу (по question_id как ключ)
+		$userByQ = [];
+		foreach ($userAnswers as $a) {
+			$qid = (int)($a['question_id'] ?? 0);
+			if ($qid <= 0) continue;
+
+			$userByQ[$qid][] = $a;
+
+			// создаём "вопрос" один раз
+			if (!isset($questions[$qid])) {
+				$questions[$qid] = [
+					'id' => $qid,
+					'question_text' => (string)($a['question_text_snapshot'] ?? ''),
+					'question_type' => (string)($a['question_type_snapshot'] ?? ''),
+				];
+			}
+
+			// optionsByQuestionId используем только для вывода текстов выбранных опций
+			// $type = (string)($a['question_type_snapshot'] ?? '');
+			// if ($type === 'radio' || $type === 'checkbox') {
+			// 	$oid = (int)($a['option_id'] ?? 0);
+			// 	if ($oid > 0) {
+			// 		$optionsByQuestionId[$qid][] = [
+			// 			'id' => $oid,
+			// 			'option_text' => (string)($a['option_text_snapshot'] ?? ''),
+			// 		];
+			// 	}
+			// }
+		}
+
+		// привести $questions к обычному списку (а не map)
+		$questions = array_values($questions);
+	}
+
 
     view_render('attempt_show', [
         'title' => 'Результат: ' . (string)($test['title'] ?? 'Тест'),
