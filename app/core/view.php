@@ -12,6 +12,19 @@ function view_render(string $view, array $data = []): void
         return;
     }
 
+	// Глобальные данные для layout (не размазываем по всем контроллерам)
+    if (auth_is_logged_in() && !array_key_exists('trashCount', $data)) {
+        $user = auth_user();
+        $userId = (int)($user['id'] ?? 0);
+
+        if ($userId > 0 && function_exists('tests_trash_count_by_user_id')) {
+            $data['trashCount'] = tests_trash_count_by_user_id($userId);
+        } else {
+            $data['trashCount'] = 0;
+        }
+    }
+
+
     // данные станут переменными в шаблоне
     extract($data, EXTR_SKIP);
 

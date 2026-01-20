@@ -73,7 +73,28 @@
                             <span class="muted">Привет, <?= htmlspecialchars(auth_user()['login']) ?></span>
                             <nav class="nav">
                                 <a href="/my/tests">Мои тесты</a>
-								<a href="/my/tests/trash">Корзина</a>
+								<a href="/my/tests/trash" class="nav-pill" aria-label="Корзина">
+									<span class="nav-pill__icon">
+										<img
+											src="/assets/img/trash-can.svg"
+											width="16"
+											height="16"
+											alt=""
+											aria-hidden="true"
+										/>
+									</span>
+
+									<!-- <span class="nav-pill__label">Корзина</span> -->
+
+									<?php if (!empty($trashCount)): ?>
+										<span class="nav-pill__count"><?= (int)$trashCount ?></span>
+									<?php endif; ?>
+								</a>
+
+
+
+
+
                             </nav>
                         <?php endif; ?>
                     </div>
