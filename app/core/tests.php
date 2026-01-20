@@ -390,18 +390,36 @@ function attempt_create(int $testId, ?int $userId): int
 {
     $pdo = db();
 
+    // 1. Получаем номер следующей попытки
     $stmt = $pdo->prepare("
-        INSERT INTO attempts (test_id, user_id, started_at)
-        VALUES (:test_id, :user_id, CURRENT_TIMESTAMP)
+        SELECT COALESCE(MAX(attempt_no), 0) + 1
+        FROM attempts
+        WHERE test_id = :test_id
+          AND user_id = :user_id
     ");
-
     $stmt->execute([
         ':test_id' => $testId,
         ':user_id' => $userId,
     ]);
 
+    $attemptNo = (int)$stmt->fetchColumn();
+
+    // 2. Создаём попытку с зафиксированным attempt_no
+    $stmt = $pdo->prepare("
+        INSERT INTO attempts (test_id, user_id, attempt_no, started_at)
+        VALUES (:test_id, :user_id, :attempt_no, CURRENT_TIMESTAMP)
+    ");
+
+    $stmt->execute([
+        ':test_id'    => $testId,
+        ':user_id'    => $userId,
+        ':attempt_no' => $attemptNo,
+    ]);
+
     return (int)$pdo->lastInsertId();
 }
+
+
 
 function attempt_finish_update(int $attemptId, int $correctCount, int $wrongCount, float $percent): void
 {
