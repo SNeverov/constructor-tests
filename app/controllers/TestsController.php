@@ -347,7 +347,7 @@ function my_tests_delete(int $testId): void
         return;
     }
 
-	flash_set('toast', ['type' => 'success', 'text' => 'Тест удалён']);
+	flash_set('toast', ['type' => 'success', 'text' => 'Тест отправлен в корзину']);
     redirect('/my/tests');
 }
 
@@ -634,4 +634,91 @@ function attempt_show(int $attemptId): void
         'userByQ' => $userByQ,
         'styles' => ['/assets/css/attempt-show.css'],
     ]);
+}
+
+
+function my_tests_trash_index(): void
+{
+    auth_required();
+
+    $user = auth_user();
+    $userId = (int)($user['id'] ?? 0);
+
+    $tests = tests_trash_list_by_user_id($userId);
+
+    view_render('my_tests_trash', [
+        'title' => 'Корзина',
+        'tests' => $tests,
+        'styles' => ['/assets/css/my-tests.css', '/assets/css/my-tests-trash.css'],
+    ]);
+}
+
+function my_tests_restore(int $testId): void
+{
+    auth_required();
+
+    $user = auth_user();
+    $userId = (int)($user['id'] ?? 0);
+
+    $restored = tests_restore_by_id_and_user_id($testId, $userId);
+
+    if (!$restored) {
+        http_response_code(403);
+        view_render('error', [
+            'title' => 'Ошибка 403',
+            'message' => 'Нельзя восстановить этот тест (нет прав или тест не найден).',
+        ]);
+        return;
+    }
+
+    flash_set('toast', ['type' => 'success', 'text' => 'Тест восстановлен']);
+    redirect('/my/tests/trash');
+}
+
+function my_tests_destroy(int $testId): void
+{
+    auth_required();
+
+    $user = auth_user();
+    $userId = (int)($user['id'] ?? 0);
+
+    $deleted = tests_destroy_by_id_and_user_id($testId, $userId);
+
+    if (!$deleted) {
+        http_response_code(403);
+        view_render('error', [
+            'title' => 'Ошибка 403',
+            'message' => 'Нельзя удалить этот тест навсегда (нет прав или тест не найден).',
+        ]);
+        return;
+    }
+
+    flash_set('toast', ['type' => 'success', 'text' => 'Тест удалён навсегда']);
+    redirect('/my/tests/trash');
+}
+
+function my_tests_trash_restore_all(): void
+{
+    auth_required();
+
+    $user = auth_user();
+    $userId = (int)($user['id'] ?? 0);
+
+    $count = tests_trash_restore_all_by_user_id($userId);
+
+    flash_set('toast', ['type' => 'success', 'text' => "Восстановлено: {$count}"]);
+    redirect('/my/tests/trash');
+}
+
+function my_tests_trash_empty(): void
+{
+    auth_required();
+
+    $user = auth_user();
+    $userId = (int)($user['id'] ?? 0);
+
+    $count = tests_trash_empty_by_user_id($userId);
+
+    flash_set('toast', ['type' => 'success', 'text' => "Удалено навсегда: {$count}"]);
+    redirect('/my/tests/trash');
 }

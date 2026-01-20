@@ -73,6 +73,7 @@
                             <span class="muted">Привет, <?= htmlspecialchars(auth_user()['login']) ?></span>
                             <nav class="nav">
                                 <a href="/my/tests">Мои тесты</a>
+								<a href="/my/tests/trash">Корзина</a>
                             </nav>
                         <?php endif; ?>
                     </div>
@@ -123,6 +124,7 @@
 					<nav class="site-footer__nav">
 						<a href="/">Главная</a>
 						<a href="/my/tests">Мои тесты</a>
+						<a href="/my/tests/trash">Корзина</a>
 						<a href="/my/tests/create">Создать тест</a>
 					</nav>
 

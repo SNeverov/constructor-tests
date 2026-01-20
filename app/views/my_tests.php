@@ -66,14 +66,15 @@
                 <a href="/my/tests/<?= (int)$test['id'] ?>/edit" class="btn">Редактировать</a>
 
                 <?= form_open('/my/tests/' . (int)$test['id'] . '/delete', 'post', [
-                    'class' => 'inline',
-                    'data-confirm' => '1',
-                    'data-confirm-title' => 'Удалить тест?',
-                    'data-confirm-text' => 'Точно удалить этот тест? Это действие нельзя отменить.',
-                    'data-confirm-ok' => 'Удалить',
-                ]) ?>
-                    <button type="submit" class="btn btn--danger">Удалить</button>
-                </form>
+					'class' => 'inline',
+					'data-confirm' => '1',
+					'data-confirm-title' => 'Отправить в корзину?',
+					'data-confirm-text' => 'Убрать этот тест в корзину? Его можно будет восстановить.',
+					'data-confirm-ok' => 'В корзину',
+				]) ?>
+					<button type="submit" class="btn btn--danger">В корзину</button>
+				</form>
+
             </div>
 
         </div>

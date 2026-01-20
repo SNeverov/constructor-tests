@@ -6,11 +6,12 @@ function tests_list_by_user_id(int $userId): array
     $pdo = db();
 
     $stmt = $pdo->prepare("
-        SELECT id, user_id, title, description, access_level, created_at, updated_at
-        FROM tests
-        WHERE user_id = :user_id
-        ORDER BY created_at DESC
-    ");
+		SELECT id, user_id, title, description, access_level, created_at, updated_at
+		FROM tests
+		WHERE user_id = :user_id AND deleted_at IS NULL
+		ORDER BY created_at DESC
+	");
+
 
     $stmt->execute([
         ':user_id' => $userId,
@@ -124,11 +125,12 @@ function tests_find_by_id(int $testId): ?array
     $pdo = db();
 
     $stmt = $pdo->prepare("
-        SELECT id, user_id, title, description, access_level, created_at, updated_at
-        FROM tests
-        WHERE id = :id
-        LIMIT 1
-    ");
+		SELECT id, user_id, title, description, access_level, created_at, updated_at
+		FROM tests
+		WHERE id = :id AND deleted_at IS NULL
+		LIMIT 1
+	");
+
 
     $stmt->execute([
         ':id' => $testId,
@@ -144,8 +146,47 @@ function tests_delete_by_id_and_user_id(int $testId, int $userId): bool
     $pdo = db();
 
     $stmt = $pdo->prepare("
-        DELETE FROM tests
-        WHERE id = :id AND user_id = :user_id
+		UPDATE tests
+		SET deleted_at = NOW()
+		WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL
+		LIMIT 1
+	");
+
+
+    $stmt->execute([
+        ':id' => $testId,
+        ':user_id' => $userId,
+    ]);
+
+    return $stmt->rowCount() === 1;
+}
+
+function tests_trash_list_by_user_id(int $userId): array
+{
+    $pdo = db();
+
+    $stmt = $pdo->prepare("
+        SELECT id, user_id, title, description, access_level, created_at, updated_at, deleted_at
+        FROM tests
+        WHERE user_id = :user_id AND deleted_at IS NOT NULL
+        ORDER BY deleted_at DESC
+    ");
+
+    $stmt->execute([
+        ':user_id' => $userId,
+    ]);
+
+    return $stmt->fetchAll();
+}
+
+function tests_restore_by_id_and_user_id(int $testId, int $userId): bool
+{
+    $pdo = db();
+
+    $stmt = $pdo->prepare("
+        UPDATE tests
+        SET deleted_at = NULL
+        WHERE id = :id AND user_id = :user_id AND deleted_at IS NOT NULL
         LIMIT 1
     ");
 
@@ -156,6 +197,75 @@ function tests_delete_by_id_and_user_id(int $testId, int $userId): bool
 
     return $stmt->rowCount() === 1;
 }
+
+function tests_destroy_by_id_and_user_id(int $testId, int $userId): bool
+{
+    $pdo = db();
+
+    $stmt = $pdo->prepare("
+        DELETE FROM tests
+        WHERE id = :id AND user_id = :user_id AND deleted_at IS NOT NULL
+        LIMIT 1
+    ");
+
+    $stmt->execute([
+        ':id' => $testId,
+        ':user_id' => $userId,
+    ]);
+
+    return $stmt->rowCount() === 1;
+}
+
+function tests_trash_restore_all_by_user_id(int $userId): int
+{
+    $pdo = db();
+
+    $stmt = $pdo->prepare("
+        UPDATE tests
+        SET deleted_at = NULL
+        WHERE user_id = :user_id AND deleted_at IS NOT NULL
+    ");
+
+    $stmt->execute([
+        ':user_id' => $userId,
+    ]);
+
+    return (int)$stmt->rowCount();
+}
+
+function tests_trash_empty_by_user_id(int $userId): int
+{
+    $pdo = db();
+
+    $stmt = $pdo->prepare("
+        DELETE FROM tests
+        WHERE user_id = :user_id AND deleted_at IS NOT NULL
+    ");
+
+    $stmt->execute([
+        ':user_id' => $userId,
+    ]);
+
+    return (int)$stmt->rowCount();
+}
+
+function tests_trash_count_by_user_id(int $userId): int
+{
+    $pdo = db();
+
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM tests
+        WHERE user_id = :user_id AND deleted_at IS NOT NULL
+    ");
+
+    $stmt->execute([
+        ':user_id' => $userId,
+    ]);
+
+    return (int)$stmt->fetchColumn();
+}
+
 
 
 function questions_list_by_test_id(int $testId): array

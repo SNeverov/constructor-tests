@@ -71,6 +71,12 @@ if ($path === '/my/tests' && $method === 'GET') {
     exit();
 }
 
+if ($path === '/my/tests/trash' && $method === 'GET') {
+    my_tests_trash_index();
+    exit();
+}
+
+
 if ($path === '/my/tests/create' && $method === 'GET') {
     my_tests_create_form();
     exit();
@@ -85,6 +91,27 @@ if ($method === 'POST' && preg_match('~^/my/tests/(\d+)/delete$~', $path, $m)) {
     my_tests_delete((int)$m[1]);
     exit();
 }
+
+if ($method === 'POST' && preg_match('~^/my/tests/(\d+)/restore$~', $path, $m)) {
+    my_tests_restore((int)$m[1]);
+    exit();
+}
+
+if ($method === 'POST' && preg_match('~^/my/tests/(\d+)/destroy$~', $path, $m)) {
+    my_tests_destroy((int)$m[1]);
+    exit();
+}
+
+if ($path === '/my/tests/trash/restore-all' && $method === 'POST') {
+    my_tests_trash_restore_all();
+    exit();
+}
+
+if ($path === '/my/tests/trash/empty' && $method === 'POST') {
+    my_tests_trash_empty();
+    exit();
+}
+
 
 
 if ($method === 'POST' && preg_match('~^/tests/(\d+)/finish$~', $path, $m)) {
