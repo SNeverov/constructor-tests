@@ -404,6 +404,44 @@ function test_pass(int $testId): void
         $questionIds[] = (int)($q['id'] ?? 0);
     }
 
+	$userId = null;
+	if (auth_is_logged_in()) {
+		$u = auth_user();
+		$userId = isset($u['id']) ? (int)$u['id'] : null;
+	}
+
+	$attemptId = 0;
+
+	// Переиспользуем “активную” попытку в рамках сессии, чтобы F5 не плодил attempts
+	if (isset($_SESSION['active_attempt_id_by_test'][$testId])) {
+		$candidateId = (int)$_SESSION['active_attempt_id_by_test'][$testId];
+		$candidate = attempt_find_by_id($candidateId);
+
+		$candidateOk = ($candidate !== null)
+			&& (int)($candidate['test_id'] ?? 0) === $testId
+			&& (($candidate['finished_at'] ?? null) === null);
+
+		if ($candidateOk) {
+			$candidateUserId = $candidate['user_id'] ?? null;
+
+			if ($userId === null) {
+				if ($candidateUserId === null) {
+					$attemptId = $candidateId;
+				}
+			} else {
+				if ((int)$candidateUserId === $userId) {
+					$attemptId = $candidateId;
+				}
+			}
+		}
+	}
+
+	if ($attemptId === 0) {
+		$attemptId = attempt_create($testId, $userId);
+		$_SESSION['active_attempt_id_by_test'][$testId] = $attemptId;
+	}
+
+
     $optionsByQuestionId = options_list_by_question_ids($questionIds);
 
     view_render('test_pass', [
@@ -411,6 +449,7 @@ function test_pass(int $testId): void
         'test' => $test,
         'questions' => $questions,
         'optionsByQuestionId' => $optionsByQuestionId,
+		'attemptId' => $attemptId,
         'styles' => ['/assets/css/test-pass.css'],
 		'scripts' => [
 			'/assets/js/test-pass.js',
@@ -449,7 +488,30 @@ function test_finish(int $testId): void
     try {
         $pdo->beginTransaction();
 
-        $attemptId = attempt_create($testId, $userId);
+        $attemptId = isset($_POST['attempt_id']) ? (int)$_POST['attempt_id'] : 0;
+
+		if ($attemptId > 0) {
+			$attempt = attempt_find_by_id($attemptId);
+
+			if ($attempt === null || (int)($attempt['test_id'] ?? 0) !== $testId) {
+				throw new RuntimeException('Invalid attempt_id');
+			}
+
+			// привязка к юзеру (чтобы нельзя было подсунуть чужую попытку)
+			$attemptUserId = $attempt['user_id'] ?? null;
+			if ($userId === null) {
+				if ($attemptUserId !== null) {
+					throw new RuntimeException('Invalid attempt owner');
+				}
+			} else {
+				if ((int)$attemptUserId !== $userId) {
+					throw new RuntimeException('Invalid attempt owner');
+				}
+			}
+		} else {
+			$attemptId = attempt_create($testId, $userId);
+		}
+
 
         $questions = questions_list_by_test_id($testId);
         $questionIds = [];
@@ -556,6 +618,7 @@ function test_finish(int $testId): void
 
         answers_insert_batch($attemptId, $answerRows);
         attempt_finish_update($attemptId, $correctCount, $wrongCount, $percent);
+		unset($_SESSION['active_attempt_id_by_test'][$testId]);
 
         $pdo->commit();
 

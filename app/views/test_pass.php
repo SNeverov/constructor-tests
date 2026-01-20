@@ -35,6 +35,7 @@ declare(strict_types=1);
 
     <form id="testPassForm" class="test-pass__form" method="post" action="/tests/<?= (int)($test['id'] ?? 0) ?>/finish" autocomplete="off">
         <?= csrf_field() ?>
+		<input type="hidden" name="attempt_id" value="<?= (int)$attemptId ?>">
 		<?php if (empty($questions)): ?>
             <div class="empty">
                 В этом тесте пока нет вопросов.

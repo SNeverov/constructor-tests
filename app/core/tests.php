@@ -407,15 +407,18 @@ function attempt_finish_update(int $attemptId, int $correctCount, int $wrongCoun
 {
     $pdo = db();
 
-    $stmt = $pdo->prepare("
+	$stmt = $pdo->prepare("
         UPDATE attempts
         SET finished_at = CURRENT_TIMESTAMP,
+            duration_sec = TIMESTAMPDIFF(SECOND, started_at, CURRENT_TIMESTAMP),
             correct_count = :correct_count,
             wrong_count = :wrong_count,
             percent = :percent
         WHERE id = :id
+          AND finished_at IS NULL
         LIMIT 1
     ");
+
 
     $stmt->execute([
         ':correct_count' => $correctCount,
