@@ -72,7 +72,9 @@
                         <?php if (auth_is_logged_in()): ?>
                             <span class="muted">Привет, <?= htmlspecialchars(auth_user()['login']) ?></span>
                             <nav class="nav">
+                                <a href="/account">Профиль</a>
                                 <a href="/my/tests">Мои тесты</a>
+                                <a href="/my/results">Мои результаты</a>
 								<a href="/my/tests/trash" class="nav-pill" aria-label="Корзина">
 									<span class="nav-pill__icon">
 										<img
@@ -144,6 +146,8 @@
 
 					<nav class="site-footer__nav">
 						<a href="/">Главная</a>
+                        <a href="/account">Профиль</a>
+                        <a href="/my/results">Мои результаты</a>
 						<a href="/my/tests">Мои тесты</a>
 						<a href="/my/tests/trash">Корзина</a>
 						<a href="/my/tests/create">Создать тест</a>

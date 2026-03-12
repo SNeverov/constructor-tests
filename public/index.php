@@ -3,30 +3,45 @@ declare(strict_types=1);
 
 session_start();
 
+require __DIR__ . '/../app/core/env.php';
+env_load(__DIR__ . '/../.env');
+
 require __DIR__ . '/../app/core/helpers.php';
+require __DIR__ . '/../app/core/rate_limit.php';
+require __DIR__ . '/../app/core/security.php';
 require __DIR__ . '/../app/core/flash.php';
 require __DIR__ . '/../app/core/view.php';
+require __DIR__ . '/../app/core/error.php';
 require __DIR__ . '/../app/controllers/HomeController.php';
 require __DIR__ . '/../app/controllers/AuthController.php';
 require __DIR__ . '/../app/controllers/TestsController.php';
+require __DIR__ . '/../app/controllers/AccountController.php';
 require __DIR__ . '/../app/core/auth.php';
 require_once __DIR__ . '/../app/core/db.php';
 require __DIR__ . '/../app/core/tests.php';
 require __DIR__ . '/../app/core/csrf.php';
 require __DIR__ . '/../app/core/form.php';
 
+security_apply_headers();
+
 set_exception_handler(function (Throwable $e): void {
+    $errorId = app_error_id();
+    app_log_exception($errorId, $e);
+
     if ($e instanceof PDOException) {
         http_response_code(500);
         view_render('error', [
             'title' => 'Ошибка',
-            'message' => 'Ошибка БД. Попробуйте позже.',
+            'message' => 'Ошибка БД. Попробуйте позже. Код: ' . $errorId,
         ]);
         return;
     }
 
     http_response_code(500);
-    echo 'Server error';
+    view_render('error', [
+        'title' => 'Ошибка',
+        'message' => 'Внутренняя ошибка сервера. Код: ' . $errorId,
+    ]);
 });
 
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '/';
@@ -34,6 +49,7 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
 if ($method === 'POST') {
     csrf_verify();
+    security_enforce_post_rate_limit($path);
 }
 
 if ($path === '/login' && $method === 'GET') {
@@ -66,6 +82,16 @@ if ($path === '/logout' && $method === 'POST') {
     exit();
 }
 
+if ($path === '/account' && $method === 'GET') {
+    account_index();
+    exit();
+}
+
+if ($path === '/my/results' && $method === 'GET') {
+    my_results_index();
+    exit();
+}
+
 if ($path === '/my/tests' && $method === 'GET') {
     my_tests_index();
     exit();
@@ -82,8 +108,18 @@ if ($path === '/my/tests/create' && $method === 'GET') {
     exit();
 }
 
+if ($method === 'GET' && preg_match('~^/my/tests/(\d+)/edit$~', $path, $m)) {
+    my_tests_edit_form((int)$m[1]);
+    exit();
+}
+
 if ($path === '/my/tests' && $method === 'POST') {
     my_tests_store();
+    exit();
+}
+
+if ($method === 'POST' && preg_match('~^/my/tests/(\d+)$~', $path, $m)) {
+    my_tests_update((int)$m[1]);
     exit();
 }
 

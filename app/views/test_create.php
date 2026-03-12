@@ -1,7 +1,13 @@
 <div class="test-create">
+    <?php
+        $isEdit = !empty($is_edit);
+        $formAction = (string)($form_action ?? '/my/tests');
+        $pageHeading = $isEdit ? 'Редактировать тест' : 'Создать тест';
+        $submitLabel = (string)($submit_label ?? ($isEdit ? 'Сохранить изменения' : 'Сохранить тест'));
+    ?>
 
     <div class="page-head">
-        <h1>Создать тест</h1>
+        <h1><?= htmlspecialchars($pageHeading, ENT_QUOTES, 'UTF-8') ?></h1>
     </div>
 
     <?php if (!empty($errors)): ?>
@@ -17,7 +23,7 @@
 
 
 
-    <?= form_open('/my/tests', 'post', ['class' => 'form', 'id' => 'testCreateForm']) ?>
+    <?= form_open($formAction, 'post', ['class' => 'form', 'id' => 'testCreateForm']) ?>
         <div class="form-section section">
             <div class="section-title">Параметры теста</div>
             <div class="form-row">
@@ -192,7 +198,7 @@
                     </div>
                 </div>
             </div>
-        <button type="submit" class="btn btn--primary">Сохранить тест</button>
+        <button type="submit" class="btn btn--primary"><?= htmlspecialchars($submitLabel, ENT_QUOTES, 'UTF-8') ?></button>
         </div>
     </form>
 

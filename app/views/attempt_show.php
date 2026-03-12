@@ -143,9 +143,14 @@ if (($sourceState ?? 'ok') === 'changed') {
 
 <div class="attempt">
     <div class="attempt__header">
+        <?php
+        $testIdRaw = $test['id'] ?? null;
+        $testIdInt = ($testIdRaw === null || $testIdRaw === '') ? 0 : (int)$testIdRaw;
+        $testIdBadge = $testIdInt > 0 ? ('Тест ID: ' . $testIdInt) : 'Тест ID: удалён';
+        ?>
         <div class="attempt__meta">
-            <span class="badge">Тест ID: <?= (int)($test['id'] ?? 0) ?></span>
-            <span class="badge">Попытка ID: <?= (int)($attempt['id'] ?? 0) ?></span>
+            <span class="badge"><?= _h($testIdBadge) ?></span>
+            <span class="badge">Результат ID: <?= (int)($attempt['id'] ?? 0) ?></span>
         </div>
 
         <h1 class="attempt__title"><?= _h((string)($test['title'] ?? 'Тест')) ?></h1>
@@ -170,6 +175,9 @@ if (($sourceState ?? 'ok') === 'changed') {
         </div>
 
         <div class="attempt__actions">
+            <?php if (auth_is_logged_in()): ?>
+                <a class="btn btn--ghost" href="/my/results">Мои результаты</a>
+            <?php endif; ?>
             <?php if (empty($testMissing)): ?>
                 <a class="btn btn--ghost" href="/tests/<?= (int)($test['id'] ?? 0) ?>">К описанию теста</a>
                 <a class="btn btn--primary" href="/tests/<?= (int)($test['id'] ?? 0) ?>/pass">Пройти ещё раз</a>

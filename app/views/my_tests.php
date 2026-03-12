@@ -1,10 +1,19 @@
 <?php
 /** @var array $tests */
+/** @var array $pagination */
+
+$page = (int)($pagination['page'] ?? 1);
+$pages = (int)($pagination['pages'] ?? 1);
+$total = (int)($pagination['total'] ?? 0);
 ?>
 
 <div class="page-head">
     <h1>Мои тесты</h1>
 </div>
+
+<?php if (!empty($tests)): ?>
+    <div class="results-meta muted">Найдено: <?= $total ?></div>
+<?php endif; ?>
 
 <?php if (empty($tests)): ?>
     <div class="empty-state">
@@ -79,5 +88,22 @@
 
         </div>
     <?php endforeach; ?>
+
+    <?php if ($pages > 1): ?>
+        <nav class="results-pagination">
+            <?php $prevPage = max(1, $page - 1); ?>
+            <?php $nextPage = min($pages, $page + 1); ?>
+
+            <?php if ($page > 1): ?>
+                <a class="btn btn--ghost" href="/my/tests?page=<?= $prevPage ?>">Назад</a>
+            <?php endif; ?>
+
+            <span class="results-pagination__info">Страница <?= $page ?> из <?= $pages ?></span>
+
+            <?php if ($page < $pages): ?>
+                <a class="btn btn--ghost" href="/my/tests?page=<?= $nextPage ?>">Вперёд</a>
+            <?php endif; ?>
+        </nav>
+    <?php endif; ?>
 
 <?php endif; ?>

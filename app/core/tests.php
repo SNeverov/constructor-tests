@@ -141,6 +141,47 @@ function tests_find_by_id(int $testId): ?array
     return $row !== false ? $row : null;
 }
 
+function tests_list_by_user_id_paginated(int $userId, int $limit, int $offset): array
+{
+    $pdo = db();
+    $limit = max(1, min(100, $limit));
+    $offset = max(0, $offset);
+
+    $stmt = $pdo->prepare("
+		SELECT id, user_id, title, description, access_level, created_at, updated_at
+		FROM tests
+		WHERE user_id = :user_id AND deleted_at IS NULL
+		ORDER BY created_at DESC
+        LIMIT {$limit} OFFSET {$offset}
+	");
+
+    $stmt->execute([
+        ':user_id' => $userId,
+    ]);
+
+    return $stmt->fetchAll();
+}
+
+function tests_find_active_by_id_and_user_id(int $testId, int $userId): ?array
+{
+    $pdo = db();
+
+    $stmt = $pdo->prepare("
+        SELECT id, user_id, title, description, access_level, created_at, updated_at
+        FROM tests
+        WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL
+        LIMIT 1
+    ");
+
+    $stmt->execute([
+        ':id' => $testId,
+        ':user_id' => $userId,
+    ]);
+
+    $row = $stmt->fetch();
+    return $row !== false ? $row : null;
+}
+
 function tests_delete_by_id_and_user_id(int $testId, int $userId): bool
 {
     $pdo = db();
@@ -314,6 +355,38 @@ function options_list_by_question_ids(array $questionIds): array
     foreach ($rows as $row) {
         $qid = (int)($row['question_id'] ?? 0);
         if ($qid <= 0) continue;
+        $grouped[$qid][] = $row;
+    }
+
+    return $grouped;
+}
+
+function options_full_list_by_question_ids(array $questionIds): array
+{
+    $questionIds = array_values(array_filter(array_map('intval', $questionIds), fn($v) => $v > 0));
+    if (count($questionIds) === 0) {
+        return [];
+    }
+
+    $pdo = db();
+    $placeholders = implode(',', array_fill(0, count($questionIds), '?'));
+
+    $stmt = $pdo->prepare("
+        SELECT id, question_id, option_text, is_correct, position
+        FROM options
+        WHERE question_id IN ($placeholders)
+        ORDER BY question_id ASC, position ASC, id ASC
+    ");
+
+    $stmt->execute($questionIds);
+    $rows = $stmt->fetchAll();
+
+    $grouped = [];
+    foreach ($rows as $row) {
+        $qid = (int)($row['question_id'] ?? 0);
+        if ($qid <= 0) {
+            continue;
+        }
         $grouped[$qid][] = $row;
     }
 
@@ -566,6 +639,46 @@ function answers_insert_batch(int $attemptId, array $rows): void
     $stmt->execute($params);
 }
 
+function tests_update_by_id_and_user_id(int $testId, int $userId, string $title, string $description, string $accessLevel): bool
+{
+    $pdo = db();
+    $stmt = $pdo->prepare("
+        UPDATE tests
+        SET title = :title,
+            description = :description,
+            access_level = :access_level,
+            updated_at = NOW()
+        WHERE id = :id
+          AND user_id = :user_id
+          AND deleted_at IS NULL
+        LIMIT 1
+    ");
+
+    $stmt->execute([
+        ':title' => $title,
+        ':description' => $description,
+        ':access_level' => $accessLevel,
+        ':id' => $testId,
+        ':user_id' => $userId,
+    ]);
+
+    return $stmt->rowCount() === 1;
+}
+
+function questions_delete_by_test_id(int $testId): int
+{
+    $pdo = db();
+    $stmt = $pdo->prepare("
+        DELETE FROM questions
+        WHERE test_id = :test_id
+    ");
+    $stmt->execute([
+        ':test_id' => $testId,
+    ]);
+
+    return (int)$stmt->rowCount();
+}
+
 function attempt_find_by_id(int $attemptId): ?array
 {
     $pdo = db();
@@ -626,5 +739,163 @@ function answers_list_by_attempt_id(int $attemptId): array
         ':attempt_id' => $attemptId,
     ]);
 
+    return $stmt->fetchAll();
+}
+
+function tests_count_active_by_user_id(int $userId): int
+{
+    $pdo = db();
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM tests
+        WHERE user_id = :user_id
+          AND deleted_at IS NULL
+    ");
+    $stmt->execute([
+        ':user_id' => $userId,
+    ]);
+
+    return (int)$stmt->fetchColumn();
+}
+
+function tests_count_deleted_by_user_id(int $userId): int
+{
+    $pdo = db();
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM tests
+        WHERE user_id = :user_id
+          AND deleted_at IS NOT NULL
+    ");
+    $stmt->execute([
+        ':user_id' => $userId,
+    ]);
+
+    return (int)$stmt->fetchColumn();
+}
+
+function attempts_count_finished_by_user_id(int $userId): int
+{
+    $pdo = db();
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM attempts
+        WHERE user_id = :user_id
+          AND finished_at IS NOT NULL
+    ");
+    $stmt->execute([
+        ':user_id' => $userId,
+    ]);
+
+    return (int)$stmt->fetchColumn();
+}
+
+function attempts_avg_percent_by_user_id(int $userId): float
+{
+    $pdo = db();
+    $stmt = $pdo->prepare("
+        SELECT AVG(percent)
+        FROM attempts
+        WHERE user_id = :user_id
+          AND finished_at IS NOT NULL
+    ");
+    $stmt->execute([
+        ':user_id' => $userId,
+    ]);
+
+    $avg = $stmt->fetchColumn();
+    return $avg === null ? 0.0 : (float)$avg;
+}
+
+function attempts_filters_sql(array $filters, array &$params): string
+{
+    $where = [
+        'a.user_id = :user_id',
+        'a.finished_at IS NOT NULL',
+    ];
+
+    $search = trim((string)($filters['search'] ?? ''));
+    if ($search !== '') {
+        $where[] = 'COALESCE(NULLIF(t.title, \'\'), NULLIF(a.test_title_snapshot, \'\'), \'Тест\') LIKE :search';
+        $params[':search'] = '%' . $search . '%';
+    }
+
+    $status = (string)($filters['status'] ?? 'all');
+    if ($status === 'correct') {
+        $where[] = 'a.percent >= 100';
+    } elseif ($status === 'partial') {
+        $where[] = 'a.percent > 0 AND a.percent < 100';
+    } elseif ($status === 'wrong') {
+        $where[] = 'a.percent = 0';
+    }
+
+    $dateFrom = (string)($filters['date_from'] ?? '');
+    if ($dateFrom !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFrom)) {
+        $where[] = 'DATE(a.finished_at) >= :date_from';
+        $params[':date_from'] = $dateFrom;
+    }
+
+    $dateTo = (string)($filters['date_to'] ?? '');
+    if ($dateTo !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo)) {
+        $where[] = 'DATE(a.finished_at) <= :date_to';
+        $params[':date_to'] = $dateTo;
+    }
+
+    return implode(' AND ', $where);
+}
+
+function attempts_count_by_user_id_filtered(int $userId, array $filters): int
+{
+    $pdo = db();
+    $params = [
+        ':user_id' => $userId,
+    ];
+    $whereSql = attempts_filters_sql($filters, $params);
+
+    $sql = "
+        SELECT COUNT(*)
+        FROM attempts a
+        LEFT JOIN tests t ON t.id = a.test_id
+        WHERE {$whereSql}
+    ";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    return (int)$stmt->fetchColumn();
+}
+
+function attempts_list_by_user_id_filtered(int $userId, array $filters, int $limit, int $offset): array
+{
+    $pdo = db();
+    $params = [
+        ':user_id' => $userId,
+    ];
+    $whereSql = attempts_filters_sql($filters, $params);
+
+    $limit = max(1, min(100, $limit));
+    $offset = max(0, $offset);
+
+    $sql = "
+        SELECT
+            a.id,
+            a.test_id,
+            a.test_title_snapshot,
+            a.correct_count,
+            a.wrong_count,
+            a.total_questions,
+            a.percent,
+            a.started_at,
+            a.finished_at,
+            t.id AS live_test_id,
+            t.title AS live_test_title
+        FROM attempts a
+        LEFT JOIN tests t ON t.id = a.test_id
+        WHERE {$whereSql}
+        ORDER BY a.finished_at DESC, a.id DESC
+        LIMIT {$limit} OFFSET {$offset}
+    ";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
     return $stmt->fetchAll();
 }

@@ -3,6 +3,10 @@ declare(strict_types=1);
 
 function auth_register_form(array $errors = [], array $old = []): void
 {
+    if (auth_is_logged_in()) {
+        redirect('/');
+    }
+
     view_render('register', [
         'title' => 'Регистрация',
         'errors' => $errors,
@@ -13,6 +17,10 @@ function auth_register_form(array $errors = [], array $old = []): void
 
 function auth_login_form(): void
 {
+    if (auth_is_logged_in()) {
+        redirect('/');
+    }
+
     view_render('login', [
         'title' => 'Вход',
 		'styles' => ['/assets/css/auth.css'],
@@ -21,17 +29,27 @@ function auth_login_form(): void
 
 function auth_login_submit(): void
 {
+    if (auth_is_logged_in()) {
+        redirect('/');
+    }
+
     $identity = trim((string) ($_POST['identity'] ?? ''));
     $password = (string) ($_POST['password'] ?? '');
+    $identityNorm = mb_strtolower($identity);
+    $ip = (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown');
 
     $errors = [];
 
     if ($identity === '') {
         $errors[] = 'Введите логин или email';
+    } elseif (mb_strlen($identity) > 255) {
+        $errors[] = 'Логин/email слишком длинный.';
     }
 
     if ($password === '') {
         $errors[] = 'Введите пароль';
+    } elseif (mb_strlen($password) > 255) {
+        $errors[] = 'Пароль слишком длинный.';
     }
 
     if ($errors) {
@@ -43,6 +61,20 @@ function auth_login_submit(): void
         ]);
         return;
     }
+
+    $lockBucket = 'login-lock:' . hash('sha256', $ip . '|' . $identityNorm);
+    if (!rate_limit_consume($lockBucket, 1, 600)) {
+        view_render('login', [
+            'title' => 'Вход',
+            'errors' => ['Слишком много попыток входа. Повторите через 10 минут.'],
+            'old' => ['identity' => $identity],
+			'styles' => ['/assets/css/auth.css'],
+        ]);
+        return;
+    }
+    rate_limit_reset($lockBucket);
+
+    $failBucket = 'login-fail:' . hash('sha256', $ip . '|' . $identityNorm);
 
     $pdo = db();
 
@@ -61,9 +93,11 @@ function auth_login_submit(): void
 
         $user = $stmt->fetch();
     } catch (PDOException $e) {
+        $errorId = app_error_id();
+        app_log_exception($errorId, $e);
         view_render('login', [
             'title' => 'Вход',
-            'errors' => ['Ошибка БД: ' . $e->getMessage()],
+            'errors' => ['Временная ошибка сервера. Код: ' . $errorId],
             'old' => ['identity' => $identity],
 			'styles' => ['/assets/css/auth.css'],
         ]);
@@ -72,9 +106,12 @@ function auth_login_submit(): void
 
 
     if (!$user) {
+        if (!rate_limit_consume($failBucket, 10, 600)) {
+            rate_limit_consume($lockBucket, 1, 600);
+        }
         view_render('login', [
             'title' => 'Вход',
-            'errors' => ['Пользователь не найден'],
+            'errors' => ['Неверный логин/email или пароль'],
             'old' => ['identity' => $identity],
 			'styles' => ['/assets/css/auth.css'],
         ]);
@@ -82,6 +119,9 @@ function auth_login_submit(): void
     }
 
     if (!password_verify($password, $user['password_hash'])) {
+        if (!rate_limit_consume($failBucket, 10, 600)) {
+            rate_limit_consume($lockBucket, 1, 600);
+        }
         view_render('login', [
             'title' => 'Вход',
             'errors' => ['Неверный логин/email или пароль'],
@@ -92,6 +132,8 @@ function auth_login_submit(): void
     }
 
     session_regenerate_id(true);
+    rate_limit_reset($failBucket);
+    rate_limit_reset($lockBucket);
 
     $_SESSION['user'] = [
         'id' => (int) $user['id'],
@@ -110,6 +152,10 @@ function auth_login_submit(): void
 
 function auth_register_submit(): void
 {
+    if (auth_is_logged_in()) {
+        redirect('/');
+    }
+
     $login = trim((string) ($_POST['login'] ?? ''));
     $email = trim((string) ($_POST['email'] ?? ''));
     $pass = (string) ($_POST['password'] ?? '');
@@ -122,8 +168,10 @@ function auth_register_submit(): void
     }
     if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $errors[] = 'Email указан некорректно.';
+    } elseif (mb_strlen($email) > 255) {
+        $errors[] = 'Email слишком длинный.';
     }
-    if ($pass === '' || mb_strlen($pass) < 6) {
+    if ($pass === '' || mb_strlen($pass) < 6 || mb_strlen($pass) > 255) {
         $errors[] = 'Пароль: минимум 6 символов.';
     }
 
@@ -169,7 +217,9 @@ function auth_register_submit(): void
 
         $userId = (int)$pdo->lastInsertId();
     } catch (PDOException $e) {
-        auth_register_form(['Ошибка БД: ' . $e->getMessage()], $old);
+        $errorId = app_error_id();
+        app_log_exception($errorId, $e);
+        auth_register_form(['Временная ошибка сервера. Код: ' . $errorId], $old);
         return;
     }
 
@@ -181,14 +231,12 @@ function auth_register_submit(): void
         'email' => $email,
     ]);
 
-    header('Location: /');
-    exit();
+    redirect('/');
 }
 
 function auth_logout_submit(): void
 {
     auth_logout();
-    header('Location: /');
-    exit();
+    redirect('/');
 }
 ?>

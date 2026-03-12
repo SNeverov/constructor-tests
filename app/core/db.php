@@ -9,12 +9,23 @@ function db(): PDO
         return $pdo;
     }
 
-    $host = 'mysql-8.2';
-    $user = 'root';
-    $pass = '';
-    $name = 'constructor_tests';
+    $cfg = require __DIR__ . '/../../config/database.php';
+    if (!is_array($cfg)) {
+        throw new RuntimeException('Invalid database config format');
+    }
 
-    $dsn = "mysql:host={$host};dbname={$name};charset=utf8mb4";
+    $host = (string)($cfg['host'] ?? '');
+    $port = (string)($cfg['port'] ?? '');
+    $name = (string)($cfg['name'] ?? '');
+    $user = (string)($cfg['user'] ?? '');
+    $pass = (string)($cfg['pass'] ?? '');
+    $charset = (string)($cfg['charset'] ?? 'utf8mb4');
+
+    if (trim($host) === '' || trim($port) === '' || trim($name) === '' || trim($user) === '') {
+        throw new RuntimeException('Database config is incomplete');
+    }
+
+    $dsn = "mysql:host={$host};port={$port};dbname={$name};charset={$charset}";
 
     try {
         $pdo = new PDO($dsn, $user, $pass, [
@@ -23,7 +34,7 @@ function db(): PDO
             PDO::ATTR_EMULATE_PREPARES   => false,
         ]);
     } catch (PDOException $e) {
-        die('DB CONNECT ERROR: ' . $e->getMessage());
+        throw new RuntimeException('DB connect failed', 0, $e);
     }
 
     return $pdo;

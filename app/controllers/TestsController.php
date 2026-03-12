@@ -15,6 +15,52 @@ function normalize_input_answer(string $s): string
     return $s;
 }
 
+function test_form_old_from_db(array $test): array
+{
+    $testId = (int)($test['id'] ?? 0);
+    $questions = questions_list_by_test_id($testId);
+    $questionIds = [];
+    foreach ($questions as $q) {
+        $questionIds[] = (int)($q['id'] ?? 0);
+    }
+
+    $optionsByQ = options_full_list_by_question_ids($questionIds);
+    $textAnswersByQ = text_answers_by_question_ids($questionIds);
+
+    $oldQuestions = [];
+    foreach ($questions as $q) {
+        $qid = (int)($q['id'] ?? 0);
+        $type = (string)($q['type'] ?? 'radio');
+
+        $item = [
+            'text' => (string)($q['question_text'] ?? ''),
+            'type' => $type,
+            'options' => [],
+            'answers' => [],
+        ];
+
+        if ($type === 'input') {
+            $item['answers'] = array_values(array_map('strval', $textAnswersByQ[$qid] ?? []));
+        } else {
+            foreach (($optionsByQ[$qid] ?? []) as $opt) {
+                $item['options'][] = [
+                    'text' => (string)($opt['option_text'] ?? ''),
+                    'is_correct' => (int)($opt['is_correct'] ?? 0),
+                ];
+            }
+        }
+
+        $oldQuestions[] = $item;
+    }
+
+    return [
+        'title' => (string)($test['title'] ?? ''),
+        'description' => (string)($test['description'] ?? ''),
+        'access_level' => (string)($test['access_level'] ?? 'public'),
+        'questions' => $oldQuestions,
+    ];
+}
+
 
 function my_tests_index(): void
 {
@@ -23,11 +69,29 @@ function my_tests_index(): void
     $user = auth_user();
     $userId = (int) ($user['id'] ?? 0);
 
-    $tests = tests_list_by_user_id($userId);
+    $page = (int)($_GET['page'] ?? 1);
+    if ($page < 1) {
+        $page = 1;
+    }
+
+    $perPage = 10;
+    $total = tests_count_active_by_user_id($userId);
+    $pages = max(1, (int)ceil($total / $perPage));
+    if ($page > $pages) {
+        $page = $pages;
+    }
+    $offset = ($page - 1) * $perPage;
+
+    $tests = tests_list_by_user_id_paginated($userId, $perPage, $offset);
 
     view_render('my_tests', [
         'title' => 'Мои тесты',
         'tests' => $tests,
+        'pagination' => [
+            'page' => $page,
+            'pages' => $pages,
+            'total' => $total,
+        ],
 		'scripts' => ['/assets/js/copy-link.js'],
 		'styles' => ['/assets/css/my-tests.css'],
     ]);
@@ -43,12 +107,41 @@ function my_tests_create_form(): void
     ]);
 }
 
+function my_tests_edit_form(int $testId): void
+{
+    auth_required();
+
+    $user = auth_user();
+    $userId = (int)($user['id'] ?? 0);
+    $test = tests_find_active_by_id_and_user_id($testId, $userId);
+
+    if ($test === null) {
+        http_response_code(404);
+        view_render('404', [
+            'title' => '404',
+        ]);
+        return;
+    }
+
+    $old = test_form_old_from_db($test);
+
+    view_render('test_create', [
+        'title' => 'Редактировать тест',
+        'styles' => ['/assets/css/test-create.css'],
+        'is_edit' => true,
+        'form_action' => '/my/tests/' . $testId,
+        'submit_label' => 'Сохранить изменения',
+        'old' => $old,
+    ]);
+}
+
 function my_tests_store(): void
 {
 
     auth_required();
 
     $errors = [];
+    $MAX_INPUT_ANSWER_LEN = 1000;
 
     $title = trim($_POST['title'] ?? '');
     if ($title === '') {
@@ -155,8 +248,8 @@ function my_tests_store(): void
                     $aText = trim((string)$a);
                     $aLen = mb_strlen($aText);
 
-                    if ($aLen < 1 || $aLen > 200) {
-                        $errors[] = "Вопрос #{$num}: текстовый ответ должен быть от 1 до 200 символов";
+                    if ($aLen < 1 || $aLen > $MAX_INPUT_ANSWER_LEN) {
+                        $errors[] = "Вопрос #{$num}: текстовый ответ должен быть от 1 до {$MAX_INPUT_ANSWER_LEN} символов";
                         break;
                     }
                 }
@@ -249,84 +342,377 @@ function my_tests_store(): void
     $userId = (int) $user['id'];
 
     $title = trim($_POST['title'] ?? '');
+    $pdo = db();
+    try {
+        $pdo->beginTransaction();
 
+        $testId = tests_create($userId, $title, $description, $accessLevel);
 
+        // Отправка вопросов в БД
+        $questions = array_values($questions);
 
-    $testId = tests_create($userId, $title, $description, $accessLevel);
-
-    // Отправка вопросов в БД
-    $questions = array_values($questions);
-
-
-    foreach ($questions as $qIndex => $q) {
-        if (!is_array($q)) {
-            continue;
-        }
-
-        $qType = (string)($q['type'] ?? '');
-        $qText = trim((string)($q['text'] ?? ''));
-        $qPos  = $qIndex + 1;
-
-        $questionId = questions_create($testId, $qType, $qText, $qPos);
-
-        // 19.2 — варианты (radio/checkbox)
-        if ($qType === 'radio' || $qType === 'checkbox') {
-            $options = $q['options'] ?? [];
-            if (!is_array($options)) {
-                $options = [];
+        foreach ($questions as $qIndex => $q) {
+            if (!is_array($q)) {
+                continue;
             }
 
-            // убираем пустые варианты
-            $options = array_values(array_filter(
-                $options,
-                fn($o) => trim((string)($o['text'] ?? '')) !== ''
-            ));
+            $qType = (string)($q['type'] ?? '');
+            $qText = trim((string)($q['text'] ?? ''));
+            $qPos  = $qIndex + 1;
 
+            $questionId = questions_create($testId, $qType, $qText, $qPos);
 
-            foreach ($options as $i => $opt) {
-                $optText = trim((string)($opt['text'] ?? ''));
-                if ($optText === '') {
+            // 19.2 — варианты (radio/checkbox)
+            if ($qType === 'radio' || $qType === 'checkbox') {
+                $options = $q['options'] ?? [];
+                if (!is_array($options)) {
+                    $options = [];
+                }
+
+                // убираем пустые варианты
+                $options = array_values(array_filter(
+                    $options,
+                    fn($o) => trim((string)($o['text'] ?? '')) !== ''
+                ));
+
+                foreach ($options as $i => $opt) {
+                    $optText = trim((string)($opt['text'] ?? ''));
+                    if ($optText === '') {
+                        continue;
+                    }
+
+                    $pos = $i + 1;
+                    $isCorrect = (int)($opt['is_correct'] ?? 0);
+
+                    options_create($questionId, $optText, $isCorrect, $pos);
+                }
+            }
+
+            // 19.3 — текстовые ответы (input)
+            if ($qType === 'input') {
+                $answers = $q['answers'] ?? [];
+                if (!is_array($answers)) {
+                    $answers = [];
+                }
+
+                $answers = array_values(array_filter(
+                    $answers,
+                    fn($a) => trim((string)$a) !== ''
+                ));
+
+                foreach ($answers as $ansText) {
+                    $text = trim((string)$ansText);
+                    if ($text === '') {
+                        continue;
+                    }
+
+                    question_text_answers_create($questionId, $text);
+                }
+            }
+        }
+
+        $pdo->commit();
+        redirect('/my/tests');
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        http_response_code(500);
+        view_render('error', [
+            'title' => 'Ошибка',
+            'message' => 'Не удалось сохранить тест целиком. Попробуйте ещё раз.',
+        ]);
+        return;
+    }
+
+}
+
+function my_tests_update(int $testId): void
+{
+    auth_required();
+
+    $user = auth_user();
+    $userId = (int)($user['id'] ?? 0);
+    $existingTest = tests_find_active_by_id_and_user_id($testId, $userId);
+    if ($existingTest === null) {
+        http_response_code(404);
+        view_render('404', [
+            'title' => '404',
+        ]);
+        return;
+    }
+
+    $errors = [];
+    $MAX_INPUT_ANSWER_LEN = 1000;
+
+    $title = trim($_POST['title'] ?? '');
+    if ($title === '') {
+        $errors[] = 'Название теста обязательно';
+    } elseif (mb_strlen($title) < 10 || mb_strlen($title) > 200) {
+        $errors[] = 'Название теста должно быть от 10 до 200 символов';
+    }
+
+    $accessLevel = $_POST['access_level'] ?? '';
+    if (!in_array($accessLevel, ['public', 'registered'], true)) {
+        $errors[] = 'Некорректный уровень доступа теста';
+    }
+
+    $description = trim($_POST['description'] ?? '');
+    $descLen = mb_strlen($description);
+    if ($descLen < 30 || $descLen > 500) {
+        $errors[] = 'Описание теста должно быть не меньше 30 символов и не больше 500 символов';
+    }
+
+    $questions = $_POST['questions'] ?? [];
+    if (!is_array($questions) || count($questions) < 1) {
+        $errors[] = 'Добавь хотя бы один вопрос';
+        $questions = [];
+    }
+
+    $MAX_QUESTIONS = 100;
+    $MAX_OPTIONS = 10;
+    $MAX_INPUT_ANSWERS = 10;
+
+    if (count($questions) > $MAX_QUESTIONS) {
+        $errors[] = "Слишком много вопросов: максимум {$MAX_QUESTIONS}";
+        $questions = array_slice($questions, 0, $MAX_QUESTIONS);
+    }
+
+    if (is_array($questions)) {
+        foreach ($questions as $i => $q) {
+            $num = $i + 1;
+
+            if (!is_array($q)) {
+                $errors[] = "Вопрос #{$num}: некорректные данные";
+                continue;
+            }
+
+            $qText = trim($q['text'] ?? '');
+            $qType = (string)($q['type'] ?? '');
+            $qLen = mb_strlen($qText);
+
+            if ($qText === '') {
+                $errors[] = "Вопрос #{$num}: текст вопроса обязателен";
+                continue;
+            }
+
+            if ($qLen < 5 || $qLen > 1000) {
+                $errors[] = "Вопрос #{$num}: текст вопроса должен быть от 5 до 1000 символов";
+                continue;
+            }
+
+            if (!in_array($qType, ['radio', 'checkbox', 'input'], true)) {
+                $errors[] = "Вопрос #{$num}: неверный тип вопроса";
+                continue;
+            }
+
+            if ($qType === 'input') {
+                $answers = $q['answers'] ?? [];
+                if (!is_array($answers)) {
+                    $answers = [];
+                }
+
+                $answers = array_values(array_filter($answers, fn($a) => trim((string)$a) !== ''));
+
+                if (count($answers) < 1) {
+                    $errors[] = "Вопрос #{$num}: укажи хотя бы один правильный текстовый ответ";
                     continue;
                 }
 
-                $pos = $i + 1;
-                $isCorrect = (int)($opt['is_correct'] ?? 0);
-
-                options_create($questionId, $optText, $isCorrect, $pos);
-            }
-        }
-
-        // 19.3 — текстовые ответы (input)
-        if ($qType === 'input') {
-            $answers = $q['answers'] ?? [];
-            if (!is_array($answers)) {
-                $answers = [];
-            }
-
-            $answers = array_values(array_filter(
-                $answers,
-                fn($a) => trim((string)$a) !== ''
-            ));
-
-
-            foreach ($answers as $ansText) {
-                $text = trim((string)$ansText);
-                if ($text === '') {
+                if (count($answers) > $MAX_INPUT_ANSWERS) {
+                    $errors[] = "Вопрос #{$num}: максимум {$MAX_INPUT_ANSWERS} текстовых ответов";
                     continue;
                 }
 
-                question_text_answers_create($questionId, $text);
+                $seenAnswers = [];
+                foreach ($answers as $a) {
+                    $norm = normalize_input_answer((string)$a);
+
+                    if ($norm === '') {
+                        continue;
+                    }
+
+                    if (isset($seenAnswers[$norm])) {
+                        $errors[] = "Вопрос #{$num}: текстовые ответы не должны повторяться (регистр/пробелы/ё→е)";
+                        continue 2;
+                    }
+
+                    $seenAnswers[$norm] = true;
+                }
+
+                foreach ($answers as $a) {
+                    $aText = trim((string)$a);
+                    $aLen = mb_strlen($aText);
+
+                    if ($aLen < 1 || $aLen > $MAX_INPUT_ANSWER_LEN) {
+                        $errors[] = "Вопрос #{$num}: текстовый ответ должен быть от 1 до {$MAX_INPUT_ANSWER_LEN} символов";
+                        break;
+                    }
+                }
+            } else {
+                $options = $q['options'] ?? [];
+                if (!is_array($options)) {
+                    $options = [];
+                }
+
+                $options = array_values(array_filter($options, fn($o) => trim((string)($o['text'] ?? '')) !== ''));
+
+                if (count($options) < 2) {
+                    $errors[] = "Вопрос #{$num}: минимум два варианта ответа";
+                    continue;
+                }
+
+                if (count($options) > $MAX_OPTIONS) {
+                    $errors[] = "Вопрос #{$num}: максимум {$MAX_OPTIONS} вариантов ответа";
+                    continue;
+                }
+
+                $seen = [];
+                foreach ($options as $o) {
+                    $t = trim((string)($o['text'] ?? ''));
+                    $t = preg_replace('/\s+/u', ' ', $t) ?? $t;
+                    $t = mb_strtolower($t);
+
+                    if ($t === '') {
+                        continue;
+                    }
+
+                    if (isset($seen[$t])) {
+                        $errors[] = "Вопрос #{$num}: варианты ответа не должны повторяться";
+                        continue 2;
+                    }
+
+                    $seen[$t] = true;
+                }
+
+                foreach ($options as $o) {
+                    $optText = trim((string)($o['text'] ?? ''));
+                    $len = mb_strlen($optText);
+
+                    if ($len < 1 || $len > 1000) {
+                        $errors[] = "Вопрос #{$num}: вариант ответа должен быть от 1 до 1000 символов";
+                        break;
+                    }
+                }
+
+                $correctCount = 0;
+                foreach ($options as $o) {
+                    $isCorrect = (int)($o['is_correct'] ?? 0);
+                    if ($isCorrect === 1) {
+                        $correctCount++;
+                    }
+                }
+
+                if ($qType === 'radio' && $correctCount !== 1) {
+                    $errors[] = "Вопрос #{$num}: при radio должен быть ровно 1 правильный вариант";
+                    continue;
+                }
+
+                if ($qType === 'checkbox' && $correctCount < 1) {
+                    $errors[] = "Вопрос #{$num}: при checkbox отметь хотя бы 1 правильный вариант";
+                    continue;
+                }
             }
         }
     }
 
+    if (!empty($errors)) {
+        view_render('test_create', [
+            'title' => 'Редактировать тест',
+            'styles' => ['/assets/css/test-create.css'],
+            'is_edit' => true,
+            'form_action' => '/my/tests/' . $testId,
+            'submit_label' => 'Сохранить изменения',
+            'errors' => $errors,
+            'old' => [
+                'title' => $_POST['title'] ?? '',
+                'description' => $_POST['description'] ?? '',
+                'access_level' => $_POST['access_level'] ?? 'public',
+                'questions' => $_POST['questions'] ?? [],
+            ],
+        ]);
+        return;
+    }
 
-    // временно: чтобы убедиться, что question_id реально создаётся
-    // echo "test_id={$testId}, question_id={$questionId}"; exit;
+    $pdo = db();
+    try {
+        $pdo->beginTransaction();
 
-    header('Location: /my/tests');
-    exit();
+        tests_update_by_id_and_user_id($testId, $userId, $title, $description, $accessLevel);
 
+        questions_delete_by_test_id($testId);
+
+        $questions = array_values($questions);
+        foreach ($questions as $qIndex => $q) {
+            if (!is_array($q)) {
+                continue;
+            }
+
+            $qType = (string)($q['type'] ?? '');
+            $qText = trim((string)($q['text'] ?? ''));
+            $qPos = $qIndex + 1;
+            $questionId = questions_create($testId, $qType, $qText, $qPos);
+
+            if ($qType === 'radio' || $qType === 'checkbox') {
+                $options = $q['options'] ?? [];
+                if (!is_array($options)) {
+                    $options = [];
+                }
+
+                $options = array_values(array_filter(
+                    $options,
+                    fn($o) => trim((string)($o['text'] ?? '')) !== ''
+                ));
+
+                foreach ($options as $i => $opt) {
+                    $optText = trim((string)($opt['text'] ?? ''));
+                    if ($optText === '') {
+                        continue;
+                    }
+
+                    $pos = $i + 1;
+                    $isCorrect = (int)($opt['is_correct'] ?? 0);
+                    options_create($questionId, $optText, $isCorrect, $pos);
+                }
+            }
+
+            if ($qType === 'input') {
+                $answers = $q['answers'] ?? [];
+                if (!is_array($answers)) {
+                    $answers = [];
+                }
+
+                $answers = array_values(array_filter(
+                    $answers,
+                    fn($a) => trim((string)$a) !== ''
+                ));
+
+                foreach ($answers as $ansText) {
+                    $text = trim((string)$ansText);
+                    if ($text === '') {
+                        continue;
+                    }
+                    question_text_answers_create($questionId, $text);
+                }
+            }
+        }
+
+        $pdo->commit();
+        flash_set('toast', ['type' => 'success', 'text' => 'Тест обновлён']);
+        redirect('/my/tests');
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        http_response_code(500);
+        view_render('error', [
+            'title' => 'Ошибка',
+            'message' => 'Не удалось сохранить изменения теста. Попробуйте ещё раз.',
+        ]);
+        return;
+    }
 }
 
 function my_tests_delete(int $testId): void
@@ -336,7 +722,16 @@ function my_tests_delete(int $testId): void
     $user = auth_user();
     $userId = (int) ($user['id'] ?? 0);
 
-    $deleted = tests_delete_by_id_and_user_id($testId, $userId);
+    try {
+        $deleted = tests_delete_by_id_and_user_id($testId, $userId);
+    } catch (Throwable $e) {
+        http_response_code(500);
+        view_render('error', [
+            'title' => 'Ошибка',
+            'message' => 'Не удалось отправить тест в корзину. Попробуйте ещё раз.',
+        ]);
+        return;
+    }
 
     if (!$deleted) {
         http_response_code(403);
@@ -483,6 +878,7 @@ function test_finish(int $testId): void
         $userId = isset($u['id']) ? (int)$u['id'] : null;
     }
 
+    $MAX_INPUT_ANSWER_LEN = 1000;
     $pdo = db();
 
     try {
@@ -500,6 +896,10 @@ function test_finish(int $testId): void
 			// привязка к юзеру (чтобы нельзя было подсунуть чужую попытку)
 			$attemptUserId = $attempt['user_id'] ?? null;
 			if ($userId === null) {
+                $sessionAttemptId = (int)($_SESSION['active_attempt_id_by_test'][$testId] ?? 0);
+                if ($sessionAttemptId !== $attemptId) {
+                    throw new RuntimeException('Invalid guest attempt session binding');
+                }
 				if ($attemptUserId !== null) {
 					throw new RuntimeException('Invalid attempt owner');
 				}
@@ -546,6 +946,9 @@ function test_finish(int $testId): void
         if (!is_array($posted)) {
             $posted = [];
         }
+        if (count($posted) > max(1, count($questions) * 3)) {
+            throw new InvalidArgumentException('Invalid submitted answers payload');
+        }
 
         $total = count($questions);
         $correctCount = 0;
@@ -553,6 +956,16 @@ function test_finish(int $testId): void
         $earnedPoints = 0.0;
 
         $answerRows = [];
+        $allowedOptionIdsByQ = [];
+        foreach ($optionsByQ as $qidTmp => $optsTmp) {
+            foreach ($optsTmp as $optTmp) {
+                $oidTmp = (int)($optTmp['id'] ?? 0);
+                if ($oidTmp <= 0) {
+                    continue;
+                }
+                $allowedOptionIdsByQ[(int)$qidTmp][$oidTmp] = true;
+            }
+        }
 
         foreach ($questions as $q) {
             $qid = (int)($q['id'] ?? 0);
@@ -566,6 +979,9 @@ function test_finish(int $testId): void
                 $userTextRaw = '';
                 if (isset($posted[$qid]) && !is_array($posted[$qid])) {
                     $userTextRaw = (string)$posted[$qid];
+                }
+                if (mb_strlen($userTextRaw) > $MAX_INPUT_ANSWER_LEN) {
+                    throw new InvalidArgumentException('Input answer is too long');
                 }
 
                 $userNorm = normalize_input_answer($userTextRaw);
@@ -606,6 +1022,9 @@ function test_finish(int $testId): void
                         if ($one > 0) $userOptIds = [$one];
                     }
                 }
+                $allowedIds = $allowedOptionIdsByQ[$qid] ?? [];
+                $userOptIds = array_values(array_filter($userOptIds, fn($oid) => isset($allowedIds[(int)$oid])));
+                $userOptIds = array_values(array_unique(array_map('intval', $userOptIds)));
 
                 $correctIds = $correctOptionIdsByQ[$qid] ?? [];
 
@@ -658,6 +1077,10 @@ function test_finish(int $testId): void
                 $userOptId = 0;
                 if (isset($posted[$qid]) && !is_array($posted[$qid])) {
                     $userOptId = (int)$posted[$qid];
+                }
+                $allowedIds = $allowedOptionIdsByQ[$qid] ?? [];
+                if ($userOptId > 0 && !isset($allowedIds[$userOptId])) {
+                    $userOptId = 0;
                 }
 
                 $correctIds = $correctOptionIdsByQ[$qid] ?? [];
@@ -713,6 +1136,17 @@ function test_finish(int $testId): void
 		attempt_finish_update($attemptId, $correctCount, $wrongCount, $percent, $totalQuestions, $testSnapshotHash);
 
 		unset($_SESSION['active_attempt_id_by_test'][$testId]);
+        if ($userId === null) {
+            if (!isset($_SESSION['guest_attempt_ids']) || !is_array($_SESSION['guest_attempt_ids'])) {
+                $_SESSION['guest_attempt_ids'] = [];
+            }
+            $_SESSION['guest_attempt_ids'][] = $attemptId;
+            $_SESSION['guest_attempt_ids'] = array_values(array_unique(array_map('intval', $_SESSION['guest_attempt_ids'])));
+            // Keep session payload bounded.
+            if (count($_SESSION['guest_attempt_ids']) > 200) {
+                $_SESSION['guest_attempt_ids'] = array_slice($_SESSION['guest_attempt_ids'], -200);
+            }
+        }
 
 
         $pdo->commit();
@@ -721,6 +1155,15 @@ function test_finish(int $testId): void
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
+        }
+
+        if ($e instanceof InvalidArgumentException) {
+            http_response_code(422);
+            view_render('error', [
+                'title' => 'Ошибка',
+                'message' => 'Некорректные данные формы. Обновите страницу и попробуйте ещё раз.',
+            ]);
+            return;
         }
 
         http_response_code(500);
@@ -742,6 +1185,35 @@ function attempt_show(int $attemptId): void
             'title' => '404',
         ]);
         return;
+    }
+
+    $attemptUserId = $attempt['user_id'] ?? null;
+    if ($attemptUserId !== null && $attemptUserId !== '') {
+        if (!auth_is_logged_in()) {
+            $_SESSION['redirect_to'] = '/attempts/' . $attemptId;
+            redirect('/login');
+        }
+
+        $viewer = auth_user();
+        $viewerId = (int)($viewer['id'] ?? 0);
+        if ($viewerId <= 0 || $viewerId !== (int)$attemptUserId) {
+            http_response_code(403);
+            view_render('error', [
+                'title' => 'Ошибка 403',
+                'message' => 'Нет доступа к этому результату.',
+            ]);
+            return;
+        }
+    } else {
+        $guestAttemptIds = $_SESSION['guest_attempt_ids'] ?? [];
+        if (!is_array($guestAttemptIds) || !in_array($attemptId, array_map('intval', $guestAttemptIds), true)) {
+            http_response_code(403);
+            view_render('error', [
+                'title' => 'Ошибка 403',
+                'message' => 'Нет доступа к этому результату.',
+            ]);
+            return;
+        }
     }
 
     $testId = (int)($attempt['test_id'] ?? 0);
@@ -949,7 +1421,16 @@ function my_tests_restore(int $testId): void
     $user = auth_user();
     $userId = (int)($user['id'] ?? 0);
 
-    $restored = tests_restore_by_id_and_user_id($testId, $userId);
+    try {
+        $restored = tests_restore_by_id_and_user_id($testId, $userId);
+    } catch (Throwable $e) {
+        http_response_code(500);
+        view_render('error', [
+            'title' => 'Ошибка',
+            'message' => 'Не удалось восстановить тест. Попробуйте ещё раз.',
+        ]);
+        return;
+    }
 
     if (!$restored) {
         http_response_code(403);
@@ -1002,7 +1483,16 @@ function my_tests_trash_restore_all(): void
     $user = auth_user();
     $userId = (int)($user['id'] ?? 0);
 
-    $count = tests_trash_restore_all_by_user_id($userId);
+    try {
+        $count = tests_trash_restore_all_by_user_id($userId);
+    } catch (Throwable $e) {
+        http_response_code(500);
+        view_render('error', [
+            'title' => 'Ошибка',
+            'message' => 'Не удалось восстановить тесты из корзины. Попробуйте ещё раз.',
+        ]);
+        return;
+    }
 
     flash_set('toast', ['type' => 'success', 'text' => "Восстановлено: {$count}"]);
     redirect('/my/tests/trash');
