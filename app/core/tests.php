@@ -528,7 +528,7 @@ function answers_insert_batch(int $attemptId, array $rows): void
     $params = [];
 
     foreach ($rows as $i => $row) {
-        $values[] = "(?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)";
+        $values[] = "(?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)";
         $params[] = $attemptId;
         $params[] = (int)($row['question_id'] ?? 0);
 
@@ -541,6 +541,7 @@ function answers_insert_batch(int $attemptId, array $rows): void
 		$params[] = (string)($row['question_text_snapshot'] ?? '');
 		$params[] = array_key_exists('option_text_snapshot', $row) ? $row['option_text_snapshot'] : null;
 		$params[] = (int)($row['is_correct_snapshot'] ?? 0);
+		$params[] = array_key_exists('correct_payload_snapshot', $row) ? $row['correct_payload_snapshot'] : null;
 
     }
 
@@ -554,6 +555,7 @@ function answers_insert_batch(int $attemptId, array $rows): void
 			question_text_snapshot,
 			option_text_snapshot,
 			is_correct_snapshot,
+			correct_payload_snapshot,
 			created_at
 		)
 
@@ -569,7 +571,21 @@ function attempt_find_by_id(int $attemptId): ?array
     $pdo = db();
 
     $stmt = $pdo->prepare("
-        SELECT id, test_id, user_id, started_at, finished_at, correct_count, wrong_count, percent
+        SELECT
+            id,
+            test_id,
+            test_title_snapshot,
+            test_access_snapshot,
+            test_snapshot_hash,
+            user_id,
+            attempt_no,
+            started_at,
+            finished_at,
+            duration_sec,
+            total_questions,
+            correct_count,
+            wrong_count,
+            percent
         FROM attempts
         WHERE id = :id
         LIMIT 1
@@ -599,6 +615,7 @@ function answers_list_by_attempt_id(int $attemptId): array
 			question_text_snapshot,
 			option_text_snapshot,
 			is_correct_snapshot,
+			correct_payload_snapshot,
 			created_at
 		FROM answers
 		WHERE attempt_id = :attempt_id

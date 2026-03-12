@@ -519,6 +519,26 @@ function test_finish(int $testId): void
             $questionIds[] = (int)($q['id'] ?? 0);
         }
 
+        $optionsByQ = options_list_by_question_ids($questionIds);
+        $optionTextById = [];
+        foreach ($optionsByQ as $opts) {
+            foreach ($opts as $opt) {
+                $oid = (int)($opt['id'] ?? 0);
+                if ($oid <= 0) {
+                    continue;
+                }
+                $optionTextById[$oid] = (string)($opt['option_text'] ?? '');
+            }
+        }
+        $allOptionTextsByQ = [];
+        foreach ($optionsByQ as $qidTmp => $opts) {
+            $list = [];
+            foreach ($opts as $opt) {
+                $list[] = (string)($opt['option_text'] ?? '');
+            }
+            $allOptionTextsByQ[(int)$qidTmp] = $list;
+        }
+
         $correctOptionIdsByQ = options_correct_ids_by_question_ids($questionIds);
         $correctTextAnswersByQ = text_answers_by_question_ids($questionIds);
 
@@ -530,6 +550,7 @@ function test_finish(int $testId): void
         $total = count($questions);
         $correctCount = 0;
         $wrongCount = 0;
+        $earnedPoints = 0.0;
 
         $answerRows = [];
 
@@ -538,6 +559,8 @@ function test_finish(int $testId): void
             $type = (string)($q['type'] ?? 'radio');
 
             $isCorrect = false;
+            $questionScore = 0.0;
+            $correctPayloadSnapshot = null;
 
             if ($type === 'input') {
                 $userTextRaw = '';
@@ -554,6 +577,11 @@ function test_finish(int $testId): void
                 }
 
                 $isCorrect = ($userNorm !== '') && in_array($userNorm, $variantsNorm, true);
+                $questionScore = $isCorrect ? 1.0 : 0.0;
+                $correctPayloadSnapshot = json_encode([
+                    'type' => 'input',
+                    'correct_text_answers' => array_values(array_map('strval', $variants)),
+                ], JSON_UNESCAPED_UNICODE);
 
                 // сохраняем текстовый ответ одной строкой
                 $answerRows[] = [
@@ -565,6 +593,7 @@ function test_finish(int $testId): void
 					'question_text_snapshot' => (string)($q['question_text'] ?? ''),
 					'option_text_snapshot' => null,
 					'is_correct_snapshot' => $isCorrect ? 1 : 0,
+					'correct_payload_snapshot' => $correctPayloadSnapshot,
 				];
 
             } elseif ($type === 'checkbox') {
@@ -585,6 +614,30 @@ function test_finish(int $testId): void
                 sort($correctSorted);
 
                 $isCorrect = (!empty($correctSorted) || !empty($userOptIds)) && ($userOptIds === $correctSorted);
+                $correctCountTotal = count($correctSorted);
+                $correctSelectedCount = 0;
+                if ($correctCountTotal > 0) {
+                    foreach ($userOptIds as $selectedOid) {
+                        if (in_array((int)$selectedOid, $correctSorted, true)) {
+                            $correctSelectedCount++;
+                        }
+                    }
+                    $questionScore = $correctSelectedCount / $correctCountTotal;
+                }
+                $correctOptionTexts = [];
+                foreach ($correctSorted as $correctOid) {
+                    $correctOptionTexts[] = (string)($optionTextById[$correctOid] ?? ('Вариант #' . $correctOid));
+                }
+                $selectedOptionTexts = [];
+                foreach ($userOptIds as $selectedOid) {
+                    $selectedOptionTexts[] = (string)($optionTextById[(int)$selectedOid] ?? ('Вариант #' . (int)$selectedOid));
+                }
+                $correctPayloadSnapshot = json_encode([
+                    'type' => 'checkbox',
+                    'all_option_texts' => array_values(array_map('strval', $allOptionTextsByQ[$qid] ?? [])),
+                    'correct_option_texts' => $correctOptionTexts,
+                    'selected_option_texts' => $selectedOptionTexts,
+                ], JSON_UNESCAPED_UNICODE);
 
                 // сохраняем каждую галочку отдельной строкой
                 foreach ($userOptIds as $oid) {
@@ -597,6 +650,7 @@ function test_finish(int $testId): void
 						'question_text_snapshot' => (string)($q['question_text'] ?? ''),
 						'option_text_snapshot' => (string)($optionTextById[$oid] ?? ''),
 						'is_correct_snapshot' => $isCorrect ? 1 : 0,
+						'correct_payload_snapshot' => $correctPayloadSnapshot,
 					];
 
                 }
@@ -608,6 +662,21 @@ function test_finish(int $testId): void
 
                 $correctIds = $correctOptionIdsByQ[$qid] ?? [];
                 $isCorrect = ($userOptId > 0) && in_array($userOptId, array_map('intval', $correctIds), true);
+                $questionScore = $isCorrect ? 1.0 : 0.0;
+                $correctOptionTexts = [];
+                foreach (array_map('intval', $correctIds) as $correctOid) {
+                    $correctOptionTexts[] = (string)($optionTextById[$correctOid] ?? ('Вариант #' . $correctOid));
+                }
+                $selectedOptionTexts = [];
+                if ($userOptId > 0) {
+                    $selectedOptionTexts[] = (string)($optionTextById[$userOptId] ?? ('Вариант #' . $userOptId));
+                }
+                $correctPayloadSnapshot = json_encode([
+                    'type' => 'radio',
+                    'all_option_texts' => array_values(array_map('strval', $allOptionTextsByQ[$qid] ?? [])),
+                    'correct_option_texts' => $correctOptionTexts,
+                    'selected_option_texts' => $selectedOptionTexts,
+                ], JSON_UNESCAPED_UNICODE);
 
                 // сохраняем выбранный option_id одной строкой (или 0 не пишем)
                 if ($userOptId > 0) {
@@ -620,6 +689,7 @@ function test_finish(int $testId): void
 						'question_text_snapshot' => (string)($q['question_text'] ?? ''),
 						'option_text_snapshot' => (string)($optionTextById[$userOptId] ?? ''),
 						'is_correct_snapshot' => $isCorrect ? 1 : 0,
+						'correct_payload_snapshot' => $correctPayloadSnapshot,
 					];
 
                 }
@@ -630,9 +700,11 @@ function test_finish(int $testId): void
             } else {
                 $wrongCount++;
             }
+
+            $earnedPoints += $questionScore;
         }
 
-        $percent = ($total > 0) ? round(($correctCount / $total) * 100, 2) : 0.0;
+        $percent = ($total > 0) ? round(($earnedPoints / $total) * 100, 2) : 0.0;
 
 		answers_insert_batch($attemptId, $answerRows);
 
@@ -674,13 +746,29 @@ function attempt_show(int $attemptId): void
 
     $testId = (int)($attempt['test_id'] ?? 0);
     $test = tests_find_by_id($testId);
-
+    $testMissing = false;
+    $sourceState = 'ok';
     if ($test === null) {
-        http_response_code(404);
-        view_render('404', [
-            'title' => '404',
-        ]);
-        return;
+        $testMissing = true;
+        $sourceState = 'deleted';
+        $snapshotTitle = trim((string)($attempt['test_title_snapshot'] ?? ''));
+        $snapshotAccess = trim((string)($attempt['test_access_snapshot'] ?? ''));
+
+        $test = [
+            'id' => $testId,
+            'title' => $snapshotTitle !== '' ? $snapshotTitle : 'Тест',
+            'access_level' => $snapshotAccess !== '' ? $snapshotAccess : 'public',
+        ];
+    }
+
+    if (!$testMissing) {
+        $attemptHash = trim((string)($attempt['test_snapshot_hash'] ?? ''));
+        if ($attemptHash !== '') {
+            $currentHash = test_snapshot_hash_by_test_id((int)($test['id'] ?? 0));
+            if ($currentHash !== '' && !hash_equals($attemptHash, $currentHash)) {
+                $sourceState = 'changed';
+            }
+        }
     }
 
     // Доступ: если тест "только для зарегистрированных", то и результат смотреть только после входа
@@ -772,18 +860,34 @@ function attempt_show(int $attemptId): void
 
 		// сгруппуем ответы пользователя по вопросу (по question_id как ключ)
 		$userByQ = [];
-		foreach ($userAnswers as $a) {
-			$qid = (int)($a['question_id'] ?? 0);
-			if ($qid <= 0) continue;
+		$groupIdByKey = [];
+		$nextSyntheticQid = -1;
 
-			$userByQ[$qid][] = $a;
+		foreach ($userAnswers as $a) {
+			$rawQid = $a['question_id'] ?? null;
+			$realQid = ($rawQid === null || $rawQid === '') ? 0 : (int)$rawQid;
+			$qText = (string)($a['question_text_snapshot'] ?? '');
+			$qType = (string)($a['question_type_snapshot'] ?? '');
+
+			// Если question_id уже NULL (после удаления вопроса), группируем по snapshot type+text.
+			$groupKey = $realQid > 0
+				? 'q:' . $realQid
+				: 's:' . hash('sha1', $qType . "\n" . $qText);
+
+			if (!isset($groupIdByKey[$groupKey])) {
+				$groupIdByKey[$groupKey] = ($realQid > 0) ? $realQid : $nextSyntheticQid--;
+			}
+
+			$groupQid = $groupIdByKey[$groupKey];
+			$userByQ[$groupQid][] = $a;
 
 			// создаём "вопрос" один раз
-			if (!isset($questions[$qid])) {
-				$questions[$qid] = [
-					'id' => $qid,
-					'question_text' => (string)($a['question_text_snapshot'] ?? ''),
-					'question_type' => (string)($a['question_type_snapshot'] ?? ''),
+			if (!isset($questions[$groupQid])) {
+				$questions[$groupQid] = [
+					'id' => $groupQid,
+					'question_text' => $qText,
+					'type' => $qType,
+					'question_type' => $qType,
 				];
 			}
 
@@ -814,6 +918,9 @@ function attempt_show(int $attemptId): void
         'correctOptionIdsByQ' => $correctOptionIdsByQ,
         'correctTextAnswersByQ' => $correctTextAnswersByQ,
         'userByQ' => $userByQ,
+        'snapshotMode' => $snapshotMode,
+        'testMissing' => $testMissing,
+        'sourceState' => $sourceState,
         'styles' => ['/assets/css/attempt-show.css'],
     ]);
 }
@@ -864,7 +971,16 @@ function my_tests_destroy(int $testId): void
     $user = auth_user();
     $userId = (int)($user['id'] ?? 0);
 
-    $deleted = tests_destroy_by_id_and_user_id($testId, $userId);
+    try {
+        $deleted = tests_destroy_by_id_and_user_id($testId, $userId);
+    } catch (Throwable $e) {
+        http_response_code(409);
+        view_render('error', [
+            'title' => 'Нельзя удалить тест',
+            'message' => 'Тест связан с историей прохождений. Сначала обновите ограничения БД для безопасного удаления.',
+        ]);
+        return;
+    }
 
     if (!$deleted) {
         http_response_code(403);
@@ -899,7 +1015,16 @@ function my_tests_trash_empty(): void
     $user = auth_user();
     $userId = (int)($user['id'] ?? 0);
 
-    $count = tests_trash_empty_by_user_id($userId);
+    try {
+        $count = tests_trash_empty_by_user_id($userId);
+    } catch (Throwable $e) {
+        http_response_code(409);
+        view_render('error', [
+            'title' => 'Нельзя очистить корзину',
+            'message' => 'Часть тестов связана с историей прохождений. Сначала обновите ограничения БД для безопасного удаления.',
+        ]);
+        return;
+    }
 
     flash_set('toast', ['type' => 'success', 'text' => "Удалено навсегда: {$count}"]);
     redirect('/my/tests/trash');
