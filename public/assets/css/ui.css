@@ -81,11 +81,27 @@
 .ui-toast-stack {
     position: fixed;
     right: 16px;
-    top: 72px;
+    top: 112px;
     z-index: 2500;
     display: grid;
     gap: 10px;
     pointer-events: none;
+}
+
+@media (max-width: 980px) {
+    .ui-toast-stack {
+        top: 96px;
+        right: 12px;
+    }
+}
+
+@media (max-width: 640px) {
+    .ui-toast-stack {
+        top: 86px;
+        right: auto;
+        left: 50%;
+        transform: translateX(-50%);
+    }
 }
 
 /* базовый тёмный “диалог” */

@@ -63,8 +63,74 @@
     color: #166534;
 }
 
+.sum__value--partial {
+    color: #0f766e;
+}
+
 .sum__value--bad {
     color: #b91c1c;
+}
+
+.sum__label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sum__hint {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    color: #475569;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: help;
+}
+
+.attempt__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 4px 0 12px;
+}
+
+.legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border: 1px solid #e5e7eb;
+    border-radius: 999px;
+    background: #fff;
+    color: #334155;
+    font-size: 13px;
+}
+
+.legend-item__swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 999px;
+    border: 1px solid #d1d5db;
+}
+
+.legend-item__swatch--ok {
+    background: #dcfce7;
+    border-color: #86efac;
+}
+
+.legend-item__swatch--bad {
+    background: #fee2e2;
+    border-color: #fca5a5;
+}
+
+.legend-item__swatch--partial {
+    background: #ccfbf1;
+    border-color: #5eead4;
 }
 
 .attempt__actions {
@@ -77,10 +143,32 @@
 .attempt__notice {
     margin-top: 10px;
     font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    background: #fff;
 }
 
 .attempt__notice--danger {
+    border-color: #fecaca;
+    background: #fef2f2;
     color: #b91c1c;
+}
+
+.attempt__notice-icon {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    border: 1px solid #fca5a5;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    flex: 0 0 auto;
 }
 
 
@@ -118,6 +206,12 @@
     background: #dcfce7;
     border-color: #bbf7d0;
     color: #166534;
+}
+
+.qres__state--partial {
+    background: #ccfbf1;
+    border-color: #99f6e4;
+    color: #0f766e;
 }
 
 .qres__state--bad {

@@ -1,5 +1,7 @@
 const MAX_OPTIONS = 10;
 const MAX_INPUT_ANSWERS = 10;
+const QUESTION_TEXT_MAX = 1000;
+const QUESTION_TEXT_MIN_HEIGHT = 36;
 
 
 function setQuestionIndex(q, index) {
@@ -132,6 +134,27 @@ function initQuestion(q) {
 
     if (!typeSelect) return;
 
+    const questionText = q.querySelector('[data-question-text]');
+    const questionTextLimit = q.querySelector('[data-question-text-limit]');
+
+    function syncQuestionTextUI() {
+        if (!questionText) return;
+
+        questionText.style.height = 'auto';
+        questionText.style.height = `${Math.max(questionText.scrollHeight, QUESTION_TEXT_MIN_HEIGHT)}px`;
+
+        if (questionTextLimit) {
+            const len = questionText.value.length;
+            questionTextLimit.textContent = `${len}/${QUESTION_TEXT_MAX}`;
+        }
+    }
+
+    if (questionText) {
+        questionText.maxLength = QUESTION_TEXT_MAX;
+        questionText.addEventListener('input', syncQuestionTextUI);
+        syncQuestionTextUI();
+    }
+
     const optionsBlock = q.querySelector('[data-block="options"]');
     const textBlock = q.querySelector('[data-block="text"]');
     const addOptionBtn = q.querySelector('[data-add-option]');
@@ -207,6 +230,7 @@ function initQuestion(q) {
 
         const type = typeSelect.value;
         const isInput = type === 'input';
+        q.classList.toggle('is-type-input', isInput);
 
         if (optionsBlock) optionsBlock.style.display = isInput ? 'none' : '';
         if (textBlock) textBlock.style.display = isInput ? '' : 'none';
@@ -300,6 +324,7 @@ function initQuestion(q) {
 
     reindexAnswers(q);
     updateAddAnswerVisibility(q);
+    syncQuestionTextUI();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -327,7 +352,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 setQuestionIndex(q, idx);
 
                 // 1) текст вопроса
-                const qText = q.querySelector(`input[name="questions[${idx}][text]"]`);
+                const qText = q.querySelector(`textarea[name="questions[${idx}][text]"]`);
                 if (qText) qText.value = qData.text ?? '';
 
                 // 2) тип
@@ -535,4 +560,3 @@ window.addEventListener('beforeunload', (e) => {
   e.preventDefault();
   /** @type {any} */ (e).returnValue = '';
 });
-

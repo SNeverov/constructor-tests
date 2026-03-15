@@ -24,7 +24,7 @@
 
 
     <?= form_open($formAction, 'post', ['class' => 'form', 'id' => 'testCreateForm']) ?>
-        <div class="form-section section">
+        <div class="form-section">
             <div class="section-title">Параметры теста</div>
             <div class="form-row">
                 <label>
@@ -60,145 +60,158 @@
             </div>
         </div>
 
-        <div class="form-section section">
-            <div class="section-title">Вопросы</div>
-            <div class="form-row">
-                <div class="questions">
-                    <div id="questionsList" class="questions__list">
+        <div class="questions-section">
+            <div class="questions">
+                <div id="questionsList" class="questions__list">
                         <div class="question-card" data-question data-index="0">
                             <div class="question-card__head">
                                 <div class="question-card__title" data-question-title>Вопрос #1</div>
+                                <button type="button" class="btn btn--danger btn--sm btn-remove-question" data-action="remove-question" aria-label="Удалить вопрос">
+                                    <img src="/assets/img/trash-red.svg?v=2" alt="" aria-hidden="true">
+                                    <span>Удалить</span>
+                                </button>
                             </div>
 
                             <div class="question-card__body">
                                 <div class="form-row">
                                     <label class="form-label">Текст вопроса</label>
-                                    <input type="text" name="questions[0][text]" class="input" placeholder="Например: Сколько будет 2+2?">
+                                    <div class="question-text-wrap">
+                                        <textarea
+                                            name="questions[0][text]"
+                                            class="input question-textarea"
+                                            data-question-text
+                                            maxlength="1000"
+                                            rows="1"
+                                            placeholder="Например: Сколько будет 2+2?"
+                                        ></textarea>
+                                        <div class="question-text-limit" data-question-text-limit>0/1000</div>
+                                    </div>
                                 </div>
 
-                                <div class="form-row">
-                                    <label class="form-label">Тип вопроса</label>
+                                <div class="question-answers-wrap">
+                                    <div class="form-row question-type-row">
+                                        <label class="form-label">Формат ответов</label>
 
-									<!-- Технический select для текущей логики JS + отправки в БД -->
-									<select name="questions[0][type]" class="input u-hidden" data-question-type aria-hidden="true" tabindex="-1">
-										<option value="radio">Один вариант (radio)</option>
-										<option value="checkbox">Несколько вариантов (checkbox)</option>
-										<option value="input">Ввод текста (input)</option>
-									</select>
+                                        <select name="questions[0][type]" class="input u-hidden" data-question-type aria-hidden="true" tabindex="-1">
+                                            <option value="radio">Один вариант (radio)</option>
+                                            <option value="checkbox">Несколько вариантов (checkbox)</option>
+                                            <option value="input">Ввод текста (input)</option>
+                                        </select>
 
-									<!-- Нормальный UI для человека -->
-									<div class="segmented" data-question-type-ui role="radiogroup" aria-label="Тип вопроса">
-										<label class="segmented__item">
-											<input type="radio" value="radio" data-question-type-radio checked>
-											<span>Один</span>
-										</label>
-
-										<label class="segmented__item">
-											<input type="radio" value="checkbox" data-question-type-radio>
-											<span>Несколько</span>
-										</label>
-
-										<label class="segmented__item">
-											<input type="radio" value="input" data-question-type-radio>
-											<span>Текст</span>
-										</label>
-									</div>
-
+                                        <div class="segmented" data-question-type-ui role="radiogroup" aria-label="Тип вопроса">
+                                            <label class="segmented__item">
+                                                <input type="radio" value="radio" data-question-type-radio checked>
+                                                <span>Один</span>
+                                            </label>
+                                            <label class="segmented__item">
+                                                <input type="radio" value="checkbox" data-question-type-radio>
+                                                <span>Несколько</span>
+                                            </label>
+                                            <label class="segmented__item">
+                                                <input type="radio" value="input" data-question-type-radio>
+                                                <span>Текст</span>
+                                            </label>
+                                        </div>
+                                    </div>
 
                                     <div class="answers-block" data-block="options">
-                                        <div class="form-label">Варианты ответа</div>
-
                                         <div class="answers">
-                                            <div class="answer-row" data-option>
-                                                <label class="correct-flag" title="Правильный ответ">
-                                                    <input type="hidden" name="questions[0][options][0][is_correct]" value="0">
-                                                    <input type="checkbox" name="questions[0][options][0][is_correct]" value="1" class="option-correct" aria-label="Правильный ответ">
-                                                </label>
+                                        <div class="answer-row" data-option>
+                                            <label class="correct-flag" title="Правильный ответ">
+                                                <input type="hidden" name="questions[0][options][0][is_correct]" value="0">
+                                                <input type="checkbox" name="questions[0][options][0][is_correct]" value="1" class="option-correct" aria-label="Правильный ответ">
+                                            </label>
 
-                                                <input
-                                                    type="text"
-                                                    name="questions[0][options][0][text]"
-                                                    class="input"
-                                                    placeholder="Вариант ответа"
-                                                >
+                                            <input
+                                                type="text"
+                                                name="questions[0][options][0][text]"
+                                                class="input"
+                                                placeholder="Вариант ответа"
+                                                maxlength="1000"
+                                            >
 
-                                                <button type="button" class="btn btn--danger btn--sm btn-del-variant" data-remove-option>
-                                                    <img src="/assets/img/delete-svgrepo-com.svg" alt="Удалить">
-                                                </button>
-                                            </div>
+                                            <button type="button" class="btn btn--danger btn--sm btn-del-variant" data-remove-option aria-label="Удалить вариант">
+                                                <img src="/assets/img/trash-red.svg?v=2" alt="" aria-hidden="true">
+                                            </button>
+                                        </div>
 
+                                        <div class="answer-row" data-option>
+                                            <label class="correct-flag" title="Правильный ответ">
+                                                <input type="hidden" name="questions[0][options][1][is_correct]" value="0">
+                                                <input type="checkbox" name="questions[0][options][1][is_correct]" value="1" class="option-correct" aria-label="Правильный ответ">
+                                            </label>
 
-                                            <div class="answer-row" data-option>
-                                                <label class="correct-flag" title="Правильный ответ">
-                                                    <input type="hidden" name="questions[0][options][1][is_correct]" value="0">
-                                                    <input type="checkbox" name="questions[0][options][1][is_correct]" value="1" class="option-correct" aria-label="Правильный ответ">
-                                                </label>
+                                            <input
+                                                type="text"
+                                                name="questions[0][options][1][text]"
+                                                class="input"
+                                                placeholder="Вариант ответа"
+                                                maxlength="1000"
+                                            >
 
-                                                <input
-                                                    type="text"
-                                                    name="questions[0][options][1][text]"
-                                                    class="input"
-                                                    placeholder="Вариант ответа"
-                                                >
-
-                                                <button type="button" class="btn btn--danger btn--sm btn-del-variant" data-remove-option>
-                                                    <img src="/assets/img/delete-svgrepo-com.svg" alt="Удалить">
-                                                </button>
-                                            </div>
+                                            <button type="button" class="btn btn--danger btn--sm btn-del-variant" data-remove-option aria-label="Удалить вариант">
+                                                <img src="/assets/img/trash-red.svg?v=2" alt="" aria-hidden="true">
+                                            </button>
+                                        </div>
                                         </div>
                                     </div>
-
 
                                     <div class="text-answers-block" data-block="text">
-                                        <div class="form-label">Правильные ответы (текст)</div>
                                         <div class="answers">
-                                            <div class="text-answer-row" data-answer>
-                                                <input
-                                                    type="text"
-                                                    name="questions[0][answers][0]"
-                                                    class="input"
-                                                    placeholder="Например: молоко"
-                                                >
-                                                <button type="button" class="btn btn--danger btn--sm btn-del-variant" data-remove-answer>
-                                                    <img src="/assets/img/delete-svgrepo-com.svg" alt="Удалить">
-                                                </button>
-                                            </div>
+                                        <div class="text-answer-row" data-answer>
+                                            <input
+                                                type="text"
+                                                name="questions[0][answers][0]"
+                                                class="input"
+                                                placeholder="Например: молоко"
+                                                maxlength="1000"
+                                            >
+                                            <button type="button" class="btn btn--danger btn--sm btn-del-variant" data-remove-answer aria-label="Удалить ответ">
+                                                <img src="/assets/img/trash-red.svg?v=2" alt="" aria-hidden="true">
+                                            </button>
+                                        </div>
 
-                                            <div class="text-answer-row" data-answer>
-                                                <input
-                                                    type="text"
-                                                    name="questions[0][answers][1]"
-                                                    class="input"
-                                                    placeholder="Альтернативный вариант (если нужен)"
-                                                >
-                                                <button type="button" class="btn btn--danger btn--sm btn-del-variant" data-remove-answer>
-                                                    <img src="/assets/img/delete-svgrepo-com.svg" alt="Удалить">
-                                                </button>
-                                            </div>
+                                        <div class="text-answer-row" data-answer>
+                                            <input
+                                                type="text"
+                                                name="questions[0][answers][1]"
+                                                class="input"
+                                                placeholder="Альтернативный вариант (если нужен)"
+                                                maxlength="1000"
+                                            >
+                                            <button type="button" class="btn btn--danger btn--sm btn-del-variant" data-remove-answer aria-label="Удалить ответ">
+                                                <img src="/assets/img/trash-red.svg?v=2" alt="" aria-hidden="true">
+                                            </button>
+                                        </div>
                                         </div>
                                     </div>
 
-                                    <div class="question-actions">
+                                    <div class="question-actions question-actions--answers">
                                         <button type="button" class="btn btn--ghost btn-add-variant" data-add-option>
-                                            + Добавить вариант
+                                            <img src="/assets/img/add-tests-create.svg?v=2" class="btn-add-icon" alt="" aria-hidden="true">
+                                            <span>Добавить вариант</span>
                                         </button>
                                         <button type="button" class="btn btn--ghost btn-add-variant" data-add-answer>
                                             + Добавить правильный ответ
                                         </button>
-                                        <button type="button" class="btn btn--ghost btn-add-question" data-action="add-question-after" data-add-question>
-                                            + Добавить вопрос
-                                        </button>
-                                        <button type="button" class="btn btn--danger btn-remove-question" data-action="remove-question">
-                                            - Удалить вопрос
-                                        </button>
                                     </div>
+
+                                </div>
+
+                                <div class="question-actions question-actions--question">
+                                    <button type="button" class="btn btn--ghost btn-add-question" data-action="add-question-after" data-add-question>
+                                        <img src="/assets/img/add-tests-create.svg?v=2" class="btn-add-icon" alt="" aria-hidden="true">
+                                        <span>Добавить вопрос</span>
+                                    </button>
                                 </div>
                             </div>
                         </div>
-                    </div>
                 </div>
             </div>
-        <button type="submit" class="btn btn--primary"><?= htmlspecialchars($submitLabel, ENT_QUOTES, 'UTF-8') ?></button>
+        </div>
+
+        <div class="test-create-submit">
+            <button type="submit" class="btn btn--primary"><?= htmlspecialchars($submitLabel, ENT_QUOTES, 'UTF-8') ?></button>
         </div>
     </form>
 

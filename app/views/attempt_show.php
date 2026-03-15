@@ -161,8 +161,16 @@ if (($sourceState ?? 'ok') === 'changed') {
                 <div class="sum__value sum__value--ok"><?= (int)$summaryCorrect ?></div>
             </div>
             <div class="sum">
-                <div class="sum__label">Частично верно</div>
-                <div class="sum__value"><?= (int)$summaryPartial ?></div>
+                <div class="sum__label">
+                    Частично верно
+                    <span
+                        class="sum__hint ui-tooltip"
+                        data-tooltip="Формула: выбранные верные варианты / все верные варианты вопроса."
+                        tabindex="0"
+                        aria-label="Формула частичного подсчёта"
+                    >?</span>
+                </div>
+                <div class="sum__value sum__value--partial"><?= (int)$summaryPartial ?></div>
             </div>
             <div class="sum">
                 <div class="sum__label">Неправильных</div>
@@ -171,6 +179,21 @@ if (($sourceState ?? 'ok') === 'changed') {
             <div class="sum">
                 <div class="sum__label">Процент</div>
                 <div class="sum__value"><?= (float)($attempt['percent'] ?? 0) ?>%</div>
+            </div>
+        </div>
+
+        <div class="attempt__legend" aria-label="Легенда цветов результата">
+            <div class="legend-item">
+                <span class="legend-item__swatch legend-item__swatch--ok"></span>
+                <span>Правильный вариант</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-item__swatch legend-item__swatch--bad"></span>
+                <span>Выбранный неверный</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-item__swatch legend-item__swatch--partial"></span>
+                <span>Частично верно</span>
             </div>
         </div>
 
@@ -186,7 +209,10 @@ if (($sourceState ?? 'ok') === 'changed') {
         </div>
 
         <?php if ($sourceNotice !== ''): ?>
-            <div class="attempt__notice attempt__notice--danger"><?= _h($sourceNotice) ?></div>
+            <div class="attempt__notice attempt__notice--danger" role="alert">
+                <span class="attempt__notice-icon" aria-hidden="true">!</span>
+                <span><?= _h($sourceNotice) ?></span>
+            </div>
         <?php endif; ?>
     </div>
 
@@ -301,7 +327,7 @@ if (($sourceState ?? 'ok') === 'changed') {
             $stateClass = 'qres__state--ok';
         } elseif ($questionScore > 0.0) {
             $stateText = 'Частично верно';
-            $stateClass = 'qres__state--ok';
+            $stateClass = 'qres__state--partial';
         }
         ?>
 

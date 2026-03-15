@@ -35,24 +35,36 @@
 
 		<!-- Theme -->
 		<meta name="theme-color" content="#0B1220">
+		<?php
+			$asset = static function (string $path): string {
+				$fullPath = rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), '/\\') . $path;
+				$version = is_file($fullPath) ? (string)filemtime($fullPath) : '1';
+				return $path . '?v=' . rawurlencode($version);
+			};
+		?>
 
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-        <link rel="stylesheet" href="/assets/css/base.css">
-		<link rel="stylesheet" href="/assets/css/ui.css">
+        <link rel="stylesheet" href="<?= htmlspecialchars($asset('/assets/css/base.css'), ENT_QUOTES, 'UTF-8') ?>">
+		<link rel="stylesheet" href="<?= htmlspecialchars($asset('/assets/css/ui.css'), ENT_QUOTES, 'UTF-8') ?>">
         <?php if (!empty($styles) && is_array($styles)): ?>
             <?php foreach ($styles as $href): ?>
-                <link rel="stylesheet" href="<?= htmlspecialchars((string) $href, ENT_QUOTES, 'UTF-8') ?>">
+                <?php
+                    $hrefStr = (string)$href;
+                    $hrefOut = str_starts_with($hrefStr, '/') ? $asset($hrefStr) : $hrefStr;
+                ?>
+                <link rel="stylesheet" href="<?= htmlspecialchars($hrefOut, ENT_QUOTES, 'UTF-8') ?>">
             <?php endforeach; ?>
         <?php endif; ?>
 
     </head>
 
-        <?php
+		<?php
 			$bodyClass = trim((string)($bodyClass ?? ''));
 			$toast = flash_get('toast', null);
 			$toastAttr = '';
+            $is404Page = str_contains($bodyClass, 'page-404');
 
 			if (is_array($toast) && !empty($toast['text'])) {
 				$toastJson = json_encode($toast, JSON_UNESCAPED_UNICODE);
@@ -67,47 +79,47 @@
             <header class="site-header">
                 <div class="container site-header__inner">
                     <div class="site-header__left">
-                        <a class="brand" href="/">Q-Platform</a>
-
-                        <?php if (auth_is_logged_in()): ?>
-                            <span class="muted">Привет, <?= htmlspecialchars(auth_user()['login']) ?></span>
-                            <nav class="nav">
-                                <a href="/account">Профиль</a>
-                                <a href="/my/tests">Мои тесты</a>
-                                <a href="/my/results">Мои результаты</a>
-								<a href="/my/tests/trash" class="nav-pill" aria-label="Корзина">
-									<span class="nav-pill__icon">
-										<img
-											src="/assets/img/trash-can.svg"
-											width="16"
-											height="16"
-											alt=""
-											aria-hidden="true"
-										/>
-									</span>
-
-									<!-- <span class="nav-pill__label">Корзина</span> -->
-
-									<?php if (!empty($trashCount)): ?>
-										<span class="nav-pill__count"><?= (int)$trashCount ?></span>
-									<?php endif; ?>
-								</a>
-
-
-
-
-
-                            </nav>
-                        <?php endif; ?>
+                        <a class="brand-wrap" href="/" aria-label="Q-Platform">
+                            <img src="<?= htmlspecialchars($asset('/assets/img/hdr-logo-q.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" class="brand-wrap__logo" aria-hidden="true">
+                            <span class="brand-wrap__text">Platform</span>
+                        </a>
                     </div>
 
                     <div class="site-header__right">
                         <?php if (auth_is_logged_in()): ?>
-                            <?= form_open('/logout', 'post', ['class' => 'inline-form']) ?>
-                                <button type="submit" class="btn btn--ghost">Выйти</button>
-                            </form>
+                            <div class="header-controls">
+                                <nav class="header-actions" aria-label="Главная навигация">
+                                    <a class="icon-btn ui-tooltip ui-tooltip--bottom" href="/my/tests/create" data-tooltip="Создать тест" aria-label="Создать тест">
+                                        <img src="<?= htmlspecialchars($asset('/assets/img/hdr-icon-create.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
+                                    </a>
+                                    <a class="icon-btn ui-tooltip ui-tooltip--bottom" href="/my/tests" data-tooltip="Мои тесты" aria-label="Мои тесты">
+                                        <img src="<?= htmlspecialchars($asset('/assets/img/hdr-icon-tests-new.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
+                                    </a>
+                                    <a class="icon-btn ui-tooltip ui-tooltip--bottom" href="/my/results" data-tooltip="Мои результаты" aria-label="Мои результаты">
+                                        <img src="<?= htmlspecialchars($asset('/assets/img/hdr-icon-results.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
+                                    </a>
+                                    <a class="icon-btn ui-tooltip ui-tooltip--bottom" href="/account" data-tooltip="Мой профиль" aria-label="Мой профиль">
+                                        <img src="<?= htmlspecialchars($asset('/assets/img/hdr-icon-profile.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
+                                    </a>
+                                    <a class="icon-btn ui-tooltip ui-tooltip--bottom" href="/feedback" data-tooltip="Обратная связь" aria-label="Обратная связь">
+                                        <img src="<?= htmlspecialchars($asset('/assets/img/hdr-icon-feedback.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
+                                    </a>
+                                    <a class="icon-btn ui-tooltip ui-tooltip--bottom" href="/my/tests/trash" data-tooltip="Корзина" aria-label="Корзина">
+                                        <img src="<?= htmlspecialchars($asset('/assets/img/trash.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
+                                        <?php if (!empty($trashCount)): ?>
+                                            <span class="icon-btn__badge" aria-label="В корзине: <?= (int)$trashCount ?>">
+                                                <?= (int)$trashCount ?>
+                                            </span>
+                                        <?php endif; ?>
+                                    </a>
+                                </nav>
 
-                            <a href="/my/tests/create" class="btn btn--primary">Создать тест</a>
+                                <?= form_open('/logout', 'post', ['class' => 'inline-form']) ?>
+                                    <button type="submit" class="icon-btn icon-btn--logout ui-tooltip ui-tooltip--bottom" data-tooltip="Выйти" aria-label="Выйти">
+                                        <img src="<?= htmlspecialchars($asset('/assets/img/hdr-icon-logout.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
+                                    </button>
+                                </form>
+                            </div>
                         <?php else: ?>
                             <a href="/login" class="btn btn--ghost">Войти</a>
                             <a href="/register" class="btn btn--primary">Регистрация</a>
@@ -118,16 +130,31 @@
 
             <main class="page page--full">
                 <div class="container">
-                    <?= $content ?>
+                    <?php if ($is404Page): ?>
+                        <?= $content ?>
+                    <?php else: ?>
+                        <div class="page-content-wrap">
+                            <?= $content ?>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </main>
 
-			<script src="/assets/js/ui.js"></script>
+            <button type="button" class="scroll-top" id="scrollTopBtn" aria-label="Наверх" title="Наверх">
+                <span class="scroll-top__icon" aria-hidden="true"></span>
+            </button>
+
+			<script src="<?= htmlspecialchars($asset('/assets/js/ui.js'), ENT_QUOTES, 'UTF-8') ?>"></script>
+            <script src="<?= htmlspecialchars($asset('/assets/js/scroll-top.js'), ENT_QUOTES, 'UTF-8') ?>"></script>
 
 
             <?php if (!empty($scripts) && is_array($scripts)): ?>
                 <?php foreach ($scripts as $src): ?>
-                    <script src="<?= htmlspecialchars((string) $src, ENT_QUOTES, 'UTF-8') ?>"></script>
+                    <?php
+                        $srcStr = (string)$src;
+                        $srcOut = str_starts_with($srcStr, '/') ? $asset($srcStr) : $srcStr;
+                    ?>
+                    <script src="<?= htmlspecialchars($srcOut, ENT_QUOTES, 'UTF-8') ?>"></script>
                 <?php endforeach; ?>
             <?php endif; ?>
 

@@ -59,8 +59,17 @@ function my_results_index(): void
     }
 
     $status = (string)($_GET['status'] ?? 'all');
-    if (!in_array($status, ['all', 'correct', 'partial', 'wrong'], true)) {
+    if (!in_array($status, ['all', 'excellent', 'good', 'satisfactory', 'bad', 'correct', 'partial', 'wrong'], true)) {
         $status = 'all';
+    }
+
+    // Backward compatibility with old filter values.
+    if ($status === 'correct') {
+        $status = 'excellent';
+    } elseif ($status === 'partial') {
+        $status = 'satisfactory';
+    } elseif ($status === 'wrong') {
+        $status = 'bad';
     }
 
     $dateFrom = trim((string)($_GET['date_from'] ?? ''));
@@ -106,6 +115,7 @@ function my_results_index(): void
             'pages' => $pages,
             'total' => $total,
         ],
+        'scripts' => ['/assets/js/list-loading.js', '/assets/js/date-picker.js'],
         'styles' => ['/assets/css/my-results.css'],
     ]);
 }

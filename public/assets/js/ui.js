@@ -49,6 +49,129 @@
     return el;
   })();
 
+  let toastOffsetRafId = 0;
+  function updateToastStackOffset() {
+    const defaultTop = 16;
+    const gapUnderHeader = 12;
+    const header = document.querySelector(".site-header");
+
+    let top = defaultTop;
+    if (header) {
+      const rect = header.getBoundingClientRect();
+      const isHeaderVisible = rect.bottom > 0 && rect.top < window.innerHeight;
+      if (isHeaderVisible) {
+        const visibleBottom = Math.min(window.innerHeight, rect.bottom);
+        top = Math.max(defaultTop, Math.round(visibleBottom + gapUnderHeader));
+      }
+    }
+
+    toastStack.style.top = `${top}px`;
+  }
+
+  function queueToastStackOffsetUpdate() {
+    if (toastOffsetRafId) return;
+    toastOffsetRafId = requestAnimationFrame(() => {
+      toastOffsetRafId = 0;
+      updateToastStackOffset();
+    });
+  }
+
+  window.addEventListener("scroll", queueToastStackOffsetUpdate, { passive: true });
+  window.addEventListener("resize", queueToastStackOffsetUpdate);
+  queueToastStackOffsetUpdate();
+
+  // ---------- Tooltip viewport fit ----------
+  const tooltipMeasureEl = (function ensureTooltipMeasureEl() {
+    const el = document.createElement("div");
+    el.style.position = "fixed";
+    el.style.left = "-9999px";
+    el.style.top = "-9999px";
+    el.style.visibility = "hidden";
+    el.style.pointerEvents = "none";
+    el.style.maxWidth = "260px";
+    el.style.padding = "7px 10px";
+    el.style.border = "1px solid rgba(148, 163, 184, 0.28)";
+    el.style.borderRadius = "9px";
+    el.style.fontSize = "12px";
+    el.style.lineHeight = "1.25";
+    el.style.whiteSpace = "normal";
+    el.style.fontFamily = "Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    document.body.appendChild(el);
+    return el;
+  })();
+
+  function measureTooltipSize(text) {
+    tooltipMeasureEl.textContent = text || "";
+    const width = Math.ceil(tooltipMeasureEl.offsetWidth);
+    const height = Math.ceil(tooltipMeasureEl.offsetHeight);
+    return { width, height };
+  }
+
+  function fitTooltipToViewport(el) {
+    if (!(el instanceof HTMLElement)) return;
+    const text = el.getAttribute("data-tooltip");
+    if (!text) return;
+
+    const rect = el.getBoundingClientRect();
+    const { width, height } = measureTooltipSize(text);
+    const viewportW = window.innerWidth || document.documentElement.clientWidth || 0;
+    const viewportH = window.innerHeight || document.documentElement.clientHeight || 0;
+    const edge = 8;
+    const gap = 10;
+
+    // horizontal clamp
+    const centerX = rect.left + (rect.width / 2);
+    const left = centerX - (width / 2);
+    let shiftX = 0;
+    if (left < edge) shiftX = edge - left;
+    if ((left + width) > (viewportW - edge)) shiftX = (viewportW - edge) - (left + width);
+    el.style.setProperty("--tt-shift-x", `${Math.round(shiftX)}px`);
+
+    // vertical auto flip
+    el.classList.remove("ui-tooltip--force-top", "ui-tooltip--force-bottom");
+    const preferredBottom = el.classList.contains("ui-tooltip--bottom");
+
+    if (preferredBottom) {
+      const bottomTop = rect.bottom + gap;
+      if ((bottomTop + height) > (viewportH - edge)) {
+        el.classList.add("ui-tooltip--force-top");
+      } else {
+        el.classList.add("ui-tooltip--force-bottom");
+      }
+      return;
+    }
+
+    const topBottom = rect.top - gap;
+    if ((topBottom - height) < edge) {
+      el.classList.add("ui-tooltip--force-bottom");
+    } else {
+      el.classList.add("ui-tooltip--force-top");
+    }
+  }
+
+  function fitAllTooltips() {
+    document.querySelectorAll(".ui-tooltip[data-tooltip]").forEach((el) => {
+      fitTooltipToViewport(el);
+    });
+  }
+
+  document.addEventListener("mouseover", (e) => {
+    const target = e.target && e.target.closest
+      ? e.target.closest(".ui-tooltip[data-tooltip]")
+      : null;
+    if (target) fitTooltipToViewport(target);
+  });
+
+  document.addEventListener("focusin", (e) => {
+    const target = e.target && e.target.closest
+      ? e.target.closest(".ui-tooltip[data-tooltip]")
+      : null;
+    if (target) fitTooltipToViewport(target);
+  });
+
+  window.addEventListener("resize", fitAllTooltips);
+  window.addEventListener("scroll", fitAllTooltips, { passive: true });
+
   function toastShow(text, type = "success", timeoutMs = 8000) {
     const toast = document.createElement("div");
     toast.className = `ui-toast ui-toast--${type}`;
@@ -230,6 +353,8 @@
   // ---------- Flash toast from server ----------
   // layout.php может поставить: <body data-toast='{"type":"success","text":"..."}'>
 	document.addEventListener("DOMContentLoaded", () => {
+    queueToastStackOffsetUpdate();
+    fitAllTooltips();
 	// --- Restore scroll (after POST/redirect) ---
 	try {
 		const key = "uiScroll:/my/tests";
@@ -241,6 +366,7 @@
 			// даём странице дорендериться и потом возвращаем позицию
 			requestAnimationFrame(() => {
 			window.scrollTo(0, y);
+      queueToastStackOffsetUpdate();
 			});
 		}
 		}

@@ -92,7 +92,7 @@ function my_tests_index(): void
             'pages' => $pages,
             'total' => $total,
         ],
-		'scripts' => ['/assets/js/copy-link.js'],
+		'scripts' => ['/assets/js/copy-link.js', '/assets/js/list-loading.js'],
 		'styles' => ['/assets/css/my-tests.css'],
     ]);
 }
@@ -1405,11 +1405,29 @@ function my_tests_trash_index(): void
     $user = auth_user();
     $userId = (int)($user['id'] ?? 0);
 
-    $tests = tests_trash_list_by_user_id($userId);
+    $page = (int)($_GET['page'] ?? 1);
+    if ($page < 1) {
+        $page = 1;
+    }
+
+    $perPage = 10;
+    $total = tests_trash_count_by_user_id($userId);
+    $pages = max(1, (int)ceil($total / $perPage));
+    if ($page > $pages) {
+        $page = $pages;
+    }
+    $offset = ($page - 1) * $perPage;
+
+    $tests = tests_trash_list_by_user_id_paginated($userId, $perPage, $offset);
 
     view_render('my_tests_trash', [
         'title' => 'Корзина',
         'tests' => $tests,
+        'pagination' => [
+            'page' => $page,
+            'pages' => $pages,
+            'total' => $total,
+        ],
         'styles' => ['/assets/css/my-tests.css', '/assets/css/my-tests-trash.css'],
     ]);
 }

@@ -17,7 +17,7 @@ $queryBase = [
 ];
 ?>
 
-<div class="results-page">
+<div class="results-page" data-list-shell>
     <div class="page-head">
         <h1>Мои результаты</h1>
     </div>
@@ -40,20 +40,43 @@ $queryBase = [
                 <select class="input" name="status">
                     <?php $status = (string)($filters['status'] ?? 'all'); ?>
                     <option value="all" <?= $status === 'all' ? 'selected' : '' ?>>Все</option>
-                    <option value="correct" <?= $status === 'correct' ? 'selected' : '' ?>>Правильно</option>
-                    <option value="partial" <?= $status === 'partial' ? 'selected' : '' ?>>Частично</option>
-                    <option value="wrong" <?= $status === 'wrong' ? 'selected' : '' ?>>Неверно</option>
+                    <option value="excellent" <?= $status === 'excellent' ? 'selected' : '' ?>>Отлично</option>
+                    <option value="good" <?= $status === 'good' ? 'selected' : '' ?>>Хорошо</option>
+                    <option value="satisfactory" <?= $status === 'satisfactory' ? 'selected' : '' ?>>Удовлетворительно</option>
+                    <option value="bad" <?= $status === 'bad' ? 'selected' : '' ?>>Плохо</option>
                 </select>
             </label>
 
             <label class="results-filters__field">
                 <span>Дата с</span>
-                <input type="date" class="input" name="date_from" value="<?= htmlspecialchars((string)($filters['date_from'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                <div class="date-field">
+                    <input
+                        type="date"
+                        class="input"
+                        name="date_from"
+                        data-date-input
+                        value="<?= htmlspecialchars((string)($filters['date_from'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                    >
+                    <button type="button" class="date-field__btn ui-tooltip" data-tooltip="Открыть календарь" data-date-open aria-label="Открыть календарь">
+                        <span class="date-field__icon" aria-hidden="true"></span>
+                    </button>
+                </div>
             </label>
 
             <label class="results-filters__field">
                 <span>Дата по</span>
-                <input type="date" class="input" name="date_to" value="<?= htmlspecialchars((string)($filters['date_to'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                <div class="date-field">
+                    <input
+                        type="date"
+                        class="input"
+                        name="date_to"
+                        data-date-input
+                        value="<?= htmlspecialchars((string)($filters['date_to'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                    >
+                    <button type="button" class="date-field__btn ui-tooltip" data-tooltip="Открыть календарь" data-date-open aria-label="Открыть календарь">
+                        <span class="date-field__icon" aria-hidden="true"></span>
+                    </button>
+                </div>
             </label>
         </div>
 
@@ -67,26 +90,38 @@ $queryBase = [
     <div class="results-meta muted">Найдено: <?= $total ?></div>
 
     <?php if (empty($rows)): ?>
-        <div class="empty-state">
+        <div class="empty-state" data-list-content>
             <div class="empty-state__card">
                 <h3 class="empty-state__title">Результаты не найдены</h3>
                 <p class="empty-state__text">Попробуй изменить фильтры или пройти тесты.</p>
+                <div class="results-empty__actions">
+                    <a href="/my/tests" class="btn btn--ghost">Перейти к тестам</a>
+                    <a href="/my/results" class="btn btn--primary">Сбросить фильтры</a>
+                </div>
             </div>
         </div>
     <?php else: ?>
-        <div class="results-list">
+        <div class="results-list" data-list-content>
             <?php foreach ($rows as $row): ?>
                 <?php
                 $percent = (float)($row['percent'] ?? 0);
-                $statusText = 'Неверно';
-                $statusClass = 'badge--bad';
-                if ($percent >= 100) {
-                    $statusText = 'Правильно';
-                    $statusClass = 'badge--ok';
-                } elseif ($percent > 0) {
-                    $statusText = 'Частично';
-                    $statusClass = 'badge--warn';
+                $rateLabel = 'Плохо';
+                $rateClass = 'score-pill--bad';
+                $itemToneClass = 'result-item--bad';
+                if ($percent >= 90.0) {
+                    $rateLabel = 'Отлично';
+                    $rateClass = 'score-pill--excellent';
+                    $itemToneClass = 'result-item--excellent';
+                } elseif ($percent >= 80.0) {
+                    $rateLabel = 'Хорошо';
+                    $rateClass = 'score-pill--good';
+                    $itemToneClass = 'result-item--good';
+                } elseif ($percent >= 70.0) {
+                    $rateLabel = 'Удовлетворительно';
+                    $rateClass = 'score-pill--ok';
+                    $itemToneClass = 'result-item--ok';
                 }
+                $barWidth = max(0.0, min(100.0, $percent));
 
                 $title = trim((string)($row['live_test_title'] ?? ''));
                 if ($title === '') {
@@ -99,29 +134,41 @@ $queryBase = [
                 $testIdRaw = $row['test_id'] ?? null;
                 $testId = ($testIdRaw === null || $testIdRaw === '') ? 0 : (int)$testIdRaw;
                 ?>
-                <article class="card result-item">
-                    <div class="result-item__head">
-                        <div class="result-item__title">
-                            <?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?>
+                <article class="card result-item <?= $itemToneClass ?>">
+                    <div class="result-item__layout">
+                        <div class="result-item__main">
+                            <div class="result-item__title">
+                                <?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?>
+                            </div>
+
+                            <div class="result-item__meta">
+                                <span class="meta-pill">Результат ID: <?= (int)($row['id'] ?? 0) ?></span>
+                                <span class="meta-pill">
+                                    <?php if ($testId > 0): ?>
+                                        Тест ID: <?= $testId ?>
+                                    <?php else: ?>
+                                        Тест ID: удалён
+                                    <?php endif; ?>
+                                </span>
+                                <span class="meta-pill">Дата: <?= htmlspecialchars((string)($row['finished_at'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                            </div>
+
+                            <div class="result-item__actions">
+                                <a class="btn btn--ghost" href="/attempts/<?= (int)($row['id'] ?? 0) ?>">Открыть результат</a>
+                            </div>
                         </div>
-                        <span class="badge <?= $statusClass ?>"><?= $statusText ?></span>
-                    </div>
 
-                    <div class="result-item__meta">
-                        <span class="badge">Результат ID: <?= (int)($row['id'] ?? 0) ?></span>
-                        <span class="badge">
-                            <?php if ($testId > 0): ?>
-                                Тест ID: <?= $testId ?>
-                            <?php else: ?>
-                                Тест ID: удалён
-                            <?php endif; ?>
-                        </span>
-                        <span class="badge">Процент: <?= $percent ?>%</span>
-                        <span class="badge">Дата: <?= htmlspecialchars((string)($row['finished_at'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
-                    </div>
-
-                    <div class="result-item__actions">
-                        <a class="btn btn--ghost" href="/attempts/<?= (int)($row['id'] ?? 0) ?>">Открыть результат</a>
+                        <div class="result-item__score">
+                            <div class="score-pill <?= $rateClass ?>" aria-label="Процент результата">
+                                <div class="score-pill__track" aria-hidden="true">
+                                    <div class="score-pill__fill" style="width: <?= $barWidth ?>%"></div>
+                                </div>
+                                <div class="score-pill__text">
+                                    <span class="score-pill__percent"><?= $percent ?>%</span>
+                                    <span class="score-pill__label"><?= $rateLabel ?></span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </article>
             <?php endforeach; ?>
@@ -129,22 +176,42 @@ $queryBase = [
     <?php endif; ?>
 
     <?php if ($pages > 1): ?>
-        <nav class="results-pagination">
+        <nav class="pager" aria-label="Пагинация результатов">
             <?php
             $prevPage = max(1, $page - 1);
             $nextPage = min($pages, $page + 1);
             ?>
             <?php if ($page > 1): ?>
                 <?php $q = $queryBase; $q['page'] = $prevPage; ?>
-                <a class="btn btn--ghost" href="/my/results?<?= htmlspecialchars(http_build_query($q), ENT_QUOTES, 'UTF-8') ?>">Назад</a>
+                <a class="pager__btn" href="/my/results?<?= htmlspecialchars(http_build_query($q), ENT_QUOTES, 'UTF-8') ?>" aria-label="Предыдущая страница">
+                    <img src="/assets/img/next-page.svg" class="pager__arrow pager__arrow--prev" alt="" aria-hidden="true">
+                </a>
+            <?php else: ?>
+                <span class="pager__btn is-disabled" aria-hidden="true">
+                    <img src="/assets/img/next-page.svg" class="pager__arrow pager__arrow--prev" alt="" aria-hidden="true">
+                </span>
             <?php endif; ?>
 
-            <span class="results-pagination__info">Страница <?= $page ?> из <?= $pages ?></span>
+            <span class="pager__info">
+                Страница <strong><?= $page ?></strong> из <strong><?= $pages ?></strong>
+            </span>
 
             <?php if ($page < $pages): ?>
                 <?php $q = $queryBase; $q['page'] = $nextPage; ?>
-                <a class="btn btn--ghost" href="/my/results?<?= htmlspecialchars(http_build_query($q), ENT_QUOTES, 'UTF-8') ?>">Вперёд</a>
+                <a class="pager__btn" href="/my/results?<?= htmlspecialchars(http_build_query($q), ENT_QUOTES, 'UTF-8') ?>" aria-label="Следующая страница">
+                    <img src="/assets/img/next-page.svg" class="pager__arrow" alt="" aria-hidden="true">
+                </a>
+            <?php else: ?>
+                <span class="pager__btn is-disabled" aria-hidden="true">
+                    <img src="/assets/img/next-page.svg" class="pager__arrow" alt="" aria-hidden="true">
+                </span>
             <?php endif; ?>
         </nav>
     <?php endif; ?>
+
+    <div class="list-loading" data-list-loading hidden aria-hidden="true">
+        <article class="card result-item skeleton-card"></article>
+        <article class="card result-item skeleton-card"></article>
+        <article class="card result-item skeleton-card"></article>
+    </div>
 </div>

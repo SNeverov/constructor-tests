@@ -1,213 +1,156 @@
-/* test-create.css - только страница создания теста */
-:root {
-  --c-bg: #f6f7fb;
-  --c-card: rgba(255,255,255,.85);
-  --c-card2: rgba(255,255,255,.65);
-  --c-border: rgba(15,23,42,.08);
-  --c-text: #0f172a;
-  --c-muted: rgba(15,23,42,.65);
-
-  --c-primary: #2f6fed;
-  --c-primary2: #2563eb;
-  --c-primary-soft: rgba(37,99,235,.12);
-
-  --c-danger: #ef4444;
-  --c-danger-soft: rgba(239,68,68,.08);
-  --c-success: #185b31b1;
-  --c-success-soft: rgba(34, 197, 94, 0.14);
-
-
-  --r-12: 12px;
-  --r-16: 16px;
-  --r-18: 18px;
+.test-create {
+  --tc-border: rgba(15, 23, 42, 0.1);
+  --tc-muted: #64748b;
 }
+
 .test-create .form {
   max-width: 100%;
   margin: 0;
 }
 
+.test-create .form-section {
+  margin-top: 16px;
+  padding: 18px;
+  border-radius: 14px;
+  border: 1px solid var(--tc-border);
+  background: #ffffff;
+  box-shadow:
+    0 10px 24px rgba(15, 23, 42, 0.1),
+    0 2px 8px rgba(15, 23, 42, 0.06);
+}
 
-.test-create .section {
+.test-create .questions-section {
   margin-top: 16px;
 }
 
-.test-create .section > .card {
-  padding: 16px;
+.test-create .form-section > .section-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 10px;
 }
 
-.test-create .alert {
-  max-width: 100%;
-  margin: 12px 0;
-}
-
-/* Верхний блок (название/описание/доступ) делаем компактнее и шире */
 .test-create .form-row > label {
   display: block;
 }
 
 .test-create .input,
-.test-create .select,
 .test-create .textarea {
   max-width: 100%;
 }
 
-/* Вопросы: карточки жирнее и читабельнее */
-.test-create .form-section {
-  background: var(--bg-card);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 16px;
-  margin-bottom: 16px;
-}
-
-.test-create .section-title {
-  font-weight: 700;
-  font-size: 15px;
-  margin-bottom: 10px;
-  color: var(--text-main);
-}
-
-.test-create .form-label {
-  font-weight: 700;
-  margin-bottom: 6px;
-  color: var(--text-main);
-}
-
-
-
-/* Кнопки добавления внутри вопросов */
-.test-create [data-add-option],
-.test-create [data-add-answer] {
-  margin-top: 0;
-}
-
-/* Кнопки действий внизу - нормальный отступ */
-.test-create [data-add-question] {
-  margin-top: 0;
-}
-
-/* "Сохранить тест" пусть будет заметнее и не липнет к контенту */
-.test-create button[type="submit"].btn--primary {
-  margin-top: 16px;
-  padding: 10px 16px;
-  margin-left: auto;
-  display: block;
-}
-
-.test-create .answers-block,
-.test-create .text-answers-block {
-  margin-top: 12px;
-}
-
-
-.test-create .hint {
-  margin-top: 8px;
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-/* Questions layout */
-
 .test-create .questions {
-  margin-top: 18px;
+  margin-top: 8px;
 }
 
 .test-create .questions__list {
   display: grid;
-  gap: 18px;
+  gap: 14px;
 }
 
-
-/* Question card */
 .test-create .question-card {
-  background: var(--c-card);
-  border: 1px solid var(--c-border);
-  border-radius: var(--r-18);
-  box-shadow: 0 16px 40px rgba(2, 6, 23, .08);
-  padding: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow:
+    0 10px 24px rgba(15, 23, 42, 0.1),
+    0 2px 8px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  overflow: hidden;
+}
+
+.test-create .question-card:focus-within {
+  border-color: rgba(15, 23, 42, 0.18);
+  box-shadow:
+    0 10px 24px rgba(15, 23, 42, 0.1),
+    0 2px 8px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
 .test-create .question-card__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.12);
+  background: #f3f6fb;
 }
 
 .test-create .question-card__title {
-  font-weight: 800;
-  font-size: 22px;
-  color: var(--c-text);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0;
 }
-
 
 .test-create .question-card__body {
-  background: rgba(255,255,255,.55);
-  border: 1px solid rgba(15,23,42,.06);
-  border-radius: var(--r-16);
-  padding: 14px;
-  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.06);
-}
-
-.test-create .question-card label {
-  display: block;
-  font-weight: 700;
-  color: var(--c-text);
-  /* margin: 0 0 8px; */
-}
-
-.test-create .question-card input[type="text"],
-.test-create .question-card textarea,
-.test-create .question-card select {
-  width: 100%;
-  border-radius: 14px;
-  border: 1px solid rgba(15,23,42,.10);
-  background: rgba(255,255,255,.8);
   padding: 12px 14px;
-  font-size: 16px;
-  outline: none;
-  transition: box-shadow .15s ease, border-color .15s ease;
 }
 
+.test-create .form-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 6px;
+  color: #0f172a;
+}
 
-/* Answers list */
+.test-create .form-row {
+  margin-bottom: 8px;
+}
+
+.test-create .question-text-wrap {
+  display: grid;
+  gap: 4px;
+}
+
+.test-create .question-textarea {
+  min-height: 36px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  line-height: 22px;
+  resize: none;
+  overflow: hidden;
+}
+
+.test-create .question-text-limit {
+  justify-self: end;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--tc-muted);
+}
+
+.test-create .answers-block,
+.test-create .text-answers-block {
+  margin-top: 8px;
+}
+
+.test-create .question-answers-wrap {
+  margin-top: 6px;
+  padding: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 12px;
+  background: #5c689c0f;
+}
+
 .test-create .answers {
   display: grid;
-  gap: 10px;
-  margin-top: 10px;
+  gap: 8px;
+}
+
+.test-create .answer-row,
+.test-create .text-answer-row {
+  display: grid;
+  align-items: center;
+  gap: 8px;
 }
 
 .test-create .answer-row {
-  display: grid;
-  grid-template-columns: 22px 1fr 40px;
-  gap: 14px;
-  align-items: center;
+  grid-template-columns: 24px minmax(0, 1fr) 38px;
 }
 
 .test-create .text-answer-row {
-  display: grid;
-  grid-template-columns: 1fr 40px;
-  gap: 14px;
-  align-items: center;
-  padding: 0;
-}
-
-.test-create .answer-row input[type="radio"],
-.test-create .answer-row input[type="checkbox"] {
-	-webkit-appearance: none;
-	appearance: none;
-	width: 18px;
-	height: 18px;
-	border: 2px solid rgba(17, 24, 39, 0.35);
-	background: rgba(17, 24, 39, 0.08);
-
-	display: grid;
-	place-items: center;
-	cursor: pointer;
-	transition: transform .12s ease, background .12s ease, border-color .12s ease;
-	border-radius: 999px;
+  grid-template-columns: minmax(0, 1fr) 38px;
 }
 
 .test-create .correct-flag {
@@ -216,191 +159,245 @@
   place-items: center;
 }
 
-.test-create .answer-row input[type="checkbox"] {
+.test-create .option-correct {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border: 2px solid rgba(17, 24, 39, 0.35);
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.08);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform .12s ease, background .12s ease, border-color .12s ease;
+}
+
+.test-create .option-correct[type="checkbox"] {
   border-radius: 6px;
 }
 
-.test-create .answer-row input[type="radio"]::after,
-.test-create .answer-row input[type="checkbox"]::after {
+.test-create .option-correct::after {
   content: "";
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #185b31b1;
   transform: scale(0);
   transition: transform .12s ease;
-  background: var(--c-text);
-  border-radius: 999px;
 }
 
-.test-create .answer-row input[type="checkbox"]::after {
-  border-radius: 3px;
+.test-create .option-correct[type="checkbox"]::after {
+  border-radius: 2px;
 }
 
-.test-create .answer-row input[type="radio"]:checked,
-.test-create .answer-row input[type="checkbox"]:checked {
-	border-color: rgba(26, 88, 49, 0.7);
-	background: var(--c-success-soft);
-
-
-	transform: translateY(-1px);
+.test-create .option-correct:checked {
+  border-color: rgba(26, 88, 49, 0.7);
+  background: rgba(34, 197, 94, 0.14);
+  transform: translateY(-1px);
 }
 
-.test-create .answer-row input[type="radio"]:checked::after,
-.test-create .answer-row input[type="checkbox"]:checked::after {
+.test-create .option-correct:checked::after {
   transform: scale(1);
-  background: var(--c-success);
-
 }
 
-/* Delete variant button */
+.test-create .option-correct:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.25);
+}
+
+.test-create .btn-del-variant,
+.test-create .btn-remove-question {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.04);
+  color: #dc2626;
+}
+
 .test-create .btn-del-variant {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  border: 1px solid rgba(239,68,68,.25);
-  background: var(--c-danger-soft);
-  color: var(--c-danger);
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-  transition: transform .12s ease, background .12s ease, border-color .12s ease;
+  width: 34px;
+  height: 34px;
   padding: 0;
 }
 
-.test-create .btn-del-variant:hover {
-  background: rgba(239,68,68,.12);
-  border-color: rgba(239,68,68,.35);
-  transform: translateY(-1px);
+.test-create .btn-del-variant img,
+.test-create .btn-remove-question img {
+  width: 30px;
+  height: 30px;
+  display: block;
+  opacity: 1;
+  filter: none !important;
 }
 
 .test-create .btn-del-variant img {
-  width: 22px;
-  height: 22px;
-  display: block;
+  width: 24px;
+  height: 24px;
 }
 
-/* Add buttons */
-.test-create .btn-add-variant {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  border-radius: 14px;
-  padding: 11px 14px;
-  border: 1px solid rgba(37,99,235,.18);
-  background: rgba(37,99,235,.08);
-  color: var(--c-text);
-  cursor: pointer;
-  transition: transform .12s ease, background .12s ease, border-color .12s ease;
+.test-create .answer-row .input,
+.test-create .text-answer-row .input {
+  min-height: 34px;
+  padding-top: 6px;
+  padding-bottom: 6px;
 }
 
-.test-create .btn-add-variant:hover {
-  background: rgba(37,99,235,.12);
-  border-color: rgba(37,99,235,.26);
-  transform: translateY(-1px);
+.test-create .btn-remove-question {
+  white-space: nowrap;
+  min-height: 38px;
+  font-size: 14px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+.test-create .btn-remove-question:hover,
+.test-create .btn-del-variant:hover {
+  background: rgba(239, 68, 68, 0.12);
 }
 
 .test-create .question-actions {
   display: flex;
-  gap: 12px;
-  width: 100%;
-  align-items: stretch;
-  flex-wrap: wrap;
-  margin-top: 12px;
+  align-items: center;
+  margin-top: 8px;
 }
 
-.test-create .question-actions .btn {
-  flex: 1 1 0;
-  padding: 10px 12px;
-  font-size: 14px;
-  border-radius: var(--radius-sm);
+.test-create .question-actions--answers {
+  justify-content: flex-start;
+  gap: 8px;
+  padding-left: 32px;
+}
+
+.test-create .question-card.is-type-input .question-actions--answers {
+  padding-left: 0;
+}
+
+.test-create .question-actions--question {
   justify-content: center;
-}
-
-
-/* Кастомный checkbox/radio по твоему классу option-correct */
-.option-correct {
-	-webkit-appearance: none;
-	appearance: none;
-
-	width: 18px;
-	height: 18px;
-	margin: 0;
-
-	border: 2px solid rgba(17, 24, 39, 0.35);
-	background: rgba(17, 24, 39, 0.08);
-
-	border-radius: 999px; /* radio look by default */
-	display: grid;
-	place-items: center;
-	cursor: pointer;
-	transition: transform .12s ease, background .12s ease, border-color .12s ease;
-}
-
-.option-correct[type="checkbox"] { border-radius: 6px; }
-
-.option-correct::after{
-  content:"";
-  width: 10px;
-  height: 10px;
-  transform: scale(0);
-  transition: transform .12s ease;
-  background: var(--primary);
-  border-radius: 999px;
-}
-
-.option-correct[type="checkbox"]::after { border-radius: 3px; }
-
-.option-correct:checked{
-	border-color: rgba(17, 24, 39, 0.80);
-	background: rgba(17, 24, 39, 0.14);
-	transform: translateY(-1px);
-}
-.option-correct:checked::after{ transform: scale(1); }
-
-/* Инпут внутри строки — без лишних марджинов */
-.answer-row .input { margin: 0; width: 100%; }
-
-/* Кнопка удалить — квадратная “иконка”, текст прячем */
-.answer-row .btn-del-variant {
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border-radius: 12px;
-
-  border: 1px solid rgba(239,68,68,.22);
-  background: rgba(239,68,68,.08);
-  color: rgb(239,68,68);
-
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-
-  transition: transform .12s ease, background .12s ease, border-color .12s ease;
-}
-
-
-.answer-row .btn-del-variant:hover{
-  background: rgba(239,68,68,.12);
-  border-color: rgba(239,68,68,.32);
-  transform: translateY(-1px);
-}
-
-/* “Добавить вариант / правильный ответ” — аккуратная secondary */
-.btn-add-variant {
   margin-top: 10px;
-  border-radius: 14px;
-  padding: 11px 14px;
-  border: 1px solid rgba(37,99,235,.18);
-  background: rgba(37,99,235,.08);
+  padding-top: 10px;
+  border-top: 1px solid var(--tc-border);
 }
 
+.test-create .test-create-submit {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
 
-/*Скрытыйй lable input для названия теста*/
-.sr-only{
-  position:absolute;
-  width:1px;height:1px;
-  padding:0;margin:-1px;
-  overflow:hidden;
-  clip:rect(0,0,0,0);
-  white-space:nowrap;
-  border:0;
+.test-create .btn-add-variant,
+.test-create .btn-add-question {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 7px 12px;
+  font-size: 15px;
+}
+
+.test-create .btn-add-variant {
+  background: #eef3fb;
+  border-color: rgba(59, 130, 246, 0.18);
+  color: #0f172a;
+}
+
+.test-create .btn-add-variant:hover {
+  background: #e6eef9;
+  border-color: rgba(59, 130, 246, 0.28);
+}
+
+.test-create .btn-add-question {
+  background: #f2f5fa;
+  border-color: rgba(15, 23, 42, 0.2);
+  color: #0f172a;
+}
+
+.test-create .btn-add-question:hover {
+  background: #e8edf5;
+  border-color: rgba(15, 23, 42, 0.32);
+}
+
+.test-create .btn-add-icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+  filter: none !important;
+}
+
+.test-create .segmented {
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+}
+
+.test-create .segmented__item span {
+  min-height: 32px;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  border-radius: 8px;
+}
+
+.test-create .segmented__item input:checked + span {
+  box-shadow: none;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+}
+
+.test-create .segmented__item input:focus-visible + span {
+  box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.1);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 840px) {
+  .test-create .question-card__title {
+    font-size: 20px;
+  }
+
+  .test-create .question-card__head {
+    padding: 12px;
+  }
+
+  .test-create .question-card__body {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 640px) {
+  .test-create .answer-row {
+    grid-template-columns: 24px minmax(0, 1fr) 38px;
+    gap: 8px;
+  }
+
+  .test-create .text-answer-row {
+    grid-template-columns: minmax(0, 1fr) 38px;
+    gap: 8px;
+  }
+
+  .test-create .btn-del-variant {
+    width: 38px;
+    height: 38px;
+  }
+
+  .test-create .question-actions--answers {
+    flex-wrap: wrap;
+    padding-left: 32px;
+  }
+
+  .test-create .question-card.is-type-input .question-actions--answers {
+    padding-left: 0;
+  }
 }

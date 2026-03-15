@@ -742,6 +742,27 @@ function answers_list_by_attempt_id(int $attemptId): array
     return $stmt->fetchAll();
 }
 
+function tests_trash_list_by_user_id_paginated(int $userId, int $limit, int $offset): array
+{
+    $pdo = db();
+    $limit = max(1, min(100, $limit));
+    $offset = max(0, $offset);
+
+    $stmt = $pdo->prepare("
+        SELECT id, user_id, title, description, access_level, created_at, updated_at, deleted_at
+        FROM tests
+        WHERE user_id = :user_id AND deleted_at IS NOT NULL
+        ORDER BY deleted_at DESC, id DESC
+        LIMIT {$limit} OFFSET {$offset}
+    ");
+
+    $stmt->execute([
+        ':user_id' => $userId,
+    ]);
+
+    return $stmt->fetchAll();
+}
+
 function tests_count_active_by_user_id(int $userId): int
 {
     $pdo = db();
@@ -821,12 +842,14 @@ function attempts_filters_sql(array $filters, array &$params): string
     }
 
     $status = (string)($filters['status'] ?? 'all');
-    if ($status === 'correct') {
-        $where[] = 'a.percent >= 100';
-    } elseif ($status === 'partial') {
-        $where[] = 'a.percent > 0 AND a.percent < 100';
-    } elseif ($status === 'wrong') {
-        $where[] = 'a.percent = 0';
+    if ($status === 'excellent' || $status === 'correct') {
+        $where[] = 'a.percent >= 90';
+    } elseif ($status === 'good') {
+        $where[] = 'a.percent >= 80 AND a.percent < 90';
+    } elseif ($status === 'satisfactory' || $status === 'partial') {
+        $where[] = 'a.percent >= 70 AND a.percent < 80';
+    } elseif ($status === 'bad' || $status === 'wrong') {
+        $where[] = 'a.percent < 70';
     }
 
     $dateFrom = (string)($filters['date_from'] ?? '');
