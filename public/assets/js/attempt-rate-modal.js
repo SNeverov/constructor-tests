@@ -75,14 +75,16 @@
           throw new Error('rate-failed');
         }
 
+        resultNode.textContent = `Вы оценили на ${value}`;
+        form.classList.add('is-rated');
         starsWrap.classList.add('is-hidden');
         resultNode.classList.add('is-show');
-        resultNode.textContent = `Вы оценили на ${value}`;
 
         setTimeout(() => {
           closeModal();
-        }, 1850);
+        }, 1200);
       } catch (err) {
+        form.classList.remove('is-rated');
         starsWrap.classList.remove('is-hidden');
         resultNode.classList.add('is-show');
         resultNode.textContent = 'Не удалось сохранить оценку';

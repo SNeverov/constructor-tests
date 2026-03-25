@@ -107,34 +107,30 @@ function restoreProgress() {
     }
 
     if (finishBtn) {
-        finishBtn.addEventListener('click', () => {
-			const ok = window.confirm('Закончить тест? После этого ответы менять не получится (пока это заглушка).');
-			if (!ok) return;
+        finishBtn.addEventListener('click', (e) => {
+			const ok = window.confirm('Закончить тест? После этого ответы менять не получится.');
+			if (!ok) {
+                e.preventDefault();
+                return;
+            }
 
 			formDirty = false;
-
             hideNote();
-
-            const qCards = form.querySelectorAll('[data-question-card]');
-            let answered = 0;
-
-            qCards.forEach((card) => {
-                const hasChecked = card.querySelector('input[type="radio"]:checked, input[type="checkbox"]:checked');
-                const textInput = card.querySelector('input[type="text"]');
-
-                if (hasChecked) {
-                    answered += 1;
-                    return;
-                }
-
-                if (textInput && String(textInput.value || '').trim() !== '') {
-                    answered += 1;
-                }
-            });
-
-            showNote(`Ответов заполнено: ${answered} из ${qCards.length}. (Пока без подсчёта результата и без сохранения)`);
         });
     }
+
+    form.addEventListener('submit', () => {
+        formDirty = false;
+        hideNote();
+
+        if (finishBtn) {
+            finishBtn.disabled = true;
+            finishBtn.textContent = 'Сохраняем...';
+        }
+        if (resetBtn) {
+            resetBtn.disabled = true;
+        }
+    });
 })();
 
 document.addEventListener('change', (e) => {

@@ -511,6 +511,7 @@ function my_tests_store(): void
         }
 
         $pdo->commit();
+        tests_payload_cache_invalidate($testId);
         redirect('/my/tests');
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {
@@ -798,6 +799,7 @@ function my_tests_update(int $testId): void
         }
 
         $pdo->commit();
+        tests_payload_cache_invalidate($testId);
         flash_set('toast', ['type' => 'success', 'text' => 'Тест обновлён']);
         redirect('/my/tests');
     } catch (Throwable $e) {
@@ -922,12 +924,11 @@ function test_pass(int $testId): void
         redirect('/login');
     }
 
-    $questions = questions_list_by_test_id($testId);
-
-    $questionIds = [];
-    foreach ($questions as $q) {
-        $questionIds[] = (int)($q['id'] ?? 0);
-    }
+    $payload = tests_payload_for_pass_cached($testId);
+    $questions = is_array($payload['questions'] ?? null) ? $payload['questions'] : [];
+    $optionsByQuestionId = is_array($payload['options_by_question_id'] ?? null)
+        ? $payload['options_by_question_id']
+        : [];
 
 	$userId = null;
 	if (auth_is_logged_in()) {
@@ -965,9 +966,6 @@ function test_pass(int $testId): void
 		$attemptId = attempt_create($testId, $userId);
 		$_SESSION['active_attempt_id_by_test'][$testId] = $attemptId;
 	}
-
-
-    $optionsByQuestionId = options_list_by_question_ids($questionIds);
 
     view_render('test_pass', [
         'title' => (string)($test['title'] ?? 'Прохождение теста'),
@@ -1016,8 +1014,8 @@ function test_finish(int $testId): void
 
         $attemptId = isset($_POST['attempt_id']) ? (int)$_POST['attempt_id'] : 0;
 
-		if ($attemptId > 0) {
-			$attempt = attempt_find_by_id($attemptId);
+        if ($attemptId > 0) {
+			$attempt = attempt_find_by_id_for_update($attemptId);
 
 			if ($attempt === null || (int)($attempt['test_id'] ?? 0) !== $testId) {
 				throw new RuntimeException('Invalid attempt_id');
@@ -1038,8 +1036,19 @@ function test_finish(int $testId): void
 					throw new RuntimeException('Invalid attempt owner');
 				}
 			}
+
+            // Idempotency: repeated finish must not create duplicate answers/stats.
+            if (($attempt['finished_at'] ?? null) !== null) {
+                $pdo->commit();
+                redirect('/attempts/' . $attemptId);
+                return;
+            }
 		} else {
 			$attemptId = attempt_create($testId, $userId);
+            $attempt = attempt_find_by_id_for_update($attemptId);
+            if ($attempt === null) {
+                throw new RuntimeException('Failed to lock new attempt');
+            }
 		}
 
 
@@ -1263,7 +1272,17 @@ function test_finish(int $testId): void
 
 		$totalQuestions = $total;
 		$testSnapshotHash = test_snapshot_hash_by_test_id($testId);
-		attempt_finish_update($attemptId, $correctCount, $wrongCount, $percent, $totalQuestions, $testSnapshotHash);
+		$finished = attempt_finish_update($attemptId, $correctCount, $wrongCount, $percent, $totalQuestions, $testSnapshotHash);
+        if (!$finished) {
+            $freshAttempt = attempt_find_by_id($attemptId);
+            if ($freshAttempt !== null && ($freshAttempt['finished_at'] ?? null) !== null) {
+                $pdo->commit();
+                unset($_SESSION['active_attempt_id_by_test'][$testId]);
+                redirect('/attempts/' . $attemptId);
+                return;
+            }
+            throw new RuntimeException('Attempt finalize race detected');
+        }
 
 		unset($_SESSION['active_attempt_id_by_test'][$testId]);
         if ($userId === null) {

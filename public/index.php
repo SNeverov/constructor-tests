@@ -1,12 +1,14 @@
 <?php
 declare(strict_types=1);
 
-session_start();
-
 require __DIR__ . '/../app/core/env.php';
 env_load(__DIR__ . '/../.env');
 
 require __DIR__ . '/../app/core/helpers.php';
+require __DIR__ . '/../app/core/config.php';
+require __DIR__ . '/../app/core/cache.php';
+require __DIR__ . '/../app/core/session.php';
+require __DIR__ . '/../app/core/observability.php';
 require __DIR__ . '/../app/core/rate_limit.php';
 require __DIR__ . '/../app/core/security.php';
 require __DIR__ . '/../app/core/flash.php';
@@ -21,6 +23,10 @@ require_once __DIR__ . '/../app/core/db.php';
 require __DIR__ . '/../app/core/tests.php';
 require __DIR__ . '/../app/core/csrf.php';
 require __DIR__ . '/../app/core/form.php';
+
+app_session_bootstrap();
+observability_bootstrap();
+app_session_start();
 
 security_apply_headers();
 

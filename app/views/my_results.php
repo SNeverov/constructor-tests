@@ -1,20 +1,20 @@
 <?php
-declare(strict_types=1);
+	declare(strict_types=1);
 
-/** @var array $rows */
-/** @var array $filters */
-/** @var array $pagination */
+	/** @var array $rows */
+	/** @var array $filters */
+	/** @var array $pagination */
 
-$page = (int)($pagination['page'] ?? 1);
-$pages = (int)($pagination['pages'] ?? 1);
-$total = (int)($pagination['total'] ?? 0);
+	$page = (int)($pagination['page'] ?? 1);
+	$pages = (int)($pagination['pages'] ?? 1);
+	$total = (int)($pagination['total'] ?? 0);
 
-$queryBase = [
-    'search' => (string)($filters['search'] ?? ''),
-    'status' => (string)($filters['status'] ?? 'all'),
-    'date_from' => (string)($filters['date_from'] ?? ''),
-    'date_to' => (string)($filters['date_to'] ?? ''),
-];
+	$queryBase = [
+		'search' => (string)($filters['search'] ?? ''),
+		'status' => (string)($filters['status'] ?? 'all'),
+		'date_from' => (string)($filters['date_from'] ?? ''),
+		'date_to' => (string)($filters['date_to'] ?? ''),
+	];
 ?>
 
 <div class="results-page" data-list-shell>

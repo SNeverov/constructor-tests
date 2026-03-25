@@ -31,7 +31,7 @@ function security_post_limit_rule(string $path): ?array
             return ['bookmarks-toggle', 80, 60];
         }
         if (preg_match('~^/tests/\d+/finish$~', $path)) {
-            return ['tests-finish', 30, 60];
+            return ['tests-finish', 120, 60];
         }
         if (preg_match('~^/tests/\d+/rate$~', $path)) {
             return ['tests-rate', 30, 60];

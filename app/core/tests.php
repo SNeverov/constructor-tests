@@ -391,31 +391,22 @@ function tests_bookmark_toggle_by_user_id(int $userId, int $testId): ?array
 
     $pdo->beginTransaction();
     try {
-        $existsStmt = $pdo->prepare("
-            SELECT 1
-            FROM test_bookmarks
+        $isBookmarked = false;
+
+        // First try to remove current bookmark.
+        $delStmt = $pdo->prepare("
+            DELETE FROM test_bookmarks
             WHERE user_id = :user_id
               AND test_id = :test_id
             LIMIT 1
         ");
-        $existsStmt->execute([
+        $delStmt->execute([
             ':user_id' => $userId,
             ':test_id' => $testId,
         ]);
-        $exists = $existsStmt->fetchColumn() !== false;
+        $removed = $delStmt->rowCount() === 1;
 
-        if ($exists) {
-            $delStmt = $pdo->prepare("
-                DELETE FROM test_bookmarks
-                WHERE user_id = :user_id
-                  AND test_id = :test_id
-                LIMIT 1
-            ");
-            $delStmt->execute([
-                ':user_id' => $userId,
-                ':test_id' => $testId,
-            ]);
-
+        if ($removed) {
             $updStmt = $pdo->prepare("
                 UPDATE tests
                 SET bookmarks_count = GREATEST(0, bookmarks_count - 1)
@@ -423,39 +414,65 @@ function tests_bookmark_toggle_by_user_id(int $userId, int $testId): ?array
                 LIMIT 1
             ");
             $updStmt->execute([':id' => $testId]);
+            $isBookmarked = false;
         } else {
-            $testStmt = $pdo->prepare("
-                SELECT id
-                FROM tests
-                WHERE id = :id
-                  AND deleted_at IS NULL
-                  AND deleted_forever_at IS NULL
-                LIMIT 1
-            ");
-            $testStmt->execute([':id' => $testId]);
-            if ($testStmt->fetchColumn() === false) {
-                if ($pdo->inTransaction()) {
-                    $pdo->rollBack();
-                }
-                return null;
-            }
-
+            // Then try to add bookmark atomically only for active test.
             $insStmt = $pdo->prepare("
-                INSERT INTO test_bookmarks (user_id, test_id, created_at)
-                VALUES (:user_id, :test_id, NOW())
+                INSERT IGNORE INTO test_bookmarks (user_id, test_id, created_at)
+                SELECT :user_id, t.id, NOW()
+                FROM tests t
+                WHERE t.id = :test_id
+                  AND t.deleted_at IS NULL
+                  AND t.deleted_forever_at IS NULL
+                LIMIT 1
             ");
             $insStmt->execute([
                 ':user_id' => $userId,
                 ':test_id' => $testId,
             ]);
+            $inserted = $insStmt->rowCount() === 1;
 
-            $updStmt = $pdo->prepare("
-                UPDATE tests
-                SET bookmarks_count = bookmarks_count + 1
-                WHERE id = :id
-                LIMIT 1
-            ");
-            $updStmt->execute([':id' => $testId]);
+            if ($inserted) {
+                $updStmt = $pdo->prepare("
+                    UPDATE tests
+                    SET bookmarks_count = bookmarks_count + 1
+                    WHERE id = :id
+                    LIMIT 1
+                ");
+                $updStmt->execute([':id' => $testId]);
+                $isBookmarked = true;
+            } else {
+                // No row inserted: either test does not exist/trashed or
+                // bookmark already exists because of a concurrent request.
+                $testStmt = $pdo->prepare("
+                    SELECT id
+                    FROM tests
+                    WHERE id = :id
+                      AND deleted_at IS NULL
+                      AND deleted_forever_at IS NULL
+                    LIMIT 1
+                ");
+                $testStmt->execute([':id' => $testId]);
+                if ($testStmt->fetchColumn() === false) {
+                    if ($pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
+                    return null;
+                }
+
+                $existsStmt = $pdo->prepare("
+                    SELECT 1
+                    FROM test_bookmarks
+                    WHERE user_id = :user_id
+                      AND test_id = :test_id
+                    LIMIT 1
+                ");
+                $existsStmt->execute([
+                    ':user_id' => $userId,
+                    ':test_id' => $testId,
+                ]);
+                $isBookmarked = $existsStmt->fetchColumn() !== false;
+            }
         }
 
         $pdo->commit();
@@ -471,17 +488,15 @@ function tests_bookmark_toggle_by_user_id(int $userId, int $testId): ?array
 
         $userCountStmt = $pdo->prepare("
             SELECT COUNT(*)
-            FROM test_bookmarks tb
-            INNER JOIN tests t ON t.id = tb.test_id
-            WHERE tb.user_id = :user_id
-              AND t.deleted_at IS NULL
+            FROM test_bookmarks
+            WHERE user_id = :user_id
         ");
         $userCountStmt->execute([':user_id' => $userId]);
         $userBookmarksCount = (int)($userCountStmt->fetchColumn() ?: 0);
 
         return [
             'ok' => true,
-            'is_bookmarked' => !$exists,
+            'is_bookmarked' => $isBookmarked,
             'test_bookmarks_count' => $testBookmarksCount,
             'user_bookmarks_count' => $userBookmarksCount,
         ];
@@ -496,53 +511,37 @@ function tests_bookmark_toggle_by_user_id(int $userId, int $testId): ?array
 function test_views_track(int $testId, ?int $userId = null): void
 {
     $pdo = db();
-    $sessionKey = session_id();
     $viewerId = (int)($userId ?? 0);
+    $sessionKey = session_id();
+    if (!is_string($sessionKey) || $sessionKey === '') {
+        $sessionKey = bin2hex(random_bytes(16));
+    }
+
+    // One unique viewer key per test:
+    // - logged user: stable user-based key
+    // - guest: session-based key
+    $viewerKey = $viewerId > 0
+        ? 'u:' . (string)$viewerId
+        : 'g:' . $sessionKey;
 
     $pdo->beginTransaction();
     try {
-        if ($viewerId > 0) {
-            $existsStmt = $pdo->prepare("
-                SELECT 1
-                FROM test_views
-                WHERE test_id = :test_id
-                  AND user_id = :user_id
-                LIMIT 1
-            ");
-            $existsStmt->execute([
-                ':test_id' => $testId,
-                ':user_id' => $viewerId,
-            ]);
-        } else {
-            $existsStmt = $pdo->prepare("
-                SELECT 1
-                FROM test_views
-                WHERE test_id = :test_id
-                  AND user_id IS NULL
-                  AND session_key = :session_key
-                LIMIT 1
-            ");
-            $existsStmt->execute([
-                ':test_id' => $testId,
-                ':session_key' => $sessionKey,
-            ]);
-        }
-
-        $alreadyTracked = $existsStmt->fetchColumn() !== false;
-        if ($alreadyTracked) {
-            $pdo->commit();
-            return;
-        }
-
         $insStmt = $pdo->prepare("
             INSERT INTO test_views (test_id, user_id, session_key, viewed_at)
             VALUES (:test_id, :user_id, :session_key, NOW())
+            ON DUPLICATE KEY UPDATE viewed_at = viewed_at
         ");
         $insStmt->execute([
             ':test_id' => $testId,
             ':user_id' => $viewerId > 0 ? $viewerId : null,
-            ':session_key' => $sessionKey,
+            ':session_key' => $viewerKey,
         ]);
+
+        $inserted = $insStmt->rowCount() === 1;
+        if (!$inserted) {
+            $pdo->commit();
+            return;
+        }
 
         $updStmt = $pdo->prepare("
             UPDATE tests
@@ -569,86 +568,52 @@ function test_rating_upsert_by_user_id(int $testId, int $userId, int $rating): b
 
     $pdo = db();
 
-    $testStmt = $pdo->prepare("
-        SELECT id
-        FROM tests
-        WHERE id = :id
-          AND deleted_at IS NULL
-        LIMIT 1
-    ");
-    $testStmt->execute([':id' => $testId]);
-    if ($testStmt->fetchColumn() === false) {
-        return false;
-    }
-
     $pdo->beginTransaction();
     try {
-        $oldStmt = $pdo->prepare("
-            SELECT rating
-            FROM test_ratings
-            WHERE test_id = :test_id
-              AND user_id = :user_id
+        $testExistsStmt = $pdo->prepare("
+            SELECT id
+            FROM tests
+            WHERE id = :id
+              AND deleted_at IS NULL
             LIMIT 1
+            FOR UPDATE
         ");
-        $oldStmt->execute([
+        $testExistsStmt->execute([':id' => $testId]);
+        if ($testExistsStmt->fetchColumn() === false) {
+            $pdo->rollBack();
+            return false;
+        }
+
+        $upsertStmt = $pdo->prepare("
+            INSERT INTO test_ratings (test_id, user_id, rating, created_at, updated_at)
+            VALUES (:test_id, :user_id, :rating, NOW(), NOW())
+            ON DUPLICATE KEY UPDATE
+                rating = VALUES(rating),
+                updated_at = NOW()
+        ");
+        $upsertStmt->execute([
             ':test_id' => $testId,
             ':user_id' => $userId,
+            ':rating' => $rating,
         ]);
-        $oldRating = $oldStmt->fetchColumn();
 
-        if ($oldRating === false) {
-            $insStmt = $pdo->prepare("
-                INSERT INTO test_ratings (test_id, user_id, rating, created_at, updated_at)
-                VALUES (:test_id, :user_id, :rating, NOW(), NOW())
-            ");
-            $insStmt->execute([
-                ':test_id' => $testId,
-                ':user_id' => $userId,
-                ':rating' => $rating,
-            ]);
-
-            $updStmt = $pdo->prepare("
-                UPDATE tests
-                SET rating_count = rating_count + 1,
-                    rating_sum = rating_sum + :rating
-                WHERE id = :id
-                LIMIT 1
-            ");
-            $updStmt->execute([
-                ':rating' => $rating,
-                ':id' => $testId,
-            ]);
-        } else {
-            $old = (int)$oldRating;
-            $delta = $rating - $old;
-
-            if ($delta !== 0) {
-                $updRatingStmt = $pdo->prepare("
-                    UPDATE test_ratings
-                    SET rating = :rating,
-                        updated_at = NOW()
-                    WHERE test_id = :test_id
-                      AND user_id = :user_id
-                    LIMIT 1
-                ");
-                $updRatingStmt->execute([
-                    ':rating' => $rating,
-                    ':test_id' => $testId,
-                    ':user_id' => $userId,
-                ]);
-
-                $updStmt = $pdo->prepare("
-                    UPDATE tests
-                    SET rating_sum = GREATEST(0, rating_sum + :delta)
-                    WHERE id = :id
-                    LIMIT 1
-                ");
-                $updStmt->execute([
-                    ':delta' => $delta,
-                    ':id' => $testId,
-                ]);
-            }
-        }
+        $recalcStmt = $pdo->prepare("
+            UPDATE tests t
+            SET
+                t.rating_count = (
+                    SELECT COUNT(*)
+                    FROM test_ratings tr
+                    WHERE tr.test_id = t.id
+                ),
+                t.rating_sum = (
+                    SELECT COALESCE(SUM(tr2.rating), 0)
+                    FROM test_ratings tr2
+                    WHERE tr2.test_id = t.id
+                )
+            WHERE t.id = :id
+            LIMIT 1
+        ");
+        $recalcStmt->execute([':id' => $testId]);
 
         $pdo->commit();
         return true;
@@ -822,6 +787,49 @@ function tests_trash_count_by_user_id(int $userId): int
     ]);
 
     return (int)$stmt->fetchColumn();
+}
+
+function tests_payload_cache_key(int $testId): string
+{
+    return 'test:' . $testId . ':payload';
+}
+
+function tests_payload_for_pass_uncached(int $testId): array
+{
+    $questions = questions_list_by_test_id($testId);
+    $questionIds = [];
+    foreach ($questions as $q) {
+        $questionIds[] = (int)($q['id'] ?? 0);
+    }
+
+    $optionsByQuestionId = options_list_by_question_ids($questionIds);
+
+    return [
+        'questions' => $questions,
+        'options_by_question_id' => $optionsByQuestionId,
+    ];
+}
+
+function tests_payload_for_pass_cached(int $testId): array
+{
+    $cacheKey = tests_payload_cache_key($testId);
+    $cached = cache_get($cacheKey);
+    if (is_array($cached) && isset($cached['questions']) && isset($cached['options_by_question_id'])) {
+        return $cached;
+    }
+
+    $payload = tests_payload_for_pass_uncached($testId);
+    $ttl = (int)app_config('cache.test_payload_ttl_sec', 300);
+    if ($ttl > 0) {
+        cache_put($cacheKey, $payload, $ttl);
+    }
+
+    return $payload;
+}
+
+function tests_payload_cache_invalidate(int $testId): void
+{
+    cache_forget(tests_payload_cache_key($testId));
 }
 
 
@@ -1070,7 +1078,7 @@ function attempt_finish_update(
     float $percent,
     int $totalQuestions,
     string $testSnapshotHash
-): void
+): bool
 {
     $pdo = db();
 
@@ -1096,6 +1104,8 @@ function attempt_finish_update(
         ':percent' => $percent,
         ':id' => $attemptId,
     ]);
+
+    return $stmt->rowCount() === 1;
 }
 
 
@@ -1230,6 +1240,41 @@ function attempt_find_by_id(int $attemptId): ?array
     return ($row !== false) ? $row : null;
 }
 
+function attempt_find_by_id_for_update(int $attemptId): ?array
+{
+    $pdo = db();
+
+    $stmt = $pdo->prepare("
+        SELECT
+            id,
+            test_id,
+            test_title_snapshot,
+            test_access_snapshot,
+            test_snapshot_hash,
+            user_id,
+            attempt_no,
+            started_at,
+            finished_at,
+            duration_sec,
+            total_questions,
+            correct_count,
+            wrong_count,
+            percent
+        FROM attempts
+        WHERE id = :id
+        LIMIT 1
+        FOR UPDATE
+    ");
+
+    $stmt->execute([
+        ':id' => $attemptId,
+    ]);
+
+    $row = $stmt->fetch();
+
+    return ($row !== false) ? $row : null;
+}
+
 function answers_list_by_attempt_id(int $attemptId): array
 {
     $pdo = db();
@@ -1306,6 +1351,7 @@ function tests_count_deleted_by_user_id(int $userId): int
         FROM tests
         WHERE user_id = :user_id
           AND deleted_at IS NOT NULL
+          AND deleted_forever_at IS NULL
     ");
     $stmt->execute([
         ':user_id' => $userId,
@@ -1373,14 +1419,17 @@ function attempts_filters_sql(array $filters, array &$params): string
 
     $dateFrom = (string)($filters['date_from'] ?? '');
     if ($dateFrom !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFrom)) {
-        $where[] = 'DATE(a.finished_at) >= :date_from';
-        $params[':date_from'] = $dateFrom;
+        $where[] = 'a.finished_at >= :date_from_ts';
+        $params[':date_from_ts'] = $dateFrom . ' 00:00:00';
     }
 
     $dateTo = (string)($filters['date_to'] ?? '');
     if ($dateTo !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo)) {
-        $where[] = 'DATE(a.finished_at) <= :date_to';
-        $params[':date_to'] = $dateTo;
+        $dateToTs = strtotime($dateTo . ' +1 day');
+        if ($dateToTs !== false) {
+            $where[] = 'a.finished_at < :date_to_next_ts';
+            $params[':date_to_next_ts'] = date('Y-m-d H:i:s', $dateToTs);
+        }
     }
 
     return implode(' AND ', $where);
