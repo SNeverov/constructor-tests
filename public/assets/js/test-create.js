@@ -2,6 +2,8 @@ const MAX_OPTIONS = 10;
 const MAX_INPUT_ANSWERS = 10;
 const QUESTION_TEXT_MAX = 1000;
 const QUESTION_TEXT_MIN_HEIGHT = 36;
+const TEST_DESCRIPTION_MAX = 500;
+const TEST_DESCRIPTION_MIN_HEIGHT = 76;
 
 
 function setQuestionIndex(q, index) {
@@ -328,6 +330,27 @@ function initQuestion(q) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    const testDescription = document.querySelector('[data-test-description]');
+    const testDescriptionLimit = document.querySelector('[data-test-description-limit]');
+
+    function syncTestDescriptionUI() {
+        if (!testDescription) return;
+
+        testDescription.style.height = 'auto';
+        testDescription.style.height = `${Math.max(testDescription.scrollHeight, TEST_DESCRIPTION_MIN_HEIGHT)}px`;
+
+        if (testDescriptionLimit) {
+            const len = testDescription.value.length;
+            testDescriptionLimit.textContent = `${len}/${TEST_DESCRIPTION_MAX}`;
+        }
+    }
+
+    if (testDescription) {
+        testDescription.maxLength = TEST_DESCRIPTION_MAX;
+        testDescription.addEventListener('input', syncTestDescriptionUI);
+        syncTestDescriptionUI();
+    }
+
     const wrap = document.querySelector('#questionsList') || document.querySelector('#questions');
     const baseTemplate = wrap ? wrap.querySelector('[data-question]') : null;
     const questionTemplate = baseTemplate ? baseTemplate.cloneNode(true) : null;
@@ -500,10 +523,13 @@ let formDirty = false;
 let isSubmitting = false;
 
 function hasPrefilledData() {
+    const form = document.querySelector('#testCreateForm');
+    if (!form) return false;
+
     const oldQuestions = window.__OLD_QUESTIONS__ || [];
     if (Array.isArray(oldQuestions) && oldQuestions.length > 0) return true;
 
-    const fields = document.querySelectorAll('input, textarea');
+    const fields = form.querySelectorAll('input, textarea');
     for (const el of fields) {
         if (el.type === 'hidden') continue;
         if (el.type === 'checkbox' || el.type === 'radio') {
@@ -551,11 +577,8 @@ window.addEventListener('pageshow', () => {
 
 
 window.addEventListener('beforeunload', (e) => {
+  if (isSubmitting) return;
   if (!formDirty) return;
-
-  // если прямо сейчас сабмитится форма создания теста — не предупреждаем
-  const active = document.activeElement;
-  if (active && active.closest && active.closest('form#testCreateForm')) return;
 
   e.preventDefault();
   /** @type {any} */ (e).returnValue = '';

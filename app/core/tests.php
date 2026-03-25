@@ -125,9 +125,24 @@ function tests_find_by_id(int $testId): ?array
     $pdo = db();
 
     $stmt = $pdo->prepare("
-		SELECT id, user_id, title, description, access_level, created_at, updated_at
-		FROM tests
-		WHERE id = :id AND deleted_at IS NULL
+		SELECT
+            t.id,
+            t.user_id,
+            t.title,
+            t.description,
+            t.access_level,
+            t.category_name,
+            t.time_limit_min,
+            t.created_at,
+            t.updated_at,
+            t.bookmarks_count,
+            t.views_count,
+            t.rating_count,
+            t.rating_sum,
+            COALESCE(u.login, '') AS creator_login
+		FROM tests t
+        LEFT JOIN users u ON u.id = t.user_id
+		WHERE t.id = :id AND t.deleted_at IS NULL
 		LIMIT 1
 	");
 
@@ -141,6 +156,45 @@ function tests_find_by_id(int $testId): ?array
     return $row !== false ? $row : null;
 }
 
+function test_rating_find_by_test_id_and_user_id(int $testId, int $userId): ?int
+{
+    $pdo = db();
+    $stmt = $pdo->prepare("
+        SELECT rating
+        FROM test_ratings
+        WHERE test_id = :test_id
+          AND user_id = :user_id
+        LIMIT 1
+    ");
+    $stmt->execute([
+        ':test_id' => $testId,
+        ':user_id' => $userId,
+    ]);
+    $value = $stmt->fetchColumn();
+    if ($value === false) {
+        return null;
+    }
+    return (int)$value;
+}
+
+function attempts_has_finished_by_test_id_and_user_id(int $testId, int $userId): bool
+{
+    $pdo = db();
+    $stmt = $pdo->prepare("
+        SELECT 1
+        FROM attempts
+        WHERE test_id = :test_id
+          AND user_id = :user_id
+          AND finished_at IS NOT NULL
+        LIMIT 1
+    ");
+    $stmt->execute([
+        ':test_id' => $testId,
+        ':user_id' => $userId,
+    ]);
+    return $stmt->fetchColumn() !== false;
+}
+
 function tests_list_by_user_id_paginated(int $userId, int $limit, int $offset): array
 {
     $pdo = db();
@@ -148,18 +202,462 @@ function tests_list_by_user_id_paginated(int $userId, int $limit, int $offset): 
     $offset = max(0, $offset);
 
     $stmt = $pdo->prepare("
-		SELECT id, user_id, title, description, access_level, created_at, updated_at
-		FROM tests
-		WHERE user_id = :user_id AND deleted_at IS NULL
-		ORDER BY created_at DESC
+		SELECT
+            t.id,
+            t.user_id,
+            t.title,
+            t.description,
+            t.access_level,
+            t.category_name,
+            t.time_limit_min,
+            t.created_at,
+            t.updated_at,
+            t.bookmarks_count,
+            t.views_count,
+            t.rating_count,
+            t.rating_sum,
+            COALESCE(u.login, '') AS creator_login,
+            CASE WHEN tb.user_id IS NULL THEN 0 ELSE 1 END AS is_bookmarked,
+            (
+                SELECT COUNT(*)
+                FROM questions q
+                WHERE q.test_id = t.id
+            ) AS questions_count,
+            (
+                SELECT COUNT(*)
+                FROM attempts a
+                WHERE a.test_id = t.id
+            ) AS attempts_count
+		FROM tests t
+        LEFT JOIN users u ON u.id = t.user_id
+        LEFT JOIN test_bookmarks tb ON tb.test_id = t.id AND tb.user_id = :viewer_id
+		WHERE t.user_id = :user_id AND t.deleted_at IS NULL
+		ORDER BY t.created_at DESC
         LIMIT {$limit} OFFSET {$offset}
 	");
 
     $stmt->execute([
         ':user_id' => $userId,
+        ':viewer_id' => $userId,
     ]);
 
     return $stmt->fetchAll();
+}
+
+function tests_count_for_home(): int
+{
+    $pdo = db();
+
+    $where = 't.deleted_at IS NULL';
+    if (!auth_is_logged_in()) {
+        $where .= " AND t.access_level = 'public'";
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM tests t
+        WHERE {$where}
+    ");
+
+    $stmt->execute();
+    return (int)$stmt->fetchColumn();
+}
+
+function tests_list_for_home(int $limit = 20, int $offset = 0): array
+{
+    $pdo = db();
+    $limit = max(1, min(100, $limit));
+    $offset = max(0, $offset);
+    $viewerId = auth_is_logged_in() ? (int)(auth_user()['id'] ?? 0) : 0;
+
+    $where = 't.deleted_at IS NULL';
+    if (!auth_is_logged_in()) {
+        $where .= " AND t.access_level = 'public'";
+    }
+
+    $bookmarksJoin = '';
+    if ($viewerId > 0) {
+        $bookmarksJoin = 'LEFT JOIN test_bookmarks tb ON tb.test_id = t.id AND tb.user_id = :viewer_id';
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT
+            t.id,
+            t.user_id,
+            t.title,
+            t.description,
+            t.access_level,
+            t.category_name,
+            t.time_limit_min,
+            t.created_at,
+            t.updated_at,
+            t.bookmarks_count,
+            t.views_count,
+            t.rating_count,
+            t.rating_sum,
+            COALESCE(u.login, '') AS creator_login,
+            " . ($viewerId > 0 ? 'CASE WHEN tb.user_id IS NULL THEN 0 ELSE 1 END' : '0') . " AS is_bookmarked,
+            (
+                SELECT COUNT(*)
+                FROM questions q
+                WHERE q.test_id = t.id
+            ) AS questions_count,
+            (
+                SELECT COUNT(*)
+                FROM attempts a
+                WHERE a.test_id = t.id
+            ) AS attempts_count
+        FROM tests t
+        LEFT JOIN users u ON u.id = t.user_id
+        {$bookmarksJoin}
+        WHERE {$where}
+        ORDER BY t.created_at DESC
+        LIMIT {$limit} OFFSET {$offset}
+    ");
+
+    $params = [];
+    if ($viewerId > 0) {
+        $params[':viewer_id'] = $viewerId;
+    }
+    $stmt->execute($params);
+    return $stmt->fetchAll();
+}
+
+function tests_count_bookmarked_by_user_id(int $userId): int
+{
+    $pdo = db();
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM test_bookmarks tb
+        WHERE tb.user_id = :user_id
+    ");
+    $stmt->execute([':user_id' => $userId]);
+    return (int)$stmt->fetchColumn();
+}
+
+function tests_list_bookmarked_by_user_id_paginated(int $userId, int $limit, int $offset): array
+{
+    $pdo = db();
+    $limit = max(1, min(100, $limit));
+    $offset = max(0, $offset);
+
+    $stmt = $pdo->prepare("
+        SELECT
+            COALESCE(t.id, tb.test_id) AS id,
+            t.user_id,
+            COALESCE(t.title, 'Удалённый тест') AS title,
+            t.description,
+            t.access_level,
+            t.category_name,
+            t.time_limit_min,
+            t.created_at,
+            t.updated_at,
+            t.bookmarks_count,
+            t.views_count,
+            t.rating_count,
+            t.rating_sum,
+            COALESCE(u.login, '') AS creator_login,
+            1 AS is_bookmarked,
+            CASE
+                WHEN t.id IS NULL THEN 'deleted'
+                WHEN t.deleted_forever_at IS NOT NULL THEN 'deleted'
+                WHEN t.deleted_at IS NOT NULL THEN 'trashed'
+                ELSE 'available'
+            END AS bookmark_availability,
+            (
+                SELECT COUNT(*)
+                FROM questions q
+                WHERE q.test_id = t.id
+            ) AS questions_count,
+            (
+                SELECT COUNT(*)
+                FROM attempts a
+                WHERE a.test_id = t.id
+            ) AS attempts_count
+        FROM test_bookmarks tb
+        LEFT JOIN tests t ON t.id = tb.test_id
+        LEFT JOIN users u ON u.id = t.user_id
+        WHERE tb.user_id = :user_id
+        ORDER BY tb.created_at DESC, t.id DESC
+        LIMIT {$limit} OFFSET {$offset}
+    ");
+    $stmt->execute([':user_id' => $userId]);
+    return $stmt->fetchAll();
+}
+
+function tests_bookmark_toggle_by_user_id(int $userId, int $testId): ?array
+{
+    $pdo = db();
+
+    $pdo->beginTransaction();
+    try {
+        $existsStmt = $pdo->prepare("
+            SELECT 1
+            FROM test_bookmarks
+            WHERE user_id = :user_id
+              AND test_id = :test_id
+            LIMIT 1
+        ");
+        $existsStmt->execute([
+            ':user_id' => $userId,
+            ':test_id' => $testId,
+        ]);
+        $exists = $existsStmt->fetchColumn() !== false;
+
+        if ($exists) {
+            $delStmt = $pdo->prepare("
+                DELETE FROM test_bookmarks
+                WHERE user_id = :user_id
+                  AND test_id = :test_id
+                LIMIT 1
+            ");
+            $delStmt->execute([
+                ':user_id' => $userId,
+                ':test_id' => $testId,
+            ]);
+
+            $updStmt = $pdo->prepare("
+                UPDATE tests
+                SET bookmarks_count = GREATEST(0, bookmarks_count - 1)
+                WHERE id = :id
+                LIMIT 1
+            ");
+            $updStmt->execute([':id' => $testId]);
+        } else {
+            $testStmt = $pdo->prepare("
+                SELECT id
+                FROM tests
+                WHERE id = :id
+                  AND deleted_at IS NULL
+                  AND deleted_forever_at IS NULL
+                LIMIT 1
+            ");
+            $testStmt->execute([':id' => $testId]);
+            if ($testStmt->fetchColumn() === false) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                return null;
+            }
+
+            $insStmt = $pdo->prepare("
+                INSERT INTO test_bookmarks (user_id, test_id, created_at)
+                VALUES (:user_id, :test_id, NOW())
+            ");
+            $insStmt->execute([
+                ':user_id' => $userId,
+                ':test_id' => $testId,
+            ]);
+
+            $updStmt = $pdo->prepare("
+                UPDATE tests
+                SET bookmarks_count = bookmarks_count + 1
+                WHERE id = :id
+                LIMIT 1
+            ");
+            $updStmt->execute([':id' => $testId]);
+        }
+
+        $pdo->commit();
+
+        $testCountStmt = $pdo->prepare("
+            SELECT bookmarks_count
+            FROM tests
+            WHERE id = :id
+            LIMIT 1
+        ");
+        $testCountStmt->execute([':id' => $testId]);
+        $testBookmarksCount = (int)($testCountStmt->fetchColumn() ?: 0);
+
+        $userCountStmt = $pdo->prepare("
+            SELECT COUNT(*)
+            FROM test_bookmarks tb
+            INNER JOIN tests t ON t.id = tb.test_id
+            WHERE tb.user_id = :user_id
+              AND t.deleted_at IS NULL
+        ");
+        $userCountStmt->execute([':user_id' => $userId]);
+        $userBookmarksCount = (int)($userCountStmt->fetchColumn() ?: 0);
+
+        return [
+            'ok' => true,
+            'is_bookmarked' => !$exists,
+            'test_bookmarks_count' => $testBookmarksCount,
+            'user_bookmarks_count' => $userBookmarksCount,
+        ];
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+}
+
+function test_views_track(int $testId, ?int $userId = null): void
+{
+    $pdo = db();
+    $sessionKey = session_id();
+    $viewerId = (int)($userId ?? 0);
+
+    $pdo->beginTransaction();
+    try {
+        if ($viewerId > 0) {
+            $existsStmt = $pdo->prepare("
+                SELECT 1
+                FROM test_views
+                WHERE test_id = :test_id
+                  AND user_id = :user_id
+                LIMIT 1
+            ");
+            $existsStmt->execute([
+                ':test_id' => $testId,
+                ':user_id' => $viewerId,
+            ]);
+        } else {
+            $existsStmt = $pdo->prepare("
+                SELECT 1
+                FROM test_views
+                WHERE test_id = :test_id
+                  AND user_id IS NULL
+                  AND session_key = :session_key
+                LIMIT 1
+            ");
+            $existsStmt->execute([
+                ':test_id' => $testId,
+                ':session_key' => $sessionKey,
+            ]);
+        }
+
+        $alreadyTracked = $existsStmt->fetchColumn() !== false;
+        if ($alreadyTracked) {
+            $pdo->commit();
+            return;
+        }
+
+        $insStmt = $pdo->prepare("
+            INSERT INTO test_views (test_id, user_id, session_key, viewed_at)
+            VALUES (:test_id, :user_id, :session_key, NOW())
+        ");
+        $insStmt->execute([
+            ':test_id' => $testId,
+            ':user_id' => $viewerId > 0 ? $viewerId : null,
+            ':session_key' => $sessionKey,
+        ]);
+
+        $updStmt = $pdo->prepare("
+            UPDATE tests
+            SET views_count = views_count + 1
+            WHERE id = :id
+            LIMIT 1
+        ");
+        $updStmt->execute([':id' => $testId]);
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+}
+
+function test_rating_upsert_by_user_id(int $testId, int $userId, int $rating): bool
+{
+    if ($rating < 1 || $rating > 5) {
+        return false;
+    }
+
+    $pdo = db();
+
+    $testStmt = $pdo->prepare("
+        SELECT id
+        FROM tests
+        WHERE id = :id
+          AND deleted_at IS NULL
+        LIMIT 1
+    ");
+    $testStmt->execute([':id' => $testId]);
+    if ($testStmt->fetchColumn() === false) {
+        return false;
+    }
+
+    $pdo->beginTransaction();
+    try {
+        $oldStmt = $pdo->prepare("
+            SELECT rating
+            FROM test_ratings
+            WHERE test_id = :test_id
+              AND user_id = :user_id
+            LIMIT 1
+        ");
+        $oldStmt->execute([
+            ':test_id' => $testId,
+            ':user_id' => $userId,
+        ]);
+        $oldRating = $oldStmt->fetchColumn();
+
+        if ($oldRating === false) {
+            $insStmt = $pdo->prepare("
+                INSERT INTO test_ratings (test_id, user_id, rating, created_at, updated_at)
+                VALUES (:test_id, :user_id, :rating, NOW(), NOW())
+            ");
+            $insStmt->execute([
+                ':test_id' => $testId,
+                ':user_id' => $userId,
+                ':rating' => $rating,
+            ]);
+
+            $updStmt = $pdo->prepare("
+                UPDATE tests
+                SET rating_count = rating_count + 1,
+                    rating_sum = rating_sum + :rating
+                WHERE id = :id
+                LIMIT 1
+            ");
+            $updStmt->execute([
+                ':rating' => $rating,
+                ':id' => $testId,
+            ]);
+        } else {
+            $old = (int)$oldRating;
+            $delta = $rating - $old;
+
+            if ($delta !== 0) {
+                $updRatingStmt = $pdo->prepare("
+                    UPDATE test_ratings
+                    SET rating = :rating,
+                        updated_at = NOW()
+                    WHERE test_id = :test_id
+                      AND user_id = :user_id
+                    LIMIT 1
+                ");
+                $updRatingStmt->execute([
+                    ':rating' => $rating,
+                    ':test_id' => $testId,
+                    ':user_id' => $userId,
+                ]);
+
+                $updStmt = $pdo->prepare("
+                    UPDATE tests
+                    SET rating_sum = GREATEST(0, rating_sum + :delta)
+                    WHERE id = :id
+                    LIMIT 1
+                ");
+                $updStmt->execute([
+                    ':delta' => $delta,
+                    ':id' => $testId,
+                ]);
+            }
+        }
+
+        $pdo->commit();
+        return true;
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
 }
 
 function tests_find_active_by_id_and_user_id(int $testId, int $userId): ?array
@@ -186,10 +684,13 @@ function tests_delete_by_id_and_user_id(int $testId, int $userId): bool
 {
     $pdo = db();
 
-    $stmt = $pdo->prepare("
+	$stmt = $pdo->prepare("
 		UPDATE tests
 		SET deleted_at = NOW()
-		WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL
+		WHERE id = :id
+          AND user_id = :user_id
+          AND deleted_at IS NULL
+          AND deleted_forever_at IS NULL
 		LIMIT 1
 	");
 
@@ -209,7 +710,9 @@ function tests_trash_list_by_user_id(int $userId): array
     $stmt = $pdo->prepare("
         SELECT id, user_id, title, description, access_level, created_at, updated_at, deleted_at
         FROM tests
-        WHERE user_id = :user_id AND deleted_at IS NOT NULL
+        WHERE user_id = :user_id
+          AND deleted_at IS NOT NULL
+          AND deleted_forever_at IS NULL
         ORDER BY deleted_at DESC
     ");
 
@@ -227,7 +730,10 @@ function tests_restore_by_id_and_user_id(int $testId, int $userId): bool
     $stmt = $pdo->prepare("
         UPDATE tests
         SET deleted_at = NULL
-        WHERE id = :id AND user_id = :user_id AND deleted_at IS NOT NULL
+        WHERE id = :id
+          AND user_id = :user_id
+          AND deleted_at IS NOT NULL
+          AND deleted_forever_at IS NULL
         LIMIT 1
     ");
 
@@ -244,8 +750,12 @@ function tests_destroy_by_id_and_user_id(int $testId, int $userId): bool
     $pdo = db();
 
     $stmt = $pdo->prepare("
-        DELETE FROM tests
-        WHERE id = :id AND user_id = :user_id AND deleted_at IS NOT NULL
+        UPDATE tests
+        SET deleted_forever_at = NOW()
+        WHERE id = :id
+          AND user_id = :user_id
+          AND deleted_at IS NOT NULL
+          AND deleted_forever_at IS NULL
         LIMIT 1
     ");
 
@@ -264,7 +774,9 @@ function tests_trash_restore_all_by_user_id(int $userId): int
     $stmt = $pdo->prepare("
         UPDATE tests
         SET deleted_at = NULL
-        WHERE user_id = :user_id AND deleted_at IS NOT NULL
+        WHERE user_id = :user_id
+          AND deleted_at IS NOT NULL
+          AND deleted_forever_at IS NULL
     ");
 
     $stmt->execute([
@@ -279,8 +791,11 @@ function tests_trash_empty_by_user_id(int $userId): int
     $pdo = db();
 
     $stmt = $pdo->prepare("
-        DELETE FROM tests
-        WHERE user_id = :user_id AND deleted_at IS NOT NULL
+        UPDATE tests
+        SET deleted_forever_at = NOW()
+        WHERE user_id = :user_id
+          AND deleted_at IS NOT NULL
+          AND deleted_forever_at IS NULL
     ");
 
     $stmt->execute([
@@ -297,7 +812,9 @@ function tests_trash_count_by_user_id(int $userId): int
     $stmt = $pdo->prepare("
         SELECT COUNT(*)
         FROM tests
-        WHERE user_id = :user_id AND deleted_at IS NOT NULL
+        WHERE user_id = :user_id
+          AND deleted_at IS NOT NULL
+          AND deleted_forever_at IS NULL
     ");
 
     $stmt->execute([
@@ -751,7 +1268,9 @@ function tests_trash_list_by_user_id_paginated(int $userId, int $limit, int $off
     $stmt = $pdo->prepare("
         SELECT id, user_id, title, description, access_level, created_at, updated_at, deleted_at
         FROM tests
-        WHERE user_id = :user_id AND deleted_at IS NOT NULL
+        WHERE user_id = :user_id
+          AND deleted_at IS NOT NULL
+          AND deleted_forever_at IS NULL
         ORDER BY deleted_at DESC, id DESC
         LIMIT {$limit} OFFSET {$offset}
     ");

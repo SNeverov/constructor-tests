@@ -37,7 +37,17 @@
             </div>
 
             <div class="form-row">
-				<textarea placeholder="Кратко описание, например, о чём или для чего данный тест." name="description" rows="4" class="textarea"><?= htmlspecialchars((string)($old['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea>
+                <div class="test-description-wrap">
+				    <textarea
+                        placeholder="Кратко описание, например, о чём или для чего данный тест."
+                        name="description"
+                        rows="1"
+                        maxlength="500"
+                        class="textarea"
+                        data-test-description
+                    ><?= htmlspecialchars((string)($old['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea>
+                    <div class="test-description-limit" data-test-description-limit>0/500</div>
+                </div>
             </div>
 
             <div class="form-row">

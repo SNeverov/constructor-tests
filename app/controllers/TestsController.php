@@ -87,14 +87,113 @@ function my_tests_index(): void
     view_render('my_tests', [
         'title' => 'Мои тесты',
         'tests' => $tests,
+		'pagination' => [
+            'page' => $page,
+            'pages' => $pages,
+            'total' => $total,
+        ],
+		'scripts' => ['/assets/js/list-loading.js', '/assets/js/my-tests-share.js'],
+		'styles' => ['/assets/css/my-tests.css'],
+    ]);
+}
+
+function my_bookmarks_index(): void
+{
+    auth_required();
+
+    $user = auth_user();
+    $userId = (int)($user['id'] ?? 0);
+
+    $page = (int)($_GET['page'] ?? 1);
+    if ($page < 1) {
+        $page = 1;
+    }
+
+    $perPage = 10;
+    $total = tests_count_bookmarked_by_user_id($userId);
+    $pages = max(1, (int)ceil($total / $perPage));
+    if ($page > $pages) {
+        $page = $pages;
+    }
+    $offset = ($page - 1) * $perPage;
+
+    $tests = tests_list_bookmarked_by_user_id_paginated($userId, $perPage, $offset);
+
+    view_render('my_bookmarks', [
+        'title' => 'Мои закладки',
+        'tests' => $tests,
         'pagination' => [
             'page' => $page,
             'pages' => $pages,
             'total' => $total,
         ],
-		'scripts' => ['/assets/js/copy-link.js', '/assets/js/list-loading.js'],
-		'styles' => ['/assets/css/my-tests.css'],
+        'scripts' => ['/assets/js/list-loading.js', '/assets/js/my-tests-share.js'],
+        'styles' => ['/assets/css/my-tests.css'],
     ]);
+}
+
+function my_bookmarks_toggle(int $testId): void
+{
+    auth_required();
+    $user = auth_user();
+    $userId = (int)($user['id'] ?? 0);
+    $isAjax = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest'
+        || str_contains(strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json');
+
+    try {
+        $result = tests_bookmark_toggle_by_user_id($userId, $testId);
+        if ($result === null) {
+            if ($isAjax) {
+                http_response_code(404);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode([
+                    'ok' => false,
+                    'message' => 'Тест не найден',
+                ], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            flash_set('toast', ['type' => 'danger', 'text' => 'Тест не найден']);
+        } elseif ($isAjax) {
+            $result['trash_count'] = tests_trash_count_by_user_id($userId);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode($result, JSON_UNESCAPED_UNICODE);
+            return;
+        }
+    } catch (Throwable $e) {
+        if ($isAjax) {
+            http_response_code(500);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'ok' => false,
+                'message' => 'Не удалось изменить закладку',
+            ], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        flash_set('toast', ['type' => 'danger', 'text' => 'Не удалось изменить закладку']);
+    }
+
+    $back = (string)($_SERVER['HTTP_REFERER'] ?? '');
+    if ($back !== '') {
+        redirect($back);
+        return;
+    }
+
+    redirect('/my/bookmarks');
+}
+
+function header_counters_json(): void
+{
+    auth_required();
+
+    $user = auth_user();
+    $userId = (int)($user['id'] ?? 0);
+
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'ok' => true,
+        'bookmarks_count' => tests_count_bookmarked_by_user_id($userId),
+        'trash_count' => tests_trash_count_by_user_id($userId),
+    ], JSON_UNESCAPED_UNICODE);
 }
 
 function my_tests_create_form(): void
@@ -743,6 +842,12 @@ function my_tests_delete(int $testId): void
     }
 
 	flash_set('toast', ['type' => 'success', 'text' => 'Тест отправлен в корзину']);
+    flash_set('sync_event', [
+        'type' => 'test-soft-deleted',
+        'test_id' => $testId,
+        'bookmarks_count' => tests_count_bookmarked_by_user_id($userId),
+        'trash_count' => tests_trash_count_by_user_id($userId),
+    ]);
     redirect('/my/tests');
 }
 
@@ -764,14 +869,39 @@ function test_show(int $testId): void
         redirect('/login');
     }
 
+    $viewerId = null;
+    if (auth_is_logged_in()) {
+        $viewer = auth_user();
+        $viewerId = (int)($viewer['id'] ?? 0);
+    }
+
+    try {
+        test_views_track($testId, $viewerId);
+    } catch (Throwable $e) {
+        // Не блокируем просмотр теста из-за ошибки счётчика.
+    }
+
     $questionsCount = questions_count_by_test_id($testId);
+    $ratingCount = (int)($test['rating_count'] ?? 0);
+    $ratingSum = (int)($test['rating_sum'] ?? 0);
+    $ratingAvg = $ratingCount > 0 ? ($ratingSum / $ratingCount) : 0.0;
+    $userRating = null;
+    $canRate = false;
+    if ($viewerId !== null && $viewerId > 0) {
+        $userRating = test_rating_find_by_test_id_and_user_id($testId, $viewerId);
+        $canRate = attempts_has_finished_by_test_id_and_user_id($testId, $viewerId);
+    }
 
     view_render('test_show', [
         'title' => (string)($test['title'] ?? 'Тест'),
         'test' => $test,
         'questions_count' => $questionsCount,
+        'rating_count' => $ratingCount,
+        'rating_avg' => $ratingAvg,
+        'user_rating' => $userRating,
+        'can_rate' => $canRate,
         'styles' => ['/assets/css/test-show.css'],
-		'scripts' => ['/assets/js/copy-link.js'],
+		'scripts' => ['/assets/js/copy-link.js', '/assets/js/test-rating.js'],
     ]);
 }
 
@@ -1150,6 +1280,15 @@ function test_finish(int $testId): void
 
 
         $pdo->commit();
+        if ($userId !== null && $userId > 0) {
+            $existingRating = test_rating_find_by_test_id_and_user_id($testId, $userId);
+            if ($existingRating === null) {
+            flash_set('rate_prompt', [
+                'attempt_id' => $attemptId,
+                'test_id' => $testId,
+            ]);
+            }
+        }
 
         redirect('/attempts/' . $attemptId);
     } catch (Throwable $e) {
@@ -1217,6 +1356,14 @@ function attempt_show(int $attemptId): void
     }
 
     $testId = (int)($attempt['test_id'] ?? 0);
+    $ratePrompt = flash_get('rate_prompt', null);
+    $showRatePrompt = false;
+    if (auth_is_logged_in() && is_array($ratePrompt)) {
+        $promptAttemptId = (int)($ratePrompt['attempt_id'] ?? 0);
+        $promptTestId = (int)($ratePrompt['test_id'] ?? 0);
+        $showRatePrompt = ($promptAttemptId === $attemptId && $promptTestId === $testId);
+    }
+
     $test = tests_find_by_id($testId);
     $testMissing = false;
     $sourceState = 'ok';
@@ -1394,7 +1541,93 @@ function attempt_show(int $attemptId): void
         'testMissing' => $testMissing,
         'sourceState' => $sourceState,
         'styles' => ['/assets/css/attempt-show.css'],
+        'scripts' => ['/assets/js/attempt-rate-modal.js'],
+        'show_rate_prompt' => $showRatePrompt,
     ]);
+}
+
+function test_rate(int $testId): void
+{
+    auth_required();
+    $user = auth_user();
+    $userId = (int)($user['id'] ?? 0);
+    $rating = (int)($_POST['rating'] ?? 0);
+    $isAjax = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest'
+        || str_contains(strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json');
+
+    if (!attempts_has_finished_by_test_id_and_user_id($testId, $userId)) {
+        $msg = 'Оценить тест можно только после прохождения';
+        if ($isAjax) {
+            http_response_code(403);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'ok' => false,
+                'message' => $msg,
+            ], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        flash_set('toast', ['type' => 'danger', 'text' => $msg]);
+        $back = (string)($_SERVER['HTTP_REFERER'] ?? '');
+        if ($back !== '') {
+            redirect($back);
+            return;
+        }
+        redirect('/tests/' . $testId);
+    }
+
+    try {
+        $ok = test_rating_upsert_by_user_id($testId, $userId, $rating);
+        if ($ok && $isAjax) {
+            $test = tests_find_by_id($testId);
+            $ratingCount = (int)($test['rating_count'] ?? 0);
+            $ratingSum = (int)($test['rating_sum'] ?? 0);
+            $ratingAvg = $ratingCount > 0 ? ($ratingSum / $ratingCount) : 0.0;
+
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'ok' => true,
+                'rating_count' => $ratingCount,
+                'rating_avg' => $ratingAvg,
+                'user_rating' => $rating,
+                'message' => 'Оценка сохранена',
+            ], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        if ($ok) {
+            flash_set('toast', ['type' => 'success', 'text' => 'Оценка сохранена']);
+        } else {
+            if ($isAjax) {
+                http_response_code(422);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode([
+                    'ok' => false,
+                    'message' => 'Не удалось сохранить оценку',
+                ], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            flash_set('toast', ['type' => 'danger', 'text' => 'Не удалось сохранить оценку']);
+        }
+    } catch (Throwable $e) {
+        if ($isAjax) {
+            http_response_code(500);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'ok' => false,
+                'message' => 'Ошибка сохранения оценки',
+            ], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        flash_set('toast', ['type' => 'danger', 'text' => 'Ошибка сохранения оценки']);
+    }
+
+    $back = (string)($_SERVER['HTTP_REFERER'] ?? '');
+    if ($back !== '') {
+        redirect($back);
+        return;
+    }
+
+    redirect('/tests/' . $testId);
 }
 
 

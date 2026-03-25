@@ -5,6 +5,21 @@
 $page = (int)($pagination['page'] ?? 1);
 $pages = (int)($pagination['pages'] ?? 1);
 $total = (int)($pagination['total'] ?? 0);
+$defaultCover = '/assets/img/cover/default_test_cover.webp';
+$currentUser = auth_user();
+$currentUserId = (int)($currentUser['id'] ?? 0);
+$currentUserLogin = trim((string)($currentUser['login'] ?? ''));
+$formatNumber = static function (int $value): string {
+    return number_format($value, 0, '', ' ');
+};
+$pluralRu = static function (int $n, string $one, string $few, string $many): string {
+    $n = abs($n) % 100;
+    $n1 = $n % 10;
+    if ($n > 10 && $n < 20) return $many;
+    if ($n1 > 1 && $n1 < 5) return $few;
+    if ($n1 === 1) return $one;
+    return $many;
+};
 ?>
 
 <div class="my-tests-page" data-list-shell>
@@ -39,56 +54,8 @@ $total = (int)($pagination['total'] ?? 0);
 
         <div data-list-content>
             <?php foreach ($tests as $test): ?>
-                <div class="card test-card">
-
-                    <div class="test-meta">
-
-                        <button
-                            type="button"
-                            class="badge badge--copy badge--copy-link"
-                            data-copy="/tests/<?= (int)$test['id'] ?>"
-                            title="Скопировать ссылку на тест"
-                        >
-                            <img
-                                src="/assets/img/link-svgrepo-com.svg"
-                                alt=""
-                                class="badge__icon"
-                                aria-hidden="true"
-                            >
-                            <span data-copy-label>ID: <?= (int)$test['id'] ?></span>
-                        </button>
-
-                        <span class="badge <?= ($test['access_level'] === 'public') ? 'badge--ok' : 'badge--warn' ?>">
-                            <?= ($test['access_level'] === 'public') ? 'Доступен всем' : 'Только для зарегистрированных' ?>
-                        </span>
-
-                    </div>
-
-                    <a class="test-title-link" href="/tests/<?= (int)$test['id'] ?>">
-                        <?= htmlspecialchars((string)$test['title'], ENT_QUOTES, 'UTF-8') ?>
-                    </a>
-
-                    <p class="test-description">
-                        <?= htmlspecialchars((string)$test['description'], ENT_QUOTES, 'UTF-8') ?>
-                    </p>
-
-                    <div class="test-actions">
-                        <a class="btn btn--ghost" href="/tests/<?= (int)$test['id'] ?>">Пройти тест</a>
-                        <a href="/my/tests/<?= (int)$test['id'] ?>/edit" class="btn">Редактировать</a>
-
-                        <?= form_open('/my/tests/' . (int)$test['id'] . '/delete', 'post', [
-                            'class' => 'inline',
-                            'data-confirm' => '1',
-                            'data-confirm-title' => 'Отправить в корзину?',
-                            'data-confirm-text' => 'Убрать этот тест в корзину? Его можно будет восстановить.',
-                            'data-confirm-ok' => 'В корзину',
-                        ]) ?>
-                            <button type="submit" class="btn btn--danger">В корзину</button>
-                        </form>
-
-                    </div>
-
-                </div>
+                <?php $cardContext = 'my_tests'; ?>
+                <?php require __DIR__ . '/partials/test-card.php'; ?>
             <?php endforeach; ?>
 
             <?php if ($pages > 1): ?>

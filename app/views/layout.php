@@ -63,6 +63,7 @@
 		<?php
 			$bodyClass = trim((string)($bodyClass ?? ''));
 			$toast = flash_get('toast', null);
+            $syncEvent = flash_get('sync_event', null);
 			$toastAttr = '';
             $is404Page = str_contains($bodyClass, 'page-404');
 
@@ -72,6 +73,14 @@
 					$toastAttr = " data-toast='" . htmlspecialchars($toastJson, ENT_QUOTES, 'UTF-8') . "'";
 				}
 			}
+
+            $syncEventJson = '';
+            if (is_array($syncEvent) && !empty($syncEvent['type'])) {
+                $tmpJson = json_encode($syncEvent, JSON_UNESCAPED_UNICODE);
+                if (is_string($tmpJson)) {
+                    $syncEventJson = $tmpJson;
+                }
+            }
 		?>
 		<body<?= $bodyClass !== '' ? ' class="' . htmlspecialchars($bodyClass, ENT_QUOTES, 'UTF-8') . '"' : '' ?><?= $toastAttr ?>>
 
@@ -98,6 +107,17 @@
                                     <a class="icon-btn ui-tooltip ui-tooltip--bottom" href="/my/results" data-tooltip="Мои результаты" aria-label="Мои результаты">
                                         <img src="<?= htmlspecialchars($asset('/assets/img/hdr-icon-results.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
                                     </a>
+                                    <?php $bookmarksTotal = (int)($bookmarksCount ?? 0); ?>
+                                    <a class="icon-btn icon-btn--bookmarks ui-tooltip ui-tooltip--bottom" href="/my/bookmarks" data-tooltip="Мои закладки" aria-label="Мои закладки" data-header-bookmarks-link>
+                                        <img src="<?= htmlspecialchars($asset('/assets/img/hdr-icon-bookmarks.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true" class="icon-btn__bookmark-icon">
+                                        <span
+                                            class="icon-btn__badge<?= $bookmarksTotal > 0 ? '' : ' is-hidden' ?>"
+                                            aria-label="В закладках: <?= $bookmarksTotal ?>"
+                                            data-header-bookmarks-badge
+                                        >
+                                            <?= $bookmarksTotal ?>
+                                        </span>
+                                    </a>
                                     <a class="icon-btn ui-tooltip ui-tooltip--bottom" href="/account" data-tooltip="Мой профиль" aria-label="Мой профиль">
                                         <img src="<?= htmlspecialchars($asset('/assets/img/hdr-icon-profile.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
                                     </a>
@@ -106,11 +126,14 @@
                                     </a>
                                     <a class="icon-btn ui-tooltip ui-tooltip--bottom" href="/my/tests/trash" data-tooltip="Корзина" aria-label="Корзина">
                                         <img src="<?= htmlspecialchars($asset('/assets/img/trash.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
-                                        <?php if (!empty($trashCount)): ?>
-                                            <span class="icon-btn__badge" aria-label="В корзине: <?= (int)$trashCount ?>">
-                                                <?= (int)$trashCount ?>
-                                            </span>
-                                        <?php endif; ?>
+                                        <?php $trashTotal = (int)($trashCount ?? 0); ?>
+                                        <span
+                                            class="icon-btn__badge<?= $trashTotal > 0 ? '' : ' is-hidden' ?>"
+                                            aria-label="В корзине: <?= $trashTotal ?>"
+                                            data-header-trash-badge
+                                        >
+                                            <?= $trashTotal ?>
+                                        </span>
                                     </a>
                                 </nav>
 
@@ -145,6 +168,7 @@
             </button>
 
 			<script src="<?= htmlspecialchars($asset('/assets/js/ui.js'), ENT_QUOTES, 'UTF-8') ?>"></script>
+            <script src="<?= htmlspecialchars($asset('/assets/js/bookmarks.js'), ENT_QUOTES, 'UTF-8') ?>"></script>
             <script src="<?= htmlspecialchars($asset('/assets/js/scroll-top.js'), ENT_QUOTES, 'UTF-8') ?>"></script>
 
 
@@ -156,6 +180,20 @@
                     ?>
                     <script src="<?= htmlspecialchars($srcOut, ENT_QUOTES, 'UTF-8') ?>"></script>
                 <?php endforeach; ?>
+            <?php endif; ?>
+
+            <?php if ($syncEventJson !== ''): ?>
+                <script>
+                    (function () {
+                        try {
+                            if (!('BroadcastChannel' in window)) return;
+                            var data = <?= $syncEventJson ?>;
+                            var ch = new BroadcastChannel('qp-header-counters');
+                            ch.postMessage(data);
+                            setTimeout(function () { try { ch.close(); } catch (e) {} }, 120);
+                        } catch (e) {}
+                    })();
+                </script>
             <?php endif; ?>
 
 
@@ -175,6 +213,7 @@
 						<a href="/">Главная</a>
                         <a href="/account">Профиль</a>
                         <a href="/my/results">Мои результаты</a>
+                        <a href="/my/bookmarks">Мои закладки</a>
 						<a href="/my/tests">Мои тесты</a>
 						<a href="/my/tests/trash">Корзина</a>
 						<a href="/my/tests/create">Создать тест</a>

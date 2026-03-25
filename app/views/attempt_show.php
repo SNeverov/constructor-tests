@@ -11,6 +11,7 @@ declare(strict_types=1);
 /** @var bool $snapshotMode */
 /** @var bool $testMissing */
 /** @var string $sourceState */
+/** @var bool $show_rate_prompt */
 
 function _h(string $s): string {
     return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
@@ -140,6 +141,36 @@ if (($sourceState ?? 'ok') === 'changed') {
     $sourceNotice = 'Исходная версия теста недоступна: тест был удалён.';
 }
 ?>
+<?php if (!empty($show_rate_prompt) && auth_is_logged_in() && (int)($test['id'] ?? 0) > 0): ?>
+    <div class="ui-backdrop is-open" data-rate-modal="1" aria-hidden="false">
+        <div class="ui-modal attempt-rate-modal" role="dialog" aria-modal="true" aria-labelledby="attemptRateTitle">
+            <div class="ui-modal__head">
+                <h3 class="ui-modal__title" id="attemptRateTitle">Оцените тест</h3>
+            </div>
+            <div class="ui-modal__body">
+                <?= form_open('/tests/' . (int)$test['id'] . '/rate', 'post', [
+                    'class' => 'attempt-rate-modal__form',
+                    'data-rate-modal-form' => '1',
+                ]) ?>
+                    <div class="attempt-rate-modal__stars" data-rate-modal-stars>
+                        <?php for ($i = 1; $i <= 5; $i++): ?>
+                            <button
+                                type="submit"
+                                name="rating"
+                                value="<?= $i ?>"
+                                class="attempt-rate-modal__star"
+                                data-rate-value="<?= $i ?>"
+                                aria-label="Оценка <?= $i ?> из 5"
+                            >★</button>
+                        <?php endfor; ?>
+                    </div>
+                    <div class="attempt-rate-modal__result" data-rate-modal-result></div>
+                    <button type="button" class="btn btn--ghost attempt-rate-modal__later" data-rate-modal-later>Оценить позже</button>
+                </form>
+            </div>
+        </div>
+    </div>
+<?php endif; ?>
 
 <div class="attempt">
     <div class="attempt__header">

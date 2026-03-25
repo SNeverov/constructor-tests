@@ -10,7 +10,3 @@
     gap:10px;
     flex-wrap:wrap;
 }
-.test-card--trash .test-title-link{
-    cursor:default;
-    text-decoration:none;
-}

@@ -274,23 +274,33 @@ a:hover {
     opacity: .94;
 }
 
+.icon-btn--bookmarks .icon-btn__bookmark-icon {
+    width: 26px;
+    height: 26px;
+}
+
 .icon-btn__badge {
     position: absolute;
-    top: -6px;
-    right: -6px;
+    top: -5px;
+    right: -5px;
     min-width: 16px;
     height: 16px;
     padding: 0 4px;
     border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    background: linear-gradient(180deg, rgba(251, 113, 133, 0.96) 0%, rgba(239, 68, 68, 0.96) 100%);
+    border: 1px solid rgba(255, 214, 223, 0.95);
+    background: #ef476f;
     color: #fff;
     font-size: 9px;
     font-weight: 700;
     line-height: 14px;
     text-align: center;
-    box-shadow: 0 6px 12px rgba(127, 29, 29, 0.35);
+    box-shadow: 0 3px 8px rgba(127, 29, 29, 0.28);
     pointer-events: none;
+    z-index: 3;
+}
+
+.icon-btn__badge.is-hidden {
+    display: none;
 }
 
 .icon-btn--logout,
@@ -1389,7 +1399,7 @@ p {
     height: 46px;
     border: 1px solid rgba(203, 213, 225, 0.7);
     border-radius: 999px;
-    background: linear-gradient(180deg, #c5cad1 0%, #949699 100%);
+    background: linear-gradient(180deg, #ffffff 0%, #e4e5e6 100%);
     box-shadow: 0 12px 24px rgba(2, 6, 23, 0.22);
     color: #0f172a;
 

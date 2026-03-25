@@ -91,6 +91,110 @@ button.badge {
     margin-top: 24px;
 }
 
+.test-show__rating {
+    margin-top: 18px;
+    padding: 14px 16px;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background: #f8fafc;
+}
+
+.test-show__rating-head {
+    margin-bottom: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.test-show__rating-stars-wrap {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.test-show__rating-form {
+    margin: 0;
+}
+
+.test-show__rating-stars {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.test-show__star-btn {
+    border: 0;
+    background: transparent;
+    color: #cbd5e1;
+    font-size: 28px;
+    line-height: 1;
+    padding: 0 2px;
+    cursor: pointer;
+    transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.test-show__star-btn:hover {
+    color: #f59e0b;
+    transform: translateY(-1px);
+}
+
+.test-show__star-btn.is-active {
+    color: #f59e0b;
+}
+
+.test-show__rating-text {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #475569;
+    font-size: 14px;
+}
+
+.test-show__rating-sep {
+    color: #94a3b8;
+}
+
+.test-show__rating-login-note {
+    color: #475569;
+    font-size: 14px;
+}
+
+.test-show__rating-lock {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+.test-show__rating-hint {
+    font-size: 12px;
+    line-height: 1.25;
+    color: #64748b;
+}
+
+.test-show__rating-stars-readonly {
+    position: relative;
+    display: inline-block;
+    font-size: 28px;
+    line-height: 1;
+    letter-spacing: 2px;
+}
+
+.test-show__rating-stars-base {
+    color: #cbd5e1;
+}
+
+.test-show__rating-stars-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    color: #f59e0b;
+}
+
 
 .badge--copy-link {
     display: inline-flex;

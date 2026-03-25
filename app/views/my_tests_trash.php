@@ -5,6 +5,21 @@
 $page = (int)($pagination['page'] ?? 1);
 $pages = (int)($pagination['pages'] ?? 1);
 $total = (int)($pagination['total'] ?? 0);
+$defaultCover = '/assets/img/cover/default_test_cover.webp';
+$currentUser = auth_user();
+$currentUserId = (int)($currentUser['id'] ?? 0);
+$currentUserLogin = trim((string)($currentUser['login'] ?? ''));
+$formatNumber = static function (int $value): string {
+    return number_format($value, 0, '', ' ');
+};
+$pluralRu = static function (int $n, string $one, string $few, string $many): string {
+    $n = abs($n) % 100;
+    $n1 = $n % 10;
+    if ($n > 10 && $n < 20) return $many;
+    if ($n1 > 1 && $n1 < 5) return $few;
+    if ($n1 === 1) return $one;
+    return $many;
+};
 ?>
 
 <div class="page-head page-head--row">
@@ -62,45 +77,11 @@ $total = (int)($pagination['total'] ?? 0);
 <?php else: ?>
 
     <?php foreach ($tests as $test): ?>
-        <div class="card test-card test-card--trash">
-
-            <div class="test-meta">
-                <span class="badge badge--warn">
-                    В корзине
-                </span>
-
-                <?php if (!empty($test['deleted_at'])): ?>
-                    <span class="badge">
-                        <?= htmlspecialchars((string)$test['deleted_at'], ENT_QUOTES, 'UTF-8') ?>
-                    </span>
-                <?php endif; ?>
-            </div>
-
-            <div class="test-title-link">
-                <?= htmlspecialchars((string)$test['title'], ENT_QUOTES, 'UTF-8') ?>
-            </div>
-
-            <p class="test-description">
-                <?= htmlspecialchars((string)$test['description'], ENT_QUOTES, 'UTF-8') ?>
-            </p>
-
-            <div class="test-actions">
-                <?= form_open('/my/tests/' . (int)$test['id'] . '/restore', 'post', ['class' => 'inline']) ?>
-                    <button type="submit" class="btn">Восстановить</button>
-                </form>
-
-                <?= form_open('/my/tests/' . (int)$test['id'] . '/destroy', 'post', [
-                    'class' => 'inline',
-                    'data-confirm' => '1',
-                    'data-confirm-title' => 'Удалить навсегда?',
-                    'data-confirm-text' => 'Удалить этот тест навсегда? Это действие нельзя отменить.',
-                    'data-confirm-ok' => 'Удалить навсегда',
-                ]) ?>
-                    <button type="submit" class="btn btn--danger">Удалить навсегда</button>
-                </form>
-            </div>
-
-        </div>
+        <?php
+            $test['bookmark_availability'] = 'trashed';
+            $cardContext = 'trash';
+        ?>
+        <?php require __DIR__ . '/partials/test-card.php'; ?>
     <?php endforeach; ?>
 
     <?php if ($pages > 1): ?>

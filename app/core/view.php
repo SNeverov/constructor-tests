@@ -24,6 +24,17 @@ function view_render(string $view, array $data = []): void
         }
     }
 
+    if (auth_is_logged_in() && !array_key_exists('bookmarksCount', $data)) {
+        $user = auth_user();
+        $userId = (int)($user['id'] ?? 0);
+
+        if ($userId > 0 && function_exists('tests_count_bookmarked_by_user_id')) {
+            $data['bookmarksCount'] = tests_count_bookmarked_by_user_id($userId);
+        } else {
+            $data['bookmarksCount'] = 0;
+        }
+    }
+
 
     // данные станут переменными в шаблоне
     extract($data, EXTR_SKIP);

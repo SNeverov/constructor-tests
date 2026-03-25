@@ -27,8 +27,14 @@ function security_post_limit_rule(string $path): ?array
         if ($path === '/my/tests') {
             return ['tests-create', 20, 60];
         }
+        if (preg_match('~^/my/bookmarks/\d+/toggle$~', $path)) {
+            return ['bookmarks-toggle', 80, 60];
+        }
         if (preg_match('~^/tests/\d+/finish$~', $path)) {
             return ['tests-finish', 30, 60];
+        }
+        if (preg_match('~^/tests/\d+/rate$~', $path)) {
+            return ['tests-rate', 30, 60];
         }
 
         return null;

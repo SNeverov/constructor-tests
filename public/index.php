@@ -92,6 +92,16 @@ if ($path === '/my/results' && $method === 'GET') {
     exit();
 }
 
+if ($path === '/my/bookmarks' && $method === 'GET') {
+    my_bookmarks_index();
+    exit();
+}
+
+if ($path === '/my/header/counters' && $method === 'GET') {
+    header_counters_json();
+    exit();
+}
+
 if ($path === '/my/tests' && $method === 'GET') {
     my_tests_index();
     exit();
@@ -138,6 +148,11 @@ if ($method === 'POST' && preg_match('~^/my/tests/(\d+)/destroy$~', $path, $m)) 
     exit();
 }
 
+if ($method === 'POST' && preg_match('~^/my/bookmarks/(\d+)/toggle$~', $path, $m)) {
+    my_bookmarks_toggle((int)$m[1]);
+    exit();
+}
+
 if ($path === '/my/tests/trash/restore-all' && $method === 'POST') {
     my_tests_trash_restore_all();
     exit();
@@ -152,6 +167,11 @@ if ($path === '/my/tests/trash/empty' && $method === 'POST') {
 
 if ($method === 'POST' && preg_match('~^/tests/(\d+)/finish$~', $path, $m)) {
     test_finish((int)$m[1]);
+    exit();
+}
+
+if ($method === 'POST' && preg_match('~^/tests/(\d+)/rate$~', $path, $m)) {
+    test_rate((int)$m[1]);
     exit();
 }
 

@@ -16,6 +16,7 @@
     const form = e.target;
     if (!(form instanceof HTMLFormElement)) return;
     if (form.hasAttribute("data-confirm")) return;
+    if (form.hasAttribute("data-bookmark-toggle")) return;
 
     const shell = form.closest("[data-list-shell]");
     if (!shell) return;

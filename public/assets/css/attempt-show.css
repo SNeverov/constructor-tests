@@ -318,6 +318,75 @@
     color: #b91c1c;
 }
 
+.attempt-rate-modal {
+    width: min(460px, 100%);
+}
+
+.attempt-rate-modal__form {
+    margin: 0;
+}
+
+.attempt-rate-modal__stars {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin: 4px 0 14px;
+}
+
+.attempt-rate-modal__stars.is-hidden {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.attempt-rate-modal__star {
+    border: 0;
+    background: transparent;
+    color: #cbd5e1;
+    font-size: 34px;
+    line-height: 1;
+    padding: 0 2px;
+    cursor: pointer;
+    transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.attempt-rate-modal__star:hover,
+.attempt-rate-modal__star.is-hover,
+.attempt-rate-modal__star.is-active {
+    color: #f59e0b;
+}
+
+.attempt-rate-modal__star:hover {
+    transform: translateY(-1px);
+}
+
+.attempt-rate-modal__result {
+    text-align: center;
+    font-size: 16px;
+    font-weight: 600;
+    color: #0f172a;
+    min-height: 24px;
+    margin: 2px 0 0;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(6px);
+    transition: opacity 0.32s cubic-bezier(.22,.61,.36,1), transform 0.32s cubic-bezier(.22,.61,.36,1);
+}
+
+.attempt-rate-modal__result.is-show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.attempt-rate-modal__later {
+    display: block;
+    margin: 0 auto;
+    font-size: 13px;
+    color: #475569;
+    margin-top: 35px;
+    margin-bottom: 25px;
+}
+
 @media (max-width: 980px) {
     .attempt__summary {
         grid-template-columns: repeat(2, minmax(0, 1fr));
