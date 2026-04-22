@@ -5,8 +5,17 @@ function tests_list_by_user_id(int $userId): array
 {
     $pdo = db();
 
-    $stmt = $pdo->prepare("
-		SELECT id, user_id, title, description, access_level, created_at, updated_at
+	$stmt = $pdo->prepare("
+		SELECT
+            id,
+            user_id,
+            title,
+            description,
+            access_level,
+            COALESCE(time_limit_sec, CASE WHEN time_limit_min IS NOT NULL THEN time_limit_min * 60 ELSE NULL END) AS time_limit_sec,
+            time_limit_min,
+            created_at,
+            updated_at
 		FROM tests
 		WHERE user_id = :user_id AND deleted_at IS NULL
 		ORDER BY created_at DESC
@@ -20,13 +29,58 @@ function tests_list_by_user_id(int $userId): array
     return $stmt->fetchAll();
 }
 
-function tests_create(int $userId, string $title, string $description, string $accessLevel): int
+function test_time_limit_sec_from_row(array $test): ?int
+{
+    $seconds = $test['time_limit_sec'] ?? null;
+    if ($seconds !== null && $seconds !== '') {
+        $seconds = (int)$seconds;
+        return $seconds > 0 ? $seconds : null;
+    }
+
+    $minutes = $test['time_limit_min'] ?? null;
+    if ($minutes !== null && $minutes !== '') {
+        $minutes = (int)$minutes;
+        if ($minutes > 0) {
+            return $minutes * 60;
+        }
+    }
+
+    return null;
+}
+
+function attempt_is_expired(array $attempt): bool
+{
+    if (($attempt['finished_at'] ?? null) !== null) {
+        return false;
+    }
+
+    $expiresAt = trim((string)($attempt['expires_at'] ?? ''));
+    if ($expiresAt === '') {
+        return false;
+    }
+
+    $expiresTs = strtotime($expiresAt);
+    if ($expiresTs === false) {
+        return false;
+    }
+
+    return $expiresTs <= time();
+}
+
+function tests_create(
+    int $userId,
+    string $title,
+    string $description,
+    string $accessLevel,
+    ?string $coverImage = null,
+    ?int $timeLimitSec = null
+): int
 {
     $pdo = db();
 
     $stmt = $pdo->prepare("
-        INSERT INTO tests (user_id, title, description, access_level)
-        VALUES (:user_id, :title, :description, :access_level)
+        INSERT INTO tests (user_id, title, description, access_level, cover_image, time_limit_sec)
+        VALUES (:user_id, :title, :description, :access_level, :cover_image, :time_limit_sec)
     ");
 
     $stmt->execute([
@@ -34,6 +88,8 @@ function tests_create(int $userId, string $title, string $description, string $a
         ':title' => $title,
         ':description' => $description,
         ':access_level' => $accessLevel,
+        ':cover_image' => $coverImage,
+        ':time_limit_sec' => ($timeLimitSec !== null && $timeLimitSec > 0) ? $timeLimitSec : null,
     ]);
 
     return (int)$pdo->lastInsertId();
@@ -43,14 +99,15 @@ function questions_create(
     int $testId,
     string $type,
     string $questionText,
-    int $position
+    int $position,
+    ?string $imagePath = null
 ): int
 {
     $pdo = db();
 
     $stmt = $pdo->prepare("
-        INSERT INTO questions (test_id, type, question_text, position)
-        VALUES (:test_id, :type, :question_text, :position)
+        INSERT INTO questions (test_id, type, question_text, position, image_path)
+        VALUES (:test_id, :type, :question_text, :position, :image_path)
     ");
 
     $stmt->execute([
@@ -58,6 +115,7 @@ function questions_create(
         ':type' => $type,
         ':question_text' => $questionText,
         ':position' => $position,
+        ':image_path' => $imagePath,
     ]);
 
     return (int)$pdo->lastInsertId();
@@ -68,14 +126,15 @@ function options_create(
     int $questionId,
     string $optionText,
     int $isCorrect,
-    int $position
+    int $position,
+    ?string $imagePath = null
 ): int
 {
     $pdo = db();
 
     $stmt = $pdo->prepare("
-        INSERT INTO options (question_id, option_text, is_correct, position)
-        VALUES (:question_id, :option_text, :is_correct, :position)
+        INSERT INTO options (question_id, option_text, is_correct, position, image_path)
+        VALUES (:question_id, :option_text, :is_correct, :position, :image_path)
     ");
 
     $stmt->execute([
@@ -83,6 +142,7 @@ function options_create(
         ':option_text' => $optionText,
         ':is_correct' => $isCorrect,
         ':position' => $position,
+        ':image_path' => $imagePath,
     ]);
 
     return (int)$pdo->lastInsertId();
@@ -132,6 +192,7 @@ function tests_find_by_id(int $testId): ?array
             t.description,
             t.access_level,
             t.category_name,
+            COALESCE(t.time_limit_sec, CASE WHEN t.time_limit_min IS NOT NULL THEN t.time_limit_min * 60 ELSE NULL END) AS time_limit_sec,
             t.time_limit_min,
             t.created_at,
             t.updated_at,
@@ -139,7 +200,9 @@ function tests_find_by_id(int $testId): ?array
             t.views_count,
             t.rating_count,
             t.rating_sum,
-            COALESCE(u.login, '') AS creator_login
+            COALESCE(u.login, '') AS creator_login,
+            t.cover_image,
+            (SELECT COUNT(*) FROM attempts a WHERE a.test_id = t.id) AS attempts_count
 		FROM tests t
         LEFT JOIN users u ON u.id = t.user_id
 		WHERE t.id = :id AND t.deleted_at IS NULL
@@ -209,6 +272,7 @@ function tests_list_by_user_id_paginated(int $userId, int $limit, int $offset): 
             t.description,
             t.access_level,
             t.category_name,
+            COALESCE(t.time_limit_sec, CASE WHEN t.time_limit_min IS NOT NULL THEN t.time_limit_min * 60 ELSE NULL END) AS time_limit_sec,
             t.time_limit_min,
             t.created_at,
             t.updated_at,
@@ -216,6 +280,7 @@ function tests_list_by_user_id_paginated(int $userId, int $limit, int $offset): 
             t.views_count,
             t.rating_count,
             t.rating_sum,
+            t.cover_image,
             COALESCE(u.login, '') AS creator_login,
             CASE WHEN tb.user_id IS NULL THEN 0 ELSE 1 END AS is_bookmarked,
             (
@@ -288,6 +353,7 @@ function tests_list_for_home(int $limit = 20, int $offset = 0): array
             t.description,
             t.access_level,
             t.category_name,
+            COALESCE(t.time_limit_sec, CASE WHEN t.time_limit_min IS NOT NULL THEN t.time_limit_min * 60 ELSE NULL END) AS time_limit_sec,
             t.time_limit_min,
             t.created_at,
             t.updated_at,
@@ -296,6 +362,7 @@ function tests_list_for_home(int $limit = 20, int $offset = 0): array
             t.rating_count,
             t.rating_sum,
             COALESCE(u.login, '') AS creator_login,
+            t.cover_image,
             " . ($viewerId > 0 ? 'CASE WHEN tb.user_id IS NULL THEN 0 ELSE 1 END' : '0') . " AS is_bookmarked,
             (
                 SELECT COUNT(*)
@@ -349,6 +416,7 @@ function tests_list_bookmarked_by_user_id_paginated(int $userId, int $limit, int
             t.description,
             t.access_level,
             t.category_name,
+            COALESCE(t.time_limit_sec, CASE WHEN t.time_limit_min IS NOT NULL THEN t.time_limit_min * 60 ELSE NULL END) AS time_limit_sec,
             t.time_limit_min,
             t.created_at,
             t.updated_at,
@@ -357,6 +425,7 @@ function tests_list_bookmarked_by_user_id_paginated(int $userId, int $limit, int
             t.rating_count,
             t.rating_sum,
             COALESCE(u.login, '') AS creator_login,
+            t.cover_image,
             1 AS is_bookmarked,
             CASE
                 WHEN t.id IS NULL THEN 'deleted'
@@ -630,7 +699,17 @@ function tests_find_active_by_id_and_user_id(int $testId, int $userId): ?array
     $pdo = db();
 
     $stmt = $pdo->prepare("
-        SELECT id, user_id, title, description, access_level, created_at, updated_at
+        SELECT
+            id,
+            user_id,
+            title,
+            description,
+            access_level,
+            cover_image,
+            COALESCE(time_limit_sec, CASE WHEN time_limit_min IS NOT NULL THEN time_limit_min * 60 ELSE NULL END) AS time_limit_sec,
+            time_limit_min,
+            created_at,
+            updated_at
         FROM tests
         WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL
         LIMIT 1
@@ -839,7 +918,7 @@ function questions_list_by_test_id(int $testId): array
     $pdo = db();
 
     $stmt = $pdo->prepare("
-        SELECT id, test_id, type, question_text, position
+        SELECT id, test_id, type, question_text, image_path, position
         FROM questions
         WHERE test_id = :test_id
         ORDER BY position ASC, id ASC
@@ -865,7 +944,7 @@ function options_list_by_question_ids(array $questionIds): array
 
     // ВАЖНО: is_correct НЕ выбираем, чтобы на странице прохождения не было спойлеров
     $stmt = $pdo->prepare("
-        SELECT id, question_id, option_text, position
+        SELECT id, question_id, option_text, image_path, position
         FROM options
         WHERE question_id IN ($placeholders)
         ORDER BY question_id ASC, position ASC, id ASC
@@ -897,7 +976,7 @@ function options_full_list_by_question_ids(array $questionIds): array
     $placeholders = implode(',', array_fill(0, count($questionIds), '?'));
 
     $stmt = $pdo->prepare("
-        SELECT id, question_id, option_text, is_correct, position
+        SELECT id, question_id, option_text, image_path, is_correct, position
         FROM options
         WHERE question_id IN ($placeholders)
         ORDER BY question_id ASC, position ASC, id ASC
@@ -990,7 +1069,7 @@ function attempt_create(int $testId, ?int $userId): int
 
 	// snapshots (на момент старта попытки)
 	$stmt = $pdo->prepare("
-		SELECT title, access_level
+		SELECT title, access_level, time_limit_sec, time_limit_min
 		FROM tests
 		WHERE id = :test_id
 		LIMIT 1
@@ -1000,6 +1079,11 @@ function attempt_create(int $testId, ?int $userId): int
 
 	$testTitleSnapshot  = (string)($testRow['title'] ?? '');
 	$testAccessSnapshot = (string)($testRow['access_level'] ?? '');
+    $timeLimitSecSnapshot = test_time_limit_sec_from_row(is_array($testRow) ? $testRow : []);
+    $expiresAt = null;
+    if ($timeLimitSecSnapshot !== null && $timeLimitSecSnapshot > 0) {
+        $expiresAt = date('Y-m-d H:i:s', time() + $timeLimitSecSnapshot);
+    }
 
 
     // 1. Получаем номер следующей попытки
@@ -1018,8 +1102,28 @@ function attempt_create(int $testId, ?int $userId): int
 
     // 2. Создаём попытку с зафиксированным attempt_no
     $stmt = $pdo->prepare("
-		INSERT INTO attempts (test_id, test_title_snapshot, test_access_snapshot, user_id, attempt_no, started_at)
-		VALUES (:test_id, :test_title_snapshot, :test_access_snapshot, :user_id, :attempt_no, CURRENT_TIMESTAMP)
+		INSERT INTO attempts (
+            test_id,
+            test_title_snapshot,
+            test_access_snapshot,
+            user_id,
+            attempt_no,
+            started_at,
+            time_limit_sec_snapshot,
+            expires_at,
+            status
+        )
+		VALUES (
+            :test_id,
+            :test_title_snapshot,
+            :test_access_snapshot,
+            :user_id,
+            :attempt_no,
+            CURRENT_TIMESTAMP,
+            :time_limit_sec_snapshot,
+            :expires_at,
+            'in_progress'
+        )
 	");
 
 
@@ -1029,6 +1133,8 @@ function attempt_create(int $testId, ?int $userId): int
 		':test_access_snapshot' => $testAccessSnapshot,
 		':user_id' => $userId,
 		':attempt_no' => $attemptNo,
+        ':time_limit_sec_snapshot' => $timeLimitSecSnapshot,
+        ':expires_at' => $expiresAt,
 	]);
 
 
@@ -1077,22 +1183,35 @@ function attempt_finish_update(
     int $wrongCount,
     float $percent,
     int $totalQuestions,
-    string $testSnapshotHash
+    string $testSnapshotHash,
+    string $status = 'finished'
 ): bool
 {
     $pdo = db();
 
     $stmt = $pdo->prepare("
         UPDATE attempts
-        SET finished_at = CURRENT_TIMESTAMP,
-            duration_sec = TIMESTAMPDIFF(SECOND, started_at, CURRENT_TIMESTAMP),
+        SET finished_at = CASE
+                WHEN :status_for_finished_at = 'expired' AND expires_at IS NOT NULL THEN expires_at
+                ELSE CURRENT_TIMESTAMP
+            END,
+            duration_sec = TIMESTAMPDIFF(
+                SECOND,
+                started_at,
+                CASE
+                    WHEN :status_for_duration = 'expired' AND expires_at IS NOT NULL THEN expires_at
+                    ELSE CURRENT_TIMESTAMP
+                END
+            ),
             total_questions = :total_questions,
             test_snapshot_hash = :test_snapshot_hash,
             correct_count = :correct_count,
             wrong_count = :wrong_count,
-            percent = :percent
+            percent = :percent,
+            status = :status
         WHERE id = :id
           AND finished_at IS NULL
+          AND status = 'in_progress'
         LIMIT 1
     ");
 
@@ -1102,6 +1221,9 @@ function attempt_finish_update(
         ':correct_count' => $correctCount,
         ':wrong_count' => $wrongCount,
         ':percent' => $percent,
+        ':status' => ($status === 'expired') ? 'expired' : 'finished',
+        ':status_for_finished_at' => ($status === 'expired') ? 'expired' : 'finished',
+        ':status_for_duration' => ($status === 'expired') ? 'expired' : 'finished',
         ':id' => $attemptId,
     ]);
 
@@ -1166,7 +1288,15 @@ function answers_insert_batch(int $attemptId, array $rows): void
     $stmt->execute($params);
 }
 
-function tests_update_by_id_and_user_id(int $testId, int $userId, string $title, string $description, string $accessLevel): bool
+function tests_update_by_id_and_user_id(
+    int $testId,
+    int $userId,
+    string $title,
+    string $description,
+    string $accessLevel,
+    ?string $coverImage = null,
+    ?int $timeLimitSec = null
+): bool
 {
     $pdo = db();
     $stmt = $pdo->prepare("
@@ -1174,6 +1304,8 @@ function tests_update_by_id_and_user_id(int $testId, int $userId, string $title,
         SET title = :title,
             description = :description,
             access_level = :access_level,
+            cover_image = :cover_image,
+            time_limit_sec = :time_limit_sec,
             updated_at = NOW()
         WHERE id = :id
           AND user_id = :user_id
@@ -1185,6 +1317,8 @@ function tests_update_by_id_and_user_id(int $testId, int $userId, string $title,
         ':title' => $title,
         ':description' => $description,
         ':access_level' => $accessLevel,
+        ':cover_image' => $coverImage,
+        ':time_limit_sec' => ($timeLimitSec !== null && $timeLimitSec > 0) ? $timeLimitSec : null,
         ':id' => $testId,
         ':user_id' => $userId,
     ]);
@@ -1221,7 +1355,10 @@ function attempt_find_by_id(int $attemptId): ?array
             attempt_no,
             started_at,
             finished_at,
+            expires_at,
             duration_sec,
+            status,
+            time_limit_sec_snapshot,
             total_questions,
             correct_count,
             wrong_count,
@@ -1255,7 +1392,10 @@ function attempt_find_by_id_for_update(int $attemptId): ?array
             attempt_no,
             started_at,
             finished_at,
+            expires_at,
             duration_sec,
+            status,
+            time_limit_sec_snapshot,
             total_questions,
             correct_count,
             wrong_count,

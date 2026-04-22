@@ -23,6 +23,7 @@ require_once __DIR__ . '/../app/core/db.php';
 require __DIR__ . '/../app/core/tests.php';
 require __DIR__ . '/../app/core/csrf.php';
 require __DIR__ . '/../app/core/form.php';
+require __DIR__ . '/../app/core/upload.php';
 
 app_session_bootstrap();
 observability_bootstrap();
@@ -121,6 +122,11 @@ if ($path === '/my/tests/trash' && $method === 'GET') {
 
 if ($path === '/my/tests/create' && $method === 'GET') {
     my_tests_create_form();
+    exit();
+}
+
+if ($path === '/my/tests/upload-image' && $method === 'POST') {
+    my_tests_upload_image();
     exit();
 }
 

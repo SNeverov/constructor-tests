@@ -115,7 +115,14 @@ function my_results_index(): void
             'pages' => $pages,
             'total' => $total,
         ],
-        'scripts' => ['/assets/js/list-loading.js', '/assets/js/date-picker.js'],
-        'styles' => ['/assets/css/my-results.css'],
+        'scripts' => [
+            '/assets/vendor/air-datepicker/air-datepicker.js',
+            '/assets/js/list-loading.js',
+            '/assets/js/date-picker.js',
+        ],
+        'styles' => [
+            '/assets/vendor/air-datepicker/air-datepicker.css',
+            '/assets/css/my-results.css',
+        ],
     ]);
 }

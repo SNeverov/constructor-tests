@@ -1,5 +1,63 @@
+// ─── Lightbox ────────────────────────────────────────────────────────────────
+
+function openLightbox(src, fullSize) {
+    const lb = document.getElementById('imgLightbox');
+    const img = document.getElementById('imgLightboxImg');
+    if (!lb || !img) return;
+
+    img.style.width = '';
+    img.style.height = '';
+    img.src = '';
+    lb.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+
+    const tmp = new Image();
+    tmp.onload = () => {
+        if (!fullSize) {
+            const maxSide = 500;
+            const w = tmp.naturalWidth;
+            const h = tmp.naturalHeight;
+            if (w > maxSide || h > maxSide) {
+                const ratio = Math.min(maxSide / w, maxSide / h);
+                img.style.width = Math.round(w * ratio) + 'px';
+                img.style.height = Math.round(h * ratio) + 'px';
+            }
+        }
+        img.src = src;
+        requestAnimationFrame(() => lb.classList.add('is-open'));
+    };
+    tmp.src = src;
+}
+
+function closeLightbox() {
+    const lb = document.getElementById('imgLightbox');
+    if (!lb) return;
+    lb.classList.add('is-closing');
+    lb.addEventListener('transitionend', () => {
+        lb.classList.remove('is-open', 'is-closing');
+        lb.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+    }, { once: true });
+}
+
+document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-lightbox-close]')) { closeLightbox(); return; }
+
+    const zoomImg = e.target.closest('.qcard__image-img, .opt__image');
+    if (zoomImg && zoomImg.src) openLightbox(zoomImg.src, true);
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeLightbox();
+});
+
+// ─── Test pass ───────────────────────────────────────────────────────────────
+
 const testPassRoot = document.querySelector('.test-pass');
 const testId = testPassRoot?.dataset.testId;
+const timeLimitSec = Number.parseInt(testPassRoot?.dataset.timeLimitSec || '0', 10) || 0;
+const initialRemainingSecRaw = testPassRoot?.dataset.remainingSec ?? '';
+const initialRemainingSec = initialRemainingSecRaw === '' ? null : (Number.parseInt(initialRemainingSecRaw, 10) || 0);
 
 if (!testId) {
 	console.warn('test-pass: testId not found');
@@ -108,6 +166,12 @@ function restoreProgress() {
 
     if (finishBtn) {
         finishBtn.addEventListener('click', (e) => {
+            if (form.dataset.autoSubmit === '1') {
+                formDirty = false;
+                hideNote();
+                return;
+            }
+
 			const ok = window.confirm('Закончить тест? После этого ответы менять не получится.');
 			if (!ok) {
                 e.preventDefault();
@@ -121,11 +185,15 @@ function restoreProgress() {
 
     form.addEventListener('submit', () => {
         formDirty = false;
-        hideNote();
+        if (form.dataset.autoSubmit !== '1') {
+            hideNote();
+        } else {
+            showNote('Время истекло. Отправляем ответы...');
+        }
 
         if (finishBtn) {
             finishBtn.disabled = true;
-            finishBtn.textContent = 'Сохраняем...';
+            finishBtn.textContent = form.dataset.autoSubmit === '1' ? 'Завершаем...' : 'Сохраняем...';
         }
         if (resetBtn) {
             resetBtn.disabled = true;
@@ -153,3 +221,78 @@ document.addEventListener('submit', (e) => {
 		localStorage.removeItem(getStorageKey());
 	}
 }, true);
+
+(function () {
+    if (!testPassRoot || timeLimitSec <= 0 || initialRemainingSec === null) return;
+
+    const form = document.getElementById('testPassForm');
+    const timer = testPassRoot.querySelector('[data-test-pass-timer]');
+    const valueNode = testPassRoot.querySelector('[data-timer-value]');
+    const noteNode = testPassRoot.querySelector('[data-timer-note]');
+    const finishBtn = document.getElementById('finishTestBtn');
+    const resetBtn = document.getElementById('resetAnswersBtn');
+
+    if (!form || !timer || !valueNode) return;
+
+    let remaining = Math.max(0, initialRemainingSec);
+    let autoSubmitting = false;
+
+    const formatCountdown = (totalSec) => {
+        const safe = Math.max(0, totalSec);
+        const hours = Math.floor(safe / 3600);
+        const minutes = Math.floor((safe % 3600) / 60);
+        const seconds = safe % 60;
+        return [hours, minutes, seconds].map((part) => String(part).padStart(2, '0')).join(':');
+    };
+
+    const syncTimerState = () => {
+        valueNode.textContent = formatCountdown(remaining);
+
+        timer.classList.toggle('is-warning', remaining > 0 && remaining <= 300);
+        timer.classList.toggle('is-danger', remaining > 0 && remaining <= 60);
+
+        if (!noteNode) return;
+        if (remaining > 300) {
+            noteNode.textContent = 'По истечении лимита попытка завершится автоматически.';
+        } else if (remaining > 60) {
+            noteNode.textContent = 'До автозавершения осталось меньше 5 минут.';
+        } else if (remaining > 0) {
+            noteNode.textContent = 'До автозавершения осталась меньше минуты.';
+        } else {
+            noteNode.textContent = 'Время истекло, отправляем ответы.';
+        }
+    };
+
+    const submitExpiredAttempt = () => {
+        if (autoSubmitting) return;
+        autoSubmitting = true;
+
+        if (finishBtn) {
+            finishBtn.disabled = true;
+            finishBtn.textContent = 'Время истекло...';
+        }
+        if (resetBtn) {
+            resetBtn.disabled = true;
+        }
+
+        form.dataset.autoSubmit = '1';
+        syncTimerState();
+        form.requestSubmit();
+    };
+
+    syncTimerState();
+    if (remaining <= 0) {
+        submitExpiredAttempt();
+        return;
+    }
+
+    const timerId = window.setInterval(() => {
+        remaining -= 1;
+        syncTimerState();
+
+        if (remaining <= 0) {
+            window.clearInterval(timerId);
+            submitExpiredAttempt();
+        }
+    }, 1000);
+})();

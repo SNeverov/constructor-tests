@@ -27,7 +27,7 @@ $ratingSum = (int)($test['rating_sum'] ?? 0);
 $ratingRaw = $ratingCount > 0 ? ($ratingSum / $ratingCount) : 0.0;
 $ratingValue = max(0.0, min(5.0, (float)$ratingRaw));
 $isBookmarked = (int)($test['is_bookmarked'] ?? 0) === 1;
-$timeLimitMin = isset($test['time_limit_min']) ? (int)$test['time_limit_min'] : null;
+$timeLimitSec = isset($test['time_limit_sec']) && (int)$test['time_limit_sec'] > 0 ? (int)$test['time_limit_sec'] : null;
 $categoryName = trim((string)($test['category_name'] ?? ''));
 if ($categoryName === '') {
     $categoryName = 'Программирование';
@@ -64,12 +64,29 @@ $showEdit = !$isUnavailable && !$isTrashContext && $isOwner;
 $showDeleteToTrash = !$isUnavailable && $cardContext === 'my_tests' && $isOwner;
 $showRestoreDestroy = $isTrashContext;
 $showStats = !$isUnavailable && !$isTrashContext;
+
+$formatTimeLimitShort = static function (?int $seconds): string {
+    if ($seconds === null || $seconds <= 0) {
+        return 'Без времени';
+    }
+
+    if ($seconds % 3600 === 0) {
+        return (int)($seconds / 3600) . ' ч';
+    }
+
+    if ($seconds % 60 === 0) {
+        return (int)($seconds / 60) . ' мин';
+    }
+
+    return gmdate('H:i:s', $seconds);
+};
 ?>
 
 <article class="card test-card test-card--premium<?= $isUnavailable ? ' test-card--unavailable' : '' ?><?= $stateClass ?><?= $contextClass ?>" data-test-card-id="<?= $testId ?>">
+    <?php $coverSrc = trim((string)($test['cover_image'] ?? '')) !== '' ? (string)$test['cover_image'] : $defaultCover; ?>
     <div class="test-card__cover">
         <img
-            src="<?= htmlspecialchars($defaultCover, ENT_QUOTES, 'UTF-8') ?>"
+            src="<?= htmlspecialchars($coverSrc, ENT_QUOTES, 'UTF-8') ?>"
             alt=""
             class="test-card__cover-img"
             loading="lazy"
@@ -233,9 +250,9 @@ $showStats = !$isUnavailable && !$isTrashContext;
                 <span><?= $formatNumber($questionsCount) ?> <?= $pluralRu($questionsCount, 'вопрос', 'вопроса', 'вопросов') ?></span>
             </div>
             <div class="test-stat">
-                <?php if ($timeLimitMin !== null && $timeLimitMin > 0): ?>
+                <?php if ($timeLimitSec !== null && $timeLimitSec > 0): ?>
                     <img src="/assets/img/test_card_svg/clock.svg" alt="" aria-hidden="true">
-                    <span><?= $formatNumber($timeLimitMin) ?> мин</span>
+                    <span><?= htmlspecialchars($formatTimeLimitShort($timeLimitSec), ENT_QUOTES, 'UTF-8') ?></span>
                 <?php else: ?>
                     <img src="/assets/img/test_card_svg/infinity.svg" alt="" aria-hidden="true">
                     <span>Без времени</span>

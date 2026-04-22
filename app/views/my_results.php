@@ -51,10 +51,17 @@
                 <span>Дата с</span>
                 <div class="date-field">
                     <input
-                        type="date"
+                        type="text"
                         class="input"
-                        name="date_from"
+                        placeholder="дд.мм.гггг"
+                        autocomplete="off"
+                        readonly
                         data-date-input
+                    >
+                    <input
+                        type="hidden"
+                        name="date_from"
+                        data-date-hidden
                         value="<?= htmlspecialchars((string)($filters['date_from'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                     >
                     <button type="button" class="date-field__btn ui-tooltip" data-tooltip="Открыть календарь" data-date-open aria-label="Открыть календарь">
@@ -67,10 +74,17 @@
                 <span>Дата по</span>
                 <div class="date-field">
                     <input
-                        type="date"
+                        type="text"
                         class="input"
-                        name="date_to"
+                        placeholder="дд.мм.гггг"
+                        autocomplete="off"
+                        readonly
                         data-date-input
+                    >
+                    <input
+                        type="hidden"
+                        name="date_to"
+                        data-date-hidden
                         value="<?= htmlspecialchars((string)($filters['date_to'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                     >
                     <button type="button" class="date-field__btn ui-tooltip" data-tooltip="Открыть календарь" data-date-open aria-label="Открыть календарь">

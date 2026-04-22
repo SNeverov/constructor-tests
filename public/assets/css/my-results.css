@@ -73,14 +73,6 @@
     background-color: #64748b;
 }
 
-.date-field input[type="date"]::-webkit-calendar-picker-indicator {
-    opacity: 0;
-    position: absolute;
-    right: 0;
-    width: 42px;
-    height: 100%;
-    cursor: pointer;
-}
 
 .results-filters__actions {
     display: flex;
@@ -357,4 +349,118 @@
     .result-item__title {
         font-size: 18px;
     }
+}
+
+/* ===== Air Datepicker — тема проекта ===== */
+.air-datepicker {
+    --adp-font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    --adp-font-size: 14px;
+
+    --adp-width: 246px;
+
+    --adp-z-index: 200;
+    --adp-padding: 8px;
+    --adp-grid-areas: 'nav' 'body' 'timepicker' 'buttons';
+
+    --adp-transition-duration: .15s;
+    --adp-transition-ease: ease;
+    --adp-transition-offset: 8px;
+
+    --adp-background-color: #ffffff;
+    --adp-background-color-hover: #f1f5f9;
+    --adp-background-color-active: #f1f5f9;
+    --adp-background-color-in-range: rgba(17, 24, 39, 0.06);
+    --adp-background-color-in-range-focused: rgba(17, 24, 39, 0.1);
+    --adp-background-color-selected-other-month-focused: rgba(17, 24, 39, 0.85);
+    --adp-background-color-selected-other-month: rgba(17, 24, 39, 0.7);
+
+    --adp-color: #111827;
+    --adp-color-secondary: #64748b;
+    --adp-accent-color: #111827;
+    --adp-color-current-date: #111827;
+    --adp-color-other-month: #94a3b8;
+    --adp-color-disabled: #cbd5e1;
+    --adp-color-disabled-in-range: #9ca3af;
+    --adp-color-other-month-hover: #64748b;
+
+    --adp-border-color: rgba(0, 0, 0, 0.1);
+    --adp-border-color-inner: rgba(0, 0, 0, 0.06);
+    --adp-border-radius: 12px;
+    --adp-border-color-inline: rgba(0, 0, 0, 0.08);
+
+    --adp-nav-height: 32px;
+    --adp-nav-arrow-color: #475569;
+    --adp-nav-action-size: 28px;
+    --adp-nav-color-secondary: #64748b;
+
+    --adp-day-name-color: #94a3b8;
+    --adp-day-name-color-hover: #64748b;
+
+    --adp-day-cell-width: 1fr;
+    --adp-day-cell-height: 32px;
+
+    --adp-month-cell-height: 42px;
+    --adp-year-cell-height: 42px;
+
+    --adp-pointer-size: 8px;
+    --adp-poiner-border-radius: 2px;
+    --adp-pointer-offset: 14px;
+
+    --adp-cell-border-radius: 8px;
+    --adp-cell-background-color-selected: #111827;
+    --adp-cell-background-color-selected-hover: #1f2937;
+    --adp-cell-background-color-between: rgba(17, 24, 39, 0.07);
+    --adp-cell-border-color-in-range: rgba(17, 24, 39, 0.12);
+
+    --adp-btn-height: 30px;
+    --adp-btn-color: #475569;
+    --adp-btn-color-hover: #111827;
+    --adp-btn-border-radius: 8px;
+    --adp-btn-background-color-hover: #f1f5f9;
+    --adp-btn-background-color-active: #e2e8f0;
+
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow:
+        0 10px 30px rgba(15, 23, 42, 0.1),
+        0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+/* Текущий день — подчёркивание вместо цветного фона */
+.air-datepicker-cell.-current- {
+    color: #111827 !important;
+    font-weight: 700;
+}
+
+.air-datepicker-cell.-current-.-selected- {
+    color: #fff !important;
+}
+
+/* Кнопки «Сегодня» / «Очистить» */
+.air-datepicker--buttons {
+    padding: 4px 8px 6px;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.air-datepicker-button {
+    font-size: 13px;
+    font-weight: 500;
+    color: #475569;
+    border-radius: 8px;
+    padding: 0 10px;
+    height: 30px;
+}
+
+.air-datepicker-button:hover {
+    background: #f1f5f9;
+    color: #111827;
+}
+
+/* Скрыть стрелку-указатель календаря */
+.air-datepicker--pointer {
+    display: none;
+}
+
+/* Убрать системный date-picker indicator у readonly-input */
+.date-field [data-date-input]::-webkit-calendar-picker-indicator {
+    display: none;
 }

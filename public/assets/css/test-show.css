@@ -4,6 +4,21 @@
     padding: 0 16px;
 }
 
+.test-show__cover {
+    margin: -28px -28px 20px;
+    border-radius: 14px 14px 0 0;
+    overflow: hidden;
+    max-height: 340px;
+}
+
+.test-show__cover-img {
+    width: 100%;
+    height: 100%;
+    max-height: 340px;
+    object-fit: cover;
+    display: block;
+}
+
 .test-show__card {
     background: #fff;
     border-radius: 14px;
@@ -12,7 +27,7 @@
 }
 
 .test-show__top {
-    margin-bottom: 24px;
+    margin-bottom: 20px;
 }
 
 .test-show__meta {
@@ -39,8 +54,6 @@ button.badge {
     line-height: 1;
 }
 
-
-
 .badge--ok {
     background: #dcfce7;
     color: #166534;
@@ -55,63 +68,83 @@ button.badge {
     font-size: 26px;
     line-height: 1.2;
     margin: 0 0 12px;
+    overflow-wrap: break-word;
+    word-break: break-word;
 }
 
 .test-show__desc {
     font-size: 15px;
     line-height: 1.5;
     color: #475569;
+    overflow-wrap: break-word;
+    word-break: break-word;
 }
 
-.test-show__info {
-    margin: 24px 0;
+/* ── Stats row ─────────────────────────────────────────── */
+
+.test-show__stats {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 10px;
+    margin-bottom: 20px;
+    padding: 14px 0;
     border-top: 1px solid #e5e7eb;
     border-bottom: 1px solid #e5e7eb;
-    padding: 16px 0;
 }
 
-.info-row {
+.test-stat-item {
     display: flex;
-    justify-content: space-between;
-    padding: 6px 0;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 10px;
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    font-size: 13px;
+    color: #334155;
+    white-space: nowrap;
+}
+
+.test-stat-item__icon {
+    width: 15px;
+    height: 15px;
+    opacity: 0.6;
+    flex-shrink: 0;
+}
+
+.test-stat-item__val {
+    font-weight: 700;
+    color: #0f172a;
     font-size: 14px;
 }
 
-.info-row__label {
+.test-stat-item__val--sm {
+    font-size: 13px;
+}
+
+.test-stat-item__label {
     color: #64748b;
 }
 
-.info-row__value {
-    color: #0f172a;
-}
+/* ── Rating inline ─────────────────────────────────────── */
 
-.test-show__actions {
-    display: flex;
-    gap: 12px;
-    margin-top: 24px;
+.test-stat-item--rating {
+    flex: 1 1 auto;
+    background: #f8fafc;
+    padding: 8px 14px;
+    gap: 8px;
+    flex-direction: column;
+    align-items: flex-start;
+    white-space: normal;
 }
 
 .test-show__rating {
-    margin-top: 18px;
-    padding: 14px 16px;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    background: #f8fafc;
-}
-
-.test-show__rating-head {
-    margin-bottom: 8px;
-    font-size: 13px;
-    font-weight: 700;
-    color: #1e293b;
-}
-
-.test-show__rating-stars-wrap {
     display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 16px;
     flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
 }
 
 .test-show__rating-form {
@@ -121,16 +154,16 @@ button.badge {
 .test-show__rating-stars {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 2px;
 }
 
 .test-show__star-btn {
     border: 0;
     background: transparent;
     color: #cbd5e1;
-    font-size: 28px;
+    font-size: 22px;
     line-height: 1;
-    padding: 0 2px;
+    padding: 0 1px;
     cursor: pointer;
     transition: color 0.15s ease, transform 0.15s ease;
 }
@@ -147,39 +180,21 @@ button.badge {
 .test-show__rating-text {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     color: #475569;
-    font-size: 14px;
+    font-size: 13px;
 }
 
 .test-show__rating-sep {
     color: #94a3b8;
 }
 
-.test-show__rating-login-note {
-    color: #475569;
-    font-size: 14px;
-}
-
-.test-show__rating-lock {
-    display: inline-flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-}
-
-.test-show__rating-hint {
-    font-size: 12px;
-    line-height: 1.25;
-    color: #64748b;
-}
-
 .test-show__rating-stars-readonly {
     position: relative;
     display: inline-block;
-    font-size: 28px;
+    font-size: 22px;
     line-height: 1;
-    letter-spacing: 2px;
+    letter-spacing: 1px;
 }
 
 .test-show__rating-stars-base {
@@ -195,6 +210,20 @@ button.badge {
     color: #f59e0b;
 }
 
+.test-show__rating-hint {
+    font-size: 12px;
+    color: #94a3b8;
+    width: 100%;
+}
+
+/* ── Actions ───────────────────────────────────────────── */
+
+.test-show__actions {
+    display: flex;
+    gap: 12px;
+}
+
+/* ── Copy badge ────────────────────────────────────────── */
 
 .badge--copy-link {
     display: inline-flex;
@@ -210,3 +239,12 @@ button.badge {
 .badge__icon { width: 14px; height: 14px; opacity: 0.75; pointer-events: none; }
 .badge--copy:hover .badge__icon { opacity: 1; }
 .badge--copied { background: #dbeafe; color: #1d4ed8; }
+
+@media (max-width: 500px) {
+    .test-show__stats {
+        gap: 8px;
+    }
+    .test-stat-item--rating {
+        flex-basis: 100%;
+    }
+}

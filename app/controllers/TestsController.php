@@ -15,6 +15,69 @@ function normalize_input_answer(string $s): string
     return $s;
 }
 
+function normalize_test_time_limit_sec(?string $raw): ?int
+{
+    $raw = trim((string)$raw);
+    if ($raw === '' || $raw === '00:00' || $raw === '00:00:00') {
+        return null;
+    }
+
+    if (!preg_match('/^(?<hours>\d{2}):(?<minutes>\d{2})(?::(?<seconds>\d{2}))?$/', $raw, $m)) {
+        throw new InvalidArgumentException('Некорректный формат лимита времени');
+    }
+
+    $hours = (int)($m['hours'] ?? 0);
+    $minutes = (int)($m['minutes'] ?? 0);
+    $seconds = isset($m['seconds']) ? (int)$m['seconds'] : 0;
+
+    if ($minutes > 59 || $seconds > 59) {
+        throw new InvalidArgumentException('Некорректное значение лимита времени');
+    }
+
+    $total = ($hours * 3600) + ($minutes * 60) + $seconds;
+    if ($total <= 0) {
+        return null;
+    }
+
+    $max = 23 * 3600 + 59 * 60 + 59;
+    if ($total > $max) {
+        throw new InvalidArgumentException('Лимит времени слишком большой');
+    }
+
+    return $total;
+}
+
+function format_time_limit_hms(?int $seconds): string
+{
+    $seconds = ($seconds !== null) ? max(0, (int)$seconds) : 0;
+    if ($seconds <= 0) {
+        return '00:00:00';
+    }
+
+    $hours = intdiv($seconds, 3600);
+    $minutes = intdiv($seconds % 3600, 60);
+    $secs = $seconds % 60;
+
+    return sprintf('%02d:%02d:%02d', $hours, $minutes, $secs);
+}
+
+function expire_attempt_by_timeout(int $attemptId, int $testId): void
+{
+    $questions = questions_list_by_test_id($testId);
+    $totalQuestions = count($questions);
+    $testSnapshotHash = test_snapshot_hash_by_test_id($testId);
+
+    attempt_finish_update(
+        $attemptId,
+        0,
+        $totalQuestions,
+        0.0,
+        $totalQuestions,
+        $testSnapshotHash,
+        'expired'
+    );
+}
+
 function test_form_old_from_db(array $test): array
 {
     $testId = (int)($test['id'] ?? 0);
@@ -35,6 +98,7 @@ function test_form_old_from_db(array $test): array
         $item = [
             'text' => (string)($q['question_text'] ?? ''),
             'type' => $type,
+            'image_path' => $q['image_path'] ?? null,
             'options' => [],
             'answers' => [],
         ];
@@ -46,6 +110,7 @@ function test_form_old_from_db(array $test): array
                 $item['options'][] = [
                     'text' => (string)($opt['option_text'] ?? ''),
                     'is_correct' => (int)($opt['is_correct'] ?? 0),
+                    'image_path' => $opt['image_path'] ?? null,
                 ];
             }
         }
@@ -57,6 +122,8 @@ function test_form_old_from_db(array $test): array
         'title' => (string)($test['title'] ?? ''),
         'description' => (string)($test['description'] ?? ''),
         'access_level' => (string)($test['access_level'] ?? 'public'),
+        'time_limit' => format_time_limit_hms(test_time_limit_sec_from_row($test)),
+        'cover_image' => $test['cover_image'] ?? null,
         'questions' => $oldQuestions,
     ];
 }
@@ -260,6 +327,13 @@ function my_tests_store(): void
         $errors[] = 'Описание теста должно быть не меньше 30 символов и не больше 500 символов';
     }
 
+    $timeLimitSec = null;
+    try {
+        $timeLimitSec = normalize_test_time_limit_sec($_POST['time_limit'] ?? null);
+    } catch (InvalidArgumentException $e) {
+        $errors[] = $e->getMessage();
+    }
+
 
     $questions = $_POST['questions'] ?? [];
     if (!is_array($questions) || count($questions) < 1) {
@@ -429,6 +503,8 @@ function my_tests_store(): void
                 'title'        => $_POST['title'] ?? '',
                 'description'  => $_POST['description'] ?? '',
                 'access_level' => $_POST['access_level'] ?? 'public',
+                'time_limit'   => $_POST['time_limit'] ?? '',
+                'cover_image'  => $_POST['cover_image'] ?? null,
                 'questions'    => $_POST['questions'] ?? [],
             ],
         ]);
@@ -445,7 +521,10 @@ function my_tests_store(): void
     try {
         $pdo->beginTransaction();
 
-        $testId = tests_create($userId, $title, $description, $accessLevel);
+        $coverImage = trim($_POST['cover_image'] ?? '');
+        $coverImage = ($coverImage !== '' && str_starts_with($coverImage, '/uploads/')) ? $coverImage : null;
+
+        $testId = tests_create($userId, $title, $description, $accessLevel, $coverImage, $timeLimitSec);
 
         // Отправка вопросов в БД
         $questions = array_values($questions);
@@ -458,10 +537,12 @@ function my_tests_store(): void
             $qType = (string)($q['type'] ?? '');
             $qText = trim((string)($q['text'] ?? ''));
             $qPos  = $qIndex + 1;
+            $qImg  = trim((string)($q['image_path'] ?? ''));
+            $qImg  = ($qImg !== '' && str_starts_with($qImg, '/uploads/')) ? $qImg : null;
 
-            $questionId = questions_create($testId, $qType, $qText, $qPos);
+            $questionId = questions_create($testId, $qType, $qText, $qPos, $qImg);
 
-            // 19.2 — варианты (radio/checkbox)
+            // варианты (radio/checkbox)
             if ($qType === 'radio' || $qType === 'checkbox') {
                 $options = $q['options'] ?? [];
                 if (!is_array($options)) {
@@ -482,12 +563,14 @@ function my_tests_store(): void
 
                     $pos = $i + 1;
                     $isCorrect = (int)($opt['is_correct'] ?? 0);
+                    $optImg = trim((string)($opt['image_path'] ?? ''));
+                    $optImg = ($optImg !== '' && str_starts_with($optImg, '/uploads/')) ? $optImg : null;
 
-                    options_create($questionId, $optText, $isCorrect, $pos);
+                    options_create($questionId, $optText, $isCorrect, $pos, $optImg);
                 }
             }
 
-            // 19.3 — текстовые ответы (input)
+            // текстовые ответы (input)
             if ($qType === 'input') {
                 $answers = $q['answers'] ?? [];
                 if (!is_array($answers)) {
@@ -562,6 +645,13 @@ function my_tests_update(int $testId): void
     $descLen = mb_strlen($description);
     if ($descLen < 30 || $descLen > 500) {
         $errors[] = 'Описание теста должно быть не меньше 30 символов и не больше 500 символов';
+    }
+
+    $timeLimitSec = null;
+    try {
+        $timeLimitSec = normalize_test_time_limit_sec($_POST['time_limit'] ?? null);
+    } catch (InvalidArgumentException $e) {
+        $errors[] = $e->getMessage();
     }
 
     $questions = $_POST['questions'] ?? [];
@@ -729,7 +819,9 @@ function my_tests_update(int $testId): void
                 'title' => $_POST['title'] ?? '',
                 'description' => $_POST['description'] ?? '',
                 'access_level' => $_POST['access_level'] ?? 'public',
-                'questions' => $_POST['questions'] ?? [],
+                'time_limit' => $_POST['time_limit'] ?? '',
+                'cover_image'  => $_POST['cover_image'] ?? null,
+                'questions'    => $_POST['questions'] ?? [],
             ],
         ]);
         return;
@@ -739,7 +831,10 @@ function my_tests_update(int $testId): void
     try {
         $pdo->beginTransaction();
 
-        tests_update_by_id_and_user_id($testId, $userId, $title, $description, $accessLevel);
+        $coverImage = trim($_POST['cover_image'] ?? '');
+        $coverImage = ($coverImage !== '' && str_starts_with($coverImage, '/uploads/')) ? $coverImage : null;
+
+        tests_update_by_id_and_user_id($testId, $userId, $title, $description, $accessLevel, $coverImage, $timeLimitSec);
 
         questions_delete_by_test_id($testId);
 
@@ -751,8 +846,11 @@ function my_tests_update(int $testId): void
 
             $qType = (string)($q['type'] ?? '');
             $qText = trim((string)($q['text'] ?? ''));
-            $qPos = $qIndex + 1;
-            $questionId = questions_create($testId, $qType, $qText, $qPos);
+            $qPos  = $qIndex + 1;
+            $qImg  = trim((string)($q['image_path'] ?? ''));
+            $qImg  = ($qImg !== '' && str_starts_with($qImg, '/uploads/')) ? $qImg : null;
+
+            $questionId = questions_create($testId, $qType, $qText, $qPos, $qImg);
 
             if ($qType === 'radio' || $qType === 'checkbox') {
                 $options = $q['options'] ?? [];
@@ -773,7 +871,10 @@ function my_tests_update(int $testId): void
 
                     $pos = $i + 1;
                     $isCorrect = (int)($opt['is_correct'] ?? 0);
-                    options_create($questionId, $optText, $isCorrect, $pos);
+                    $optImg = trim((string)($opt['image_path'] ?? ''));
+                    $optImg = ($optImg !== '' && str_starts_with($optImg, '/uploads/')) ? $optImg : null;
+
+                    options_create($questionId, $optText, $isCorrect, $pos, $optImg);
                 }
             }
 
@@ -948,6 +1049,38 @@ function test_pass(int $testId): void
 			&& (($candidate['finished_at'] ?? null) === null);
 
 		if ($candidateOk) {
+            if (attempt_is_expired($candidate)) {
+                $pdo = db();
+                $pdo->beginTransaction();
+                try {
+                    $lockedAttempt = attempt_find_by_id_for_update($candidateId);
+                    if ($lockedAttempt !== null && (int)($lockedAttempt['test_id'] ?? 0) === $testId && ($lockedAttempt['finished_at'] ?? null) === null && attempt_is_expired($lockedAttempt)) {
+                        expire_attempt_by_timeout($candidateId, $testId);
+                    }
+                    $pdo->commit();
+                } catch (Throwable $e) {
+                    if ($pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
+                    throw $e;
+                }
+
+                unset($_SESSION['active_attempt_id_by_test'][$testId]);
+                if ($userId === null) {
+                    if (!isset($_SESSION['guest_attempt_ids']) || !is_array($_SESSION['guest_attempt_ids'])) {
+                        $_SESSION['guest_attempt_ids'] = [];
+                    }
+                    $_SESSION['guest_attempt_ids'][] = $candidateId;
+                    $_SESSION['guest_attempt_ids'] = array_values(array_unique(array_map('intval', $_SESSION['guest_attempt_ids'])));
+                    if (count($_SESSION['guest_attempt_ids']) > 200) {
+                        $_SESSION['guest_attempt_ids'] = array_slice($_SESSION['guest_attempt_ids'], -200);
+                    }
+                }
+                flash_set('toast', ['type' => 'danger', 'text' => 'Время на прохождение истекло. Попытка завершена автоматически.']);
+                redirect('/attempts/' . $candidateId);
+                return;
+            }
+
 			$candidateUserId = $candidate['user_id'] ?? null;
 
 			if ($userId === null) {
@@ -967,12 +1100,23 @@ function test_pass(int $testId): void
 		$_SESSION['active_attempt_id_by_test'][$testId] = $attemptId;
 	}
 
+    $attempt = attempt_find_by_id($attemptId);
+    $timeLimitSec = $attempt !== null ? (int)($attempt['time_limit_sec_snapshot'] ?? 0) : 0;
+    $expiresAt = ($attempt !== null) ? trim((string)($attempt['expires_at'] ?? '')) : '';
+    $remainingSec = null;
+    if ($timeLimitSec > 0 && $expiresAt !== '') {
+        $remainingSec = max(0, (int)floor((strtotime($expiresAt) ?: 0) - time()));
+    }
+
     view_render('test_pass', [
         'title' => (string)($test['title'] ?? 'Прохождение теста'),
         'test' => $test,
         'questions' => $questions,
         'optionsByQuestionId' => $optionsByQuestionId,
+		'attempt' => $attempt,
 		'attemptId' => $attemptId,
+        'timeLimitSec' => $timeLimitSec,
+        'remainingSec' => $remainingSec,
         'styles' => ['/assets/css/test-pass.css'],
 		'scripts' => [
 			'/assets/js/test-pass.js',
@@ -1050,6 +1194,26 @@ function test_finish(int $testId): void
                 throw new RuntimeException('Failed to lock new attempt');
             }
 		}
+
+        if (attempt_is_expired($attempt)) {
+            expire_attempt_by_timeout($attemptId, $testId);
+            unset($_SESSION['active_attempt_id_by_test'][$testId]);
+            if ($userId === null) {
+                if (!isset($_SESSION['guest_attempt_ids']) || !is_array($_SESSION['guest_attempt_ids'])) {
+                    $_SESSION['guest_attempt_ids'] = [];
+                }
+                $_SESSION['guest_attempt_ids'][] = $attemptId;
+                $_SESSION['guest_attempt_ids'] = array_values(array_unique(array_map('intval', $_SESSION['guest_attempt_ids'])));
+                if (count($_SESSION['guest_attempt_ids']) > 200) {
+                    $_SESSION['guest_attempt_ids'] = array_slice($_SESSION['guest_attempt_ids'], -200);
+                }
+            }
+
+            $pdo->commit();
+            flash_set('toast', ['type' => 'danger', 'text' => 'Время на прохождение истекло. Новые ответы не были приняты.']);
+            redirect('/attempts/' . $attemptId);
+            return;
+        }
 
 
         $questions = questions_list_by_test_id($testId);
@@ -1425,17 +1589,25 @@ function attempt_show(int $attemptId): void
     $correctOptionIdsByQ = options_correct_ids_by_question_ids($questionIds);
     $correctTextAnswersByQ = text_answers_by_question_ids($questionIds);
 
-	$optionsByQ = options_list_by_question_ids($questionIds);
-
-	// карта option_id => option_text
+	// карта option_id => option_text + image_path
 	$optionTextById = [];
-	foreach ($optionsByQ as $qidTmp => $opts) {
+	foreach ($optionsByQuestionId as $qidTmp => $opts) {
 		foreach ($opts as $opt) {
 			$oidTmp = (int)($opt['id'] ?? 0);
 			if ($oidTmp <= 0) continue;
 			$optionTextById[$oidTmp] = (string)($opt['option_text'] ?? '');
 		}
 	}
+
+    // карта qid => image_path для восстановления в snapshot-режиме
+    $questionImageByQid = [];
+    foreach ($questions as $q) {
+        $qidTmp = (int)($q['id'] ?? 0);
+        $img = trim((string)($q['image_path'] ?? ''));
+        if ($qidTmp > 0 && $img !== '') {
+            $questionImageByQid[$qidTmp] = $img;
+        }
+    }
 
 
     $userAnswers = answers_list_by_attempt_id($attemptId);
@@ -1544,6 +1716,15 @@ function attempt_show(int $attemptId): void
 
 		// привести $questions к обычному списку (а не map)
 		$questions = array_values($questions);
+
+        // Дополнить snapshot-вопросы image_path из живой БД (если вопрос ещё существует)
+        foreach ($questions as &$qSnap) {
+            $qSnapId = (int)($qSnap['id'] ?? 0);
+            if ($qSnapId > 0 && isset($questionImageByQid[$qSnapId])) {
+                $qSnap['image_path'] = $questionImageByQid[$qSnapId];
+            }
+        }
+        unset($qSnap);
 	}
 
 
@@ -1560,7 +1741,7 @@ function attempt_show(int $attemptId): void
         'testMissing' => $testMissing,
         'sourceState' => $sourceState,
         'styles' => ['/assets/css/attempt-show.css'],
-        'scripts' => ['/assets/js/attempt-rate-modal.js'],
+        'scripts' => ['/assets/js/attempt-show.js', '/assets/js/attempt-rate-modal.js'],
         'show_rate_prompt' => $showRatePrompt,
     ]);
 }
@@ -1788,4 +1969,35 @@ function my_tests_trash_empty(): void
 
     flash_set('toast', ['type' => 'success', 'text' => "Удалено навсегда: {$count}"]);
     redirect('/my/tests/trash');
+}
+
+function my_tests_upload_image(): void
+{
+    auth_required();
+
+    header('Content-Type: application/json; charset=utf-8');
+
+    $type = trim((string)($_POST['image_type'] ?? ''));
+    if (!in_array($type, ['cover', 'question', 'option'], true)) {
+        http_response_code(422);
+        echo json_encode(['ok' => false, 'error' => 'Неверный тип изображения'], JSON_UNESCAPED_UNICODE);
+        return;
+    }
+
+    $file = $_FILES['image'] ?? null;
+    if ($file === null) {
+        http_response_code(422);
+        echo json_encode(['ok' => false, 'error' => 'Файл не получен'], JSON_UNESCAPED_UNICODE);
+        return;
+    }
+
+    try {
+        $webPath = upload_image($file, $type);
+    } catch (RuntimeException $e) {
+        http_response_code(422);
+        echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        return;
+    }
+
+    echo json_encode(['ok' => true, 'path' => $webPath], JSON_UNESCAPED_UNICODE);
 }

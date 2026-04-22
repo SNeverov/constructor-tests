@@ -140,6 +140,12 @@ if (($sourceState ?? 'ok') === 'changed') {
 } elseif (($sourceState ?? 'ok') === 'deleted') {
     $sourceNotice = 'Исходная версия теста недоступна: тест был удалён.';
 }
+
+$attemptStatus = (string)($attempt['status'] ?? '');
+$expiredNotice = '';
+if ($attemptStatus === 'expired') {
+    $expiredNotice = 'Время на прохождение истекло. Попытка завершена автоматически, засчитаны только ответы, на которые вы успели ответить.';
+}
 ?>
 <?php if (!empty($show_rate_prompt) && auth_is_logged_in() && (int)($test['id'] ?? 0) > 0): ?>
     <div class="ui-backdrop is-open" data-rate-modal="1" aria-hidden="false">
@@ -182,6 +188,9 @@ if (($sourceState ?? 'ok') === 'changed') {
         <div class="attempt__meta">
             <span class="badge"><?= _h($testIdBadge) ?></span>
             <span class="badge">Результат ID: <?= (int)($attempt['id'] ?? 0) ?></span>
+            <?php if ($attemptStatus === 'expired'): ?>
+                <span class="badge badge--danger-soft">Время истекло</span>
+            <?php endif; ?>
         </div>
 
         <h1 class="attempt__title"><?= _h((string)($test['title'] ?? 'Тест')) ?></h1>
@@ -243,6 +252,13 @@ if (($sourceState ?? 'ok') === 'changed') {
             <div class="attempt__notice attempt__notice--danger" role="alert">
                 <span class="attempt__notice-icon" aria-hidden="true">!</span>
                 <span><?= _h($sourceNotice) ?></span>
+            </div>
+        <?php endif; ?>
+
+        <?php if ($expiredNotice !== ''): ?>
+            <div class="attempt__notice attempt__notice--warn" role="alert">
+                <span class="attempt__notice-icon" aria-hidden="true">!</span>
+                <span><?= _h($expiredNotice) ?></span>
             </div>
         <?php endif; ?>
     </div>
@@ -363,14 +379,30 @@ if (($sourceState ?? 'ok') === 'changed') {
         ?>
 
         <div class="qres">
-            <div class="qres__top">
-                <div class="qres__num">Вопрос #<?= (int)($i + 1) ?></div>
+            <div class="qres__head">
+                <div class="qres__title">
+                    <span class="qres__num"><?= (int)($i + 1) ?></span>
+                    Вопрос
+                </div>
                 <div class="qres__state <?= $stateClass ?>">
                     <?= $stateText ?>
                 </div>
             </div>
 
+            <div class="qres__body">
             <div class="qres__text"><?= nl2br(_h($qText)) ?></div>
+
+            <?php $qImg = trim((string)($q['image_path'] ?? '')); ?>
+            <?php if ($qImg !== ''): ?>
+                <div class="qres__image">
+                    <img
+                        src="<?= _h($qImg) ?>"
+                        alt=""
+                        class="qres__image-img"
+                        loading="lazy"
+                    >
+                </div>
+            <?php endif; ?>
 
             <div class="qres__answers">
                 <?php if ($type === 'input'): ?>
@@ -456,6 +488,15 @@ if (($sourceState ?? 'ok') === 'changed') {
                         } elseif (!empty($snapshotOptions)) {
                             $renderOptions = array_values($snapshotOptions);
                         }
+
+                        // карта нормализованный_текст => image_path из живой БД
+                        $optImgByNorm = [];
+                        foreach ($optionsByQuestionId[$qid] ?? [] as $liveOpt) {
+                            $liveImg = trim((string)($liveOpt['image_path'] ?? ''));
+                            if ($liveImg !== '') {
+                                $optImgByNorm[_norm_opt((string)($liveOpt['option_text'] ?? ''))] = $liveImg;
+                            }
+                        }
                         ?>
                         <?php if (empty($renderOptions)): ?>
                             <div class="muted">Ответ не выбран.</div>
@@ -465,19 +506,20 @@ if (($sourceState ?? 'ok') === 'changed') {
                                 $norm = _norm_opt((string)$snapshotText);
                                 $isCorrectOpt = isset($correctNormMap[$norm]);
                                 $isUserOpt = isset($selectedNormMap[$norm]);
+                                $optImg = $optImgByNorm[$norm] ?? '';
 
                                 $optCls = 'opt';
-                                if ($isCorrectOpt) {
-                                    $optCls .= ' opt--correct';
-                                }
-                                if ($isUserOpt && !$isCorrectOpt) {
-                                    $optCls .= ' opt--wrong';
-                                }
+                                if ($isCorrectOpt) $optCls .= ' opt--correct';
+                                if ($isUserOpt && !$isCorrectOpt) $optCls .= ' opt--wrong';
+                                if ($optImg !== '') $optCls .= ' opt--has-image';
                                 ?>
                                 <div class="<?= $optCls ?>">
                                     <div class="opt__mark">
                                         <?php if ($isUserOpt): ?>✓<?php else: ?>&nbsp;<?php endif; ?>
                                     </div>
+                                    <?php if ($optImg !== ''): ?>
+                                        <img src="<?= _h($optImg) ?>" alt="" class="opt__image" loading="lazy">
+                                    <?php endif; ?>
                                     <div class="opt__text"><?= _h($snapshotText) ?></div>
                                 </div>
                             <?php endforeach; ?>
@@ -500,6 +542,7 @@ if (($sourceState ?? 'ok') === 'changed') {
                                 <?php
                                 $oid = (int)($opt['id'] ?? 0);
                                 $otext = (string)($opt['option_text'] ?? '');
+                                $oimg = trim((string)($opt['image_path'] ?? ''));
 
                                 $isCorrectOpt = in_array($oid, $correctOptIds, true);
                                 $isUserOpt = in_array($oid, $userOptIds, true);
@@ -507,11 +550,20 @@ if (($sourceState ?? 'ok') === 'changed') {
                                 $cls = 'opt';
                                 if ($isCorrectOpt) $cls .= ' opt--correct';
                                 if ($isUserOpt && !$isCorrectOpt) $cls .= ' opt--wrong';
+                                if ($oimg !== '') $cls .= ' opt--has-image';
                                 ?>
                                 <div class="<?= $cls ?>">
                                     <div class="opt__mark">
                                         <?php if ($isUserOpt): ?>✓<?php else: ?>&nbsp;<?php endif; ?>
                                     </div>
+                                    <?php if ($oimg !== ''): ?>
+                                        <img
+                                            src="<?= _h($oimg) ?>"
+                                            alt=""
+                                            class="opt__image"
+                                            loading="lazy"
+                                        >
+                                    <?php endif; ?>
                                     <div class="opt__text"><?= _h($otext) ?></div>
                                 </div>
                             <?php endforeach; ?>
@@ -519,7 +571,18 @@ if (($sourceState ?? 'ok') === 'changed') {
                     <?php endif; ?>
                 <?php endif; ?>
             </div>
+            </div>
         </div>
 
     <?php endforeach; ?>
+</div>
+
+<div id="imgLightbox" class="img-lightbox" aria-hidden="true" role="dialog" aria-label="Просмотр изображения">
+    <div class="img-lightbox__backdrop" data-lightbox-close></div>
+    <div class="img-lightbox__content">
+        <button class="img-lightbox__close" data-lightbox-close aria-label="Закрыть">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+        <img src="" alt="" class="img-lightbox__img" id="imgLightboxImg">
+    </div>
 </div>
