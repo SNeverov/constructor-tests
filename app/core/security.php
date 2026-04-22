@@ -18,6 +18,9 @@ function security_post_limit_rule(string $path): ?array
         if (preg_match('~^/my/tests/\d+/(delete|restore|destroy)$~', $path)) {
             return ['tests-mutate', 40, 60];
         }
+        if ($path === '/my/tests/draft' || preg_match('~^/my/tests/\d+/draft$~', $path)) {
+            return ['tests-draft-save', 120, 60];
+        }
         if (preg_match('~^/my/tests/\d+$~', $path)) {
             return ['tests-update', 20, 60];
         }
@@ -55,6 +58,16 @@ if (!function_exists('security_enforce_post_rate_limit')) {
 
         if (rate_limit_consume($bucket, (int)$limit, (int)$window)) {
             return;
+        }
+
+        if (request_expects_json()) {
+            http_response_code(429);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'ok' => false,
+                'message' => 'Слишком много запросов за короткое время. Повторите позже.',
+            ], JSON_UNESCAPED_UNICODE);
+            exit();
         }
 
         http_response_code(429);

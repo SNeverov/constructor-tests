@@ -684,7 +684,16 @@
 .test-create .test-create-submit {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
   margin-top: 10px;
+}
+
+.test-create .test-create-save-status {
+  margin-left: auto;
+  font-size: 13px;
+  color: #5b6472;
 }
 
 .test-create .btn-add-variant,

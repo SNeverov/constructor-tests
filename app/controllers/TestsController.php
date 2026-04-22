@@ -42,14 +42,418 @@ function test_form_old_from_db(array $test): array
     }
 
     return [
+        'id' => (int)($test['id'] ?? 0),
         'title' => (string)($test['title'] ?? ''),
         'description' => (string)($test['description'] ?? ''),
         'access_level' => (string)($test['access_level'] ?? 'public'),
+        'status' => (string)($test['status'] ?? test_status_published()),
+        'published_at' => (string)($test['published_at'] ?? ''),
+        'last_saved_at' => (string)($test['last_saved_at'] ?? ''),
         'category_names' => test_category_display_names($test['category_names'] ?? ($test['category_name'] ?? null)),
         'time_limit' => format_time_limit_hms(test_time_limit_sec_from_row($test)),
         'cover_image' => $test['cover_image'] ?? null,
         'questions' => $oldQuestions,
     ];
+}
+
+function tests_request_is_ajax(): bool
+{
+    return strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest'
+        || str_contains(strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json');
+}
+
+function tests_json_response(array $payload, int $status = 200): void
+{
+    http_response_code($status);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+    exit();
+}
+
+function tests_normalize_upload_path(mixed $raw): ?string
+{
+    $value = trim((string)$raw);
+    if ($value === '' || !str_starts_with($value, '/uploads/')) {
+        return null;
+    }
+
+    return $value;
+}
+
+function tests_collect_form_payload(array $source, bool $strictValidation = true): array
+{
+    $errors = [];
+    $maxInputAnswerLen = 1000;
+
+    $title = trim((string)($source['title'] ?? ''));
+    if ($strictValidation) {
+        if ($title === '') {
+            $errors[] = 'Название теста обязательно';
+        } elseif (mb_strlen($title) < 10 || mb_strlen($title) > 200) {
+            $errors[] = 'Название теста должно быть от 10 до 200 символов';
+        }
+    } elseif (mb_strlen($title) > 200) {
+        $title = mb_substr($title, 0, 200);
+    }
+
+    $accessLevel = (string)($source['access_level'] ?? 'public');
+    if (!in_array($accessLevel, ['public', 'registered'], true)) {
+        if ($strictValidation) {
+            $errors[] = 'Некорректный уровень доступа теста';
+        }
+        $accessLevel = 'public';
+    }
+
+    $description = trim((string)($source['description'] ?? ''));
+    $descLen = mb_strlen($description);
+    if ($strictValidation) {
+        if ($descLen < 30 || $descLen > 500) {
+            $errors[] = 'Описание теста должно быть не меньше 30 символов и не больше 500 символов';
+        }
+    } elseif ($descLen > 500) {
+        $description = mb_substr($description, 0, 500);
+    }
+
+    $categoryNames = [];
+    try {
+        $categoryNames = test_category_names_from_input($source['category_names'] ?? null);
+    } catch (InvalidArgumentException $e) {
+        if ($strictValidation) {
+            $errors[] = $e->getMessage();
+        }
+    }
+    if ($strictValidation && $categoryNames === []) {
+        $errors[] = 'Выберите хотя бы одну категорию';
+    }
+
+    $timeLimitSec = null;
+    try {
+        $timeLimitSec = normalize_test_time_limit_sec($source['time_limit'] ?? null);
+    } catch (InvalidArgumentException $e) {
+        if ($strictValidation) {
+            $errors[] = $e->getMessage();
+        }
+    }
+
+    $rawQuestions = $source['questions'] ?? [];
+    if (!is_array($rawQuestions)) {
+        $rawQuestions = [];
+    }
+
+    $maxQuestions = 100;
+    $maxOptions = 10;
+    $maxInputAnswers = 10;
+
+    if ($strictValidation && count($rawQuestions) < 1) {
+        $errors[] = 'Добавь хотя бы один вопрос';
+    }
+    if (count($rawQuestions) > $maxQuestions) {
+        if ($strictValidation) {
+            $errors[] = "Слишком много вопросов: максимум {$maxQuestions}";
+        }
+        $rawQuestions = array_slice($rawQuestions, 0, $maxQuestions);
+    }
+
+    $questions = [];
+
+    $rawQuestionsCount = count($rawQuestions);
+    foreach ($rawQuestions as $i => $q) {
+        $num = $i + 1;
+        if (!is_array($q)) {
+            if ($strictValidation) {
+                $errors[] = "Вопрос #{$num}: некорректные данные";
+            }
+            continue;
+        }
+
+        $qText = trim((string)($q['text'] ?? ''));
+        $qType = (string)($q['type'] ?? 'radio');
+        if (!in_array($qType, ['radio', 'checkbox', 'input'], true)) {
+            if ($strictValidation) {
+                $errors[] = "Вопрос #{$num}: неверный тип вопроса";
+            }
+            $qType = 'radio';
+        }
+
+        $question = [
+            'text' => $qText,
+            'type' => $qType,
+            'image_path' => tests_normalize_upload_path($q['image_path'] ?? null),
+            'options' => [],
+            'answers' => [],
+        ];
+
+        if ($strictValidation) {
+            $qLen = mb_strlen($qText);
+            if ($qText === '') {
+                $errors[] = "Вопрос #{$num}: текст вопроса обязателен";
+                continue;
+            }
+            if ($qLen < 5 || $qLen > 1000) {
+                $errors[] = "Вопрос #{$num}: текст вопроса должен быть от 5 до 1000 символов";
+                continue;
+            }
+        } elseif (mb_strlen($qText) > 1000) {
+            $question['text'] = mb_substr($qText, 0, 1000);
+        }
+
+        if ($qType === 'input') {
+            $answers = $q['answers'] ?? [];
+            if (!is_array($answers)) {
+                $answers = [];
+            }
+
+            $answers = array_values(array_filter(array_map(
+                static fn($a): string => trim((string)$a),
+                $answers
+            ), static fn(string $a): bool => $a !== ''));
+
+            if (count($answers) > $maxInputAnswers) {
+                if ($strictValidation) {
+                    $errors[] = "Вопрос #{$num}: максимум {$maxInputAnswers} текстовых ответов";
+                    continue;
+                }
+                $answers = array_slice($answers, 0, $maxInputAnswers);
+            }
+
+            if ($strictValidation) {
+                if (count($answers) < 1) {
+                    $errors[] = "Вопрос #{$num}: укажи хотя бы один правильный текстовый ответ";
+                    continue;
+                }
+
+                $seenAnswers = [];
+                foreach ($answers as $a) {
+                    $norm = normalize_input_answer($a);
+                    if ($norm === '') {
+                        continue;
+                    }
+                    if (isset($seenAnswers[$norm])) {
+                        $errors[] = "Вопрос #{$num}: текстовые ответы не должны повторяться (регистр/пробелы/ё→е)";
+                        continue 2;
+                    }
+                    $seenAnswers[$norm] = true;
+                }
+            }
+
+            foreach ($answers as $a) {
+                $aLen = mb_strlen($a);
+                if ($strictValidation && ($aLen < 1 || $aLen > $maxInputAnswerLen)) {
+                    $errors[] = "Вопрос #{$num}: текстовый ответ должен быть от 1 до {$maxInputAnswerLen} символов";
+                    continue 2;
+                }
+                if (!$strictValidation && $aLen > $maxInputAnswerLen) {
+                    $a = mb_substr($a, 0, $maxInputAnswerLen);
+                }
+                $question['answers'][] = $a;
+            }
+        } else {
+            $options = $q['options'] ?? [];
+            if (!is_array($options)) {
+                $options = [];
+            }
+
+            $normalizedOptions = [];
+            foreach (array_slice(array_values($options), 0, $maxOptions) as $opt) {
+                if (!is_array($opt)) {
+                    continue;
+                }
+
+                $normalizedOptions[] = [
+                    'text' => trim((string)($opt['text'] ?? '')),
+                    'is_correct' => (int)($opt['is_correct'] ?? 0) === 1 ? 1 : 0,
+                    'image_path' => tests_normalize_upload_path($opt['image_path'] ?? null),
+                ];
+            }
+
+            if ($strictValidation) {
+                $normalizedOptions = array_values(array_filter(
+                    $normalizedOptions,
+                    static fn(array $opt): bool => $opt['text'] !== ''
+                ));
+
+                if (count($normalizedOptions) < 2) {
+                    $errors[] = "Вопрос #{$num}: минимум два варианта ответа";
+                    continue;
+                }
+
+                $seen = [];
+                foreach ($normalizedOptions as $opt) {
+                    $t = preg_replace('/\s+/u', ' ', $opt['text']) ?? $opt['text'];
+                    $t = mb_strtolower(trim($t));
+                    if ($t === '') {
+                        continue;
+                    }
+                    if (isset($seen[$t])) {
+                        $errors[] = "Вопрос #{$num}: варианты ответа не должны повторяться";
+                        continue 2;
+                    }
+                    $seen[$t] = true;
+                }
+
+                $correctCount = 0;
+                foreach ($normalizedOptions as $opt) {
+                    $len = mb_strlen($opt['text']);
+                    if ($len < 1 || $len > 1000) {
+                        $errors[] = "Вопрос #{$num}: вариант ответа должен быть от 1 до 1000 символов";
+                        continue 2;
+                    }
+                    if ((int)$opt['is_correct'] === 1) {
+                        $correctCount++;
+                    }
+                }
+
+                if ($qType === 'radio' && $correctCount !== 1) {
+                    $errors[] = "Вопрос #{$num}: при radio должен быть ровно 1 правильный вариант";
+                    continue;
+                }
+
+                if ($qType === 'checkbox' && $correctCount < 1) {
+                    $errors[] = "Вопрос #{$num}: при checkbox отметь хотя бы 1 правильный вариант";
+                    continue;
+                }
+            } else {
+                foreach ($normalizedOptions as &$opt) {
+                    if (mb_strlen($opt['text']) > 1000) {
+                        $opt['text'] = mb_substr($opt['text'], 0, 1000);
+                    }
+                }
+                unset($opt);
+            }
+
+            $question['options'] = $normalizedOptions;
+        }
+
+        if (!$strictValidation) {
+            $hasOptionContent = false;
+            foreach ((array)$question['options'] as $opt) {
+                if (!is_array($opt)) {
+                    continue;
+                }
+                if (trim((string)($opt['text'] ?? '')) !== '' || (int)($opt['is_correct'] ?? 0) === 1 || !empty($opt['image_path'])) {
+                    $hasOptionContent = true;
+                    break;
+                }
+            }
+
+            $shouldKeepDraftQuestion =
+                trim((string)$question['text']) !== ''
+                || !empty($question['image_path'])
+                || !empty($question['answers'])
+                || $hasOptionContent
+                || (string)$question['type'] !== 'radio'
+                || $rawQuestionsCount > 1;
+
+            if (!$shouldKeepDraftQuestion) {
+                continue;
+            }
+        }
+
+        $questions[] = $question;
+    }
+
+    return [
+        'payload' => [
+            'title' => $title,
+            'description' => $description,
+            'access_level' => $accessLevel,
+            'category_names' => $categoryNames,
+            'time_limit_sec' => $timeLimitSec,
+            'cover_image' => tests_normalize_upload_path($source['cover_image'] ?? null),
+            'questions' => $questions,
+        ],
+        'errors' => $errors,
+    ];
+}
+
+function tests_payload_has_meaningful_content(array $payload, array $source): bool
+{
+    if (trim((string)($payload['title'] ?? '')) !== '') {
+        return true;
+    }
+    if (trim((string)($payload['description'] ?? '')) !== '') {
+        return true;
+    }
+    if (($payload['access_level'] ?? 'public') !== 'public') {
+        return true;
+    }
+    if (!empty($payload['category_names'])) {
+        return true;
+    }
+    if (($payload['time_limit_sec'] ?? null) !== null) {
+        return true;
+    }
+    if (($payload['cover_image'] ?? null) !== null) {
+        return true;
+    }
+    if (!empty($payload['questions'])) {
+        return true;
+    }
+
+    $rawQuestions = $source['questions'] ?? [];
+    if (is_array($rawQuestions) && count($rawQuestions) > 1) {
+        return true;
+    }
+
+    return false;
+}
+
+function tests_replace_questions_payload(int $testId, array $questions): void
+{
+    questions_delete_by_test_id($testId);
+
+    foreach (array_values($questions) as $qIndex => $q) {
+        $questionId = questions_create(
+            $testId,
+            (string)($q['type'] ?? 'radio'),
+            trim((string)($q['text'] ?? '')),
+            $qIndex + 1,
+            tests_normalize_upload_path($q['image_path'] ?? null)
+        );
+
+        if ((string)($q['type'] ?? 'radio') === 'input') {
+            foreach ((array)($q['answers'] ?? []) as $answerText) {
+                $answerText = trim((string)$answerText);
+                if ($answerText === '') {
+                    continue;
+                }
+                question_text_answers_create($questionId, $answerText);
+            }
+            continue;
+        }
+
+        foreach ((array)($q['options'] ?? []) as $optIndex => $opt) {
+            if (!is_array($opt)) {
+                continue;
+            }
+            $optText = trim((string)($opt['text'] ?? ''));
+            $optImage = tests_normalize_upload_path($opt['image_path'] ?? null);
+            $isCorrect = (int)($opt['is_correct'] ?? 0) === 1 ? 1 : 0;
+            if ($optText === '' && $optImage === null && $isCorrect !== 1) {
+                continue;
+            }
+            options_create(
+                $questionId,
+                $optText,
+                $isCorrect,
+                $optIndex + 1,
+                $optImage
+            );
+        }
+    }
+}
+
+function tests_render_form_with_errors(string $title, array $errors, array $old, bool $isEdit = false, ?int $testId = null, string $submitLabel = 'Опубликовать'): void
+{
+    view_render('test_create', [
+        'title' => $title,
+        'styles' => ['/assets/css/test-create.css'],
+        'errors' => $errors,
+        'old' => $old,
+        'is_edit' => $isEdit,
+        'form_action' => $testId !== null ? '/my/tests/' . $testId : '/my/tests',
+        'submit_label' => $submitLabel,
+    ]);
 }
 
 function my_tests_index(): void
@@ -94,6 +498,7 @@ function my_tests_create_form(): void
     view_render('test_create', [
         'title' => 'Создать тест',
         'styles' => ['/assets/css/test-create.css'],
+        'submit_label' => 'Опубликовать',
     ]);
 }
 
@@ -120,298 +525,187 @@ function my_tests_edit_form(int $testId): void
         'styles' => ['/assets/css/test-create.css'],
         'is_edit' => true,
         'form_action' => '/my/tests/' . $testId,
-        'submit_label' => 'Сохранить изменения',
+        'submit_label' => tests_is_draft_row($test) ? 'Опубликовать' : 'Сохранить изменения',
         'old' => $old,
     ]);
+}
+
+function my_tests_draft_save(): void
+{
+    auth_required();
+
+    $user = auth_user();
+    $userId = (int)($user['id'] ?? 0);
+    $normalized = tests_collect_form_payload($_POST, false);
+    $payload = $normalized['payload'];
+
+    if (!tests_payload_has_meaningful_content($payload, $_POST)) {
+        tests_json_response([
+            'ok' => true,
+            'created' => false,
+            'saved' => false,
+            'message' => 'Черновик пока пустой',
+        ]);
+    }
+
+    $pdo = db();
+    try {
+        $pdo->beginTransaction();
+
+        $testId = tests_create(
+            $userId,
+            (string)$payload['title'],
+            (string)$payload['description'],
+            (string)$payload['access_level'],
+            (array)$payload['category_names'],
+            $payload['cover_image'],
+            $payload['time_limit_sec'],
+            test_status_draft(),
+            null,
+            date('Y-m-d H:i:s')
+        );
+        test_categories_replace_by_test_id($testId, (array)$payload['category_names']);
+        tests_replace_questions_payload($testId, (array)$payload['questions']);
+
+        $pdo->commit();
+        tests_payload_cache_invalidate($testId);
+
+        tests_json_response([
+            'ok' => true,
+            'created' => true,
+            'saved' => true,
+            'test_id' => $testId,
+            'status' => test_status_draft(),
+            'edit_url' => '/my/tests/' . $testId . '/edit',
+            'draft_url' => '/my/tests/' . $testId . '/draft',
+            'message' => 'Черновик сохранён',
+        ]);
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        tests_json_response([
+            'ok' => false,
+            'message' => 'Не удалось сохранить черновик. Попробуйте ещё раз.',
+        ], 500);
+    }
+}
+
+function my_tests_draft_update(int $testId): void
+{
+    auth_required();
+
+    $user = auth_user();
+    $userId = (int)($user['id'] ?? 0);
+    $existingTest = tests_find_active_by_id_and_user_id($testId, $userId);
+    if ($existingTest === null) {
+        tests_json_response([
+            'ok' => false,
+            'message' => 'Черновик не найден',
+        ], 404);
+    }
+
+    if (!tests_is_draft_row($existingTest)) {
+        tests_json_response([
+            'ok' => false,
+            'message' => 'Сохранять черновик можно только для черновика',
+        ], 409);
+    }
+
+    $normalized = tests_collect_form_payload($_POST, false);
+    $payload = $normalized['payload'];
+
+    $pdo = db();
+    try {
+        $pdo->beginTransaction();
+        tests_update_by_id_and_user_id(
+            $testId,
+            $userId,
+            (string)$payload['title'],
+            (string)$payload['description'],
+            (string)$payload['access_level'],
+            (array)$payload['category_names'],
+            $payload['cover_image'],
+            $payload['time_limit_sec'],
+            test_status_draft(),
+            null,
+            true
+        );
+        test_categories_replace_by_test_id($testId, (array)$payload['category_names']);
+        tests_replace_questions_payload($testId, (array)$payload['questions']);
+
+        $pdo->commit();
+        tests_payload_cache_invalidate($testId);
+
+        tests_json_response([
+            'ok' => true,
+            'saved' => true,
+            'test_id' => $testId,
+            'status' => test_status_draft(),
+            'edit_url' => '/my/tests/' . $testId . '/edit',
+            'draft_url' => '/my/tests/' . $testId . '/draft',
+            'message' => 'Черновик сохранён',
+        ]);
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        tests_json_response([
+            'ok' => false,
+            'message' => 'Не удалось сохранить черновик. Попробуйте ещё раз.',
+        ], 500);
+    }
 }
 
 function my_tests_store(): void
 {
     auth_required();
 
-    $errors = [];
-    $MAX_INPUT_ANSWER_LEN = 1000;
-
-    $title = trim($_POST['title'] ?? '');
-    if ($title === '') {
-        $errors[] = 'Название теста обязательно';
-    } elseif (mb_strlen($title) < 10 || mb_strlen($title) > 200) {
-        $errors[] = 'Название теста должно быть от 10 до 200 символов';
-    }
-
-    $accessLevel = $_POST['access_level'] ?? '';
-    if (!in_array($accessLevel, ['public', 'registered'], true)) {
-        $errors[] = 'Некорректный уровень доступа теста';
-    }
-
-    $description = trim($_POST['description'] ?? '');
-    $descLen = mb_strlen($description);
-    if ($descLen < 30 || $descLen > 500) {
-        $errors[] = 'Описание теста должно быть не меньше 30 символов и не больше 500 символов';
-    }
-
-    $categoryNames = test_category_default_names();
-    try {
-        $categoryNames = test_category_names_from_input($_POST['category_names'] ?? null);
-    } catch (InvalidArgumentException $e) {
-        $errors[] = $e->getMessage();
-    }
-    if ($categoryNames === []) {
-        $errors[] = 'Выберите хотя бы одну категорию';
-    }
-
-    $timeLimitSec = null;
-    try {
-        $timeLimitSec = normalize_test_time_limit_sec($_POST['time_limit'] ?? null);
-    } catch (InvalidArgumentException $e) {
-        $errors[] = $e->getMessage();
-    }
-
-    $questions = $_POST['questions'] ?? [];
-    if (!is_array($questions) || count($questions) < 1) {
-        $errors[] = 'Добавь хотя бы один вопрос';
-        $questions = [];
-    }
-
-    $MAX_QUESTIONS = 100;
-    $MAX_OPTIONS = 10;
-    $MAX_INPUT_ANSWERS = 10;
-
-    if (count($questions) > $MAX_QUESTIONS) {
-        $errors[] = "Слишком много вопросов: максимум {$MAX_QUESTIONS}";
-        $questions = array_slice($questions, 0, $MAX_QUESTIONS);
-    }
-
-    if (is_array($questions)) {
-        foreach ($questions as $i => $q) {
-            $num = $i + 1;
-
-            if (!is_array($q)) {
-                $errors[] = "Вопрос #{$num}: некорректные данные";
-                continue;
-            }
-
-            $qText = trim($q['text'] ?? '');
-            $qType = (string)($q['type'] ?? '');
-            $qLen = mb_strlen($qText);
-
-            if ($qText === '') {
-                $errors[] = "Вопрос #{$num}: текст вопроса обязателен";
-                continue;
-            }
-
-            if ($qLen < 5 || $qLen > 1000) {
-                $errors[] = "Вопрос #{$num}: текст вопроса должен быть от 5 до 1000 символов";
-                continue;
-            }
-
-            if (!in_array($qType, ['radio', 'checkbox', 'input'], true)) {
-                $errors[] = "Вопрос #{$num}: неверный тип вопроса";
-                continue;
-            }
-
-            if ($qType === 'input') {
-                $answers = $q['answers'] ?? [];
-                if (!is_array($answers)) $answers = [];
-
-                $answers = array_values(array_filter($answers, fn($a) => trim((string)$a) !== ''));
-
-                if (count($answers) < 1) {
-                    $errors[] = "Вопрос #{$num}: укажи хотя бы один правильный текстовый ответ";
-                    continue;
-                }
-
-                if (count($answers) > $MAX_INPUT_ANSWERS) {
-                    $errors[] = "Вопрос #{$num}: максимум {$MAX_INPUT_ANSWERS} текстовых ответов";
-                    continue;
-                }
-
-                $seenAnswers = [];
-                foreach ($answers as $a) {
-                    $norm = normalize_input_answer((string) $a);
-
-                    if ($norm === '') {
-                        continue;
-                    }
-
-                    if (isset($seenAnswers[$norm])) {
-                        $errors[] = "Вопрос #{$num}: текстовые ответы не должны повторяться (регистр/пробелы/ё→е)";
-                        continue 2;
-                    }
-
-                    $seenAnswers[$norm] = true;
-                }
-
-                foreach ($answers as $a) {
-                    $aText = trim((string)$a);
-                    $aLen = mb_strlen($aText);
-
-                    if ($aLen < 1 || $aLen > $MAX_INPUT_ANSWER_LEN) {
-                        $errors[] = "Вопрос #{$num}: текстовый ответ должен быть от 1 до {$MAX_INPUT_ANSWER_LEN} символов";
-                        break;
-                    }
-                }
-
-            } else {
-                $options = $q['options'] ?? [];
-                if (!is_array($options)) $options = [];
-
-                $options = array_values(array_filter($options, fn($o) => trim((string)($o['text'] ?? '')) !== ''));
-
-                if (count($options) < 2) {
-                    $errors[] = "Вопрос #{$num}: минимум два варианта ответа";
-                    continue;
-                }
-
-                if (count($options) > $MAX_OPTIONS) {
-                    $errors[] = "Вопрос #{$num}: максимум {$MAX_OPTIONS} вариантов ответа";
-                    continue;
-                }
-
-                $seen = [];
-                foreach ($options as $o) {
-                    $t = trim((string)($o['text'] ?? ''));
-                    $t = preg_replace('/\s+/u', ' ', $t) ?? $t;
-                    $t = mb_strtolower($t);
-
-                    if ($t === '') {
-                        continue;
-                    }
-
-                    if (isset($seen[$t])) {
-                        $errors[] = "Вопрос #{$num}: варианты ответа не должны повторяться";
-                        continue 2;
-                    }
-
-                    $seen[$t] = true;
-                }
-
-                foreach ($options as $o) {
-                    $optText = trim((string)($o['text'] ?? ''));
-                    $len = mb_strlen($optText);
-
-                    if ($len < 1 || $len > 1000) {
-                        $errors[] = "Вопрос #{$num}: вариант ответа должен быть от 1 до 1000 символов";
-                        break;
-                    }
-                }
-
-                $correctCount = 0;
-                foreach ($options as $o) {
-                    $isCorrect = (int)($o['is_correct'] ?? 0);
-                    if ($isCorrect === 1) $correctCount++;
-                }
-
-                if ($qType === 'radio' && $correctCount !== 1) {
-                    $errors[] = "Вопрос #{$num}: при radio должен быть ровно 1 правильный вариант";
-                    continue;
-                }
-
-                if ($qType === 'checkbox' && $correctCount < 1) {
-                    $errors[] = "Вопрос #{$num}: при checkbox отметь хотя бы 1 правильный вариант";
-                    continue;
-                }
-            }
-        }
-    }
+    $normalized = tests_collect_form_payload($_POST, true);
+    $payload = $normalized['payload'];
+    $errors = $normalized['errors'];
 
     if (!empty($errors)) {
-        view_render('test_create', [
-            'title'  => 'Создать тест',
-            'styles' => ['/assets/css/test-create.css'],
-            'errors' => $errors,
-            'old'    => [
-                'title'        => $_POST['title'] ?? '',
-                'description'  => $_POST['description'] ?? '',
-                'access_level' => $_POST['access_level'] ?? 'public',
-                'category_names' => $_POST['category_names'] ?? [],
-                'time_limit'   => $_POST['time_limit'] ?? '',
-                'cover_image'  => $_POST['cover_image'] ?? null,
-                'questions'    => $_POST['questions'] ?? [],
-            ],
-        ]);
-        exit();
+        tests_render_form_with_errors('Создать тест', $errors, [
+            'title' => $_POST['title'] ?? '',
+            'description' => $_POST['description'] ?? '',
+            'access_level' => $_POST['access_level'] ?? 'public',
+            'category_names' => $_POST['category_names'] ?? [],
+            'time_limit' => $_POST['time_limit'] ?? '',
+            'cover_image' => $_POST['cover_image'] ?? null,
+            'questions' => $_POST['questions'] ?? [],
+            'status' => test_status_draft(),
+        ], false, null, 'Опубликовать');
+        return;
     }
 
     $user = auth_user();
-    $userId = (int) $user['id'];
+    $userId = (int)($user['id'] ?? 0);
 
-    $title = trim($_POST['title'] ?? '');
     $pdo = db();
     try {
         $pdo->beginTransaction();
 
-        $coverImage = trim($_POST['cover_image'] ?? '');
-        $coverImage = ($coverImage !== '' && str_starts_with($coverImage, '/uploads/')) ? $coverImage : null;
-
-        $testId = tests_create($userId, $title, $description, $accessLevel, $categoryNames, $coverImage, $timeLimitSec);
-        test_categories_replace_by_test_id($testId, $categoryNames);
-
-        $questions = array_values($questions);
-
-        foreach ($questions as $qIndex => $q) {
-            if (!is_array($q)) {
-                continue;
-            }
-
-            $qType = (string)($q['type'] ?? '');
-            $qText = trim((string)($q['text'] ?? ''));
-            $qPos  = $qIndex + 1;
-            $qImg  = trim((string)($q['image_path'] ?? ''));
-            $qImg  = ($qImg !== '' && str_starts_with($qImg, '/uploads/')) ? $qImg : null;
-
-            $questionId = questions_create($testId, $qType, $qText, $qPos, $qImg);
-
-            if ($qType === 'radio' || $qType === 'checkbox') {
-                $options = $q['options'] ?? [];
-                if (!is_array($options)) {
-                    $options = [];
-                }
-
-                $options = array_values(array_filter(
-                    $options,
-                    fn($o) => trim((string)($o['text'] ?? '')) !== ''
-                ));
-
-                foreach ($options as $i => $opt) {
-                    $optText = trim((string)($opt['text'] ?? ''));
-                    if ($optText === '') {
-                        continue;
-                    }
-
-                    $pos = $i + 1;
-                    $isCorrect = (int)($opt['is_correct'] ?? 0);
-                    $optImg = trim((string)($opt['image_path'] ?? ''));
-                    $optImg = ($optImg !== '' && str_starts_with($optImg, '/uploads/')) ? $optImg : null;
-
-                    options_create($questionId, $optText, $isCorrect, $pos, $optImg);
-                }
-            }
-
-            if ($qType === 'input') {
-                $answers = $q['answers'] ?? [];
-                if (!is_array($answers)) {
-                    $answers = [];
-                }
-
-                $answers = array_values(array_filter(
-                    $answers,
-                    fn($a) => trim((string)$a) !== ''
-                ));
-
-                foreach ($answers as $ansText) {
-                    $text = trim((string)$ansText);
-                    if ($text === '') {
-                        continue;
-                    }
-
-                    question_text_answers_create($questionId, $text);
-                }
-            }
-        }
+        $testId = tests_create(
+            $userId,
+            (string)$payload['title'],
+            (string)$payload['description'],
+            (string)$payload['access_level'],
+            (array)$payload['category_names'],
+            $payload['cover_image'],
+            $payload['time_limit_sec'],
+            test_status_published(),
+            date('Y-m-d H:i:s'),
+            date('Y-m-d H:i:s')
+        );
+        test_categories_replace_by_test_id($testId, (array)$payload['category_names']);
+        tests_replace_questions_payload($testId, (array)$payload['questions']);
 
         $pdo->commit();
         tests_payload_cache_invalidate($testId);
+        flash_set('toast', ['type' => 'success', 'text' => 'Тест опубликован']);
         redirect('/my/tests');
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {
@@ -421,9 +715,8 @@ function my_tests_store(): void
         http_response_code(500);
         view_render('error', [
             'title' => 'Ошибка',
-            'message' => 'Не удалось сохранить тест целиком. Попробуйте ещё раз.',
+            'message' => 'Не удалось опубликовать тест. Попробуйте ещё раз.',
         ]);
-        return;
     }
 }
 
@@ -442,215 +735,24 @@ function my_tests_update(int $testId): void
         return;
     }
 
-    $errors = [];
-    $MAX_INPUT_ANSWER_LEN = 1000;
-
-    $title = trim($_POST['title'] ?? '');
-    if ($title === '') {
-        $errors[] = 'Название теста обязательно';
-    } elseif (mb_strlen($title) < 10 || mb_strlen($title) > 200) {
-        $errors[] = 'Название теста должно быть от 10 до 200 символов';
-    }
-
-    $accessLevel = $_POST['access_level'] ?? '';
-    if (!in_array($accessLevel, ['public', 'registered'], true)) {
-        $errors[] = 'Некорректный уровень доступа теста';
-    }
-
-    $description = trim($_POST['description'] ?? '');
-    $descLen = mb_strlen($description);
-    if ($descLen < 30 || $descLen > 500) {
-        $errors[] = 'Описание теста должно быть не меньше 30 символов и не больше 500 символов';
-    }
-
-    $categoryNames = test_category_default_names();
-    try {
-        $categoryNames = test_category_names_from_input($_POST['category_names'] ?? null);
-    } catch (InvalidArgumentException $e) {
-        $errors[] = $e->getMessage();
-    }
-    if ($categoryNames === []) {
-        $errors[] = 'Выберите хотя бы одну категорию';
-    }
-
-    $timeLimitSec = null;
-    try {
-        $timeLimitSec = normalize_test_time_limit_sec($_POST['time_limit'] ?? null);
-    } catch (InvalidArgumentException $e) {
-        $errors[] = $e->getMessage();
-    }
-
-    $questions = $_POST['questions'] ?? [];
-    if (!is_array($questions) || count($questions) < 1) {
-        $errors[] = 'Добавь хотя бы один вопрос';
-        $questions = [];
-    }
-
-    $MAX_QUESTIONS = 100;
-    $MAX_OPTIONS = 10;
-    $MAX_INPUT_ANSWERS = 10;
-
-    if (count($questions) > $MAX_QUESTIONS) {
-        $errors[] = "Слишком много вопросов: максимум {$MAX_QUESTIONS}";
-        $questions = array_slice($questions, 0, $MAX_QUESTIONS);
-    }
-
-    if (is_array($questions)) {
-        foreach ($questions as $i => $q) {
-            $num = $i + 1;
-
-            if (!is_array($q)) {
-                $errors[] = "Вопрос #{$num}: некорректные данные";
-                continue;
-            }
-
-            $qText = trim($q['text'] ?? '');
-            $qType = (string)($q['type'] ?? '');
-            $qLen = mb_strlen($qText);
-
-            if ($qText === '') {
-                $errors[] = "Вопрос #{$num}: текст вопроса обязателен";
-                continue;
-            }
-
-            if ($qLen < 5 || $qLen > 1000) {
-                $errors[] = "Вопрос #{$num}: текст вопроса должен быть от 5 до 1000 символов";
-                continue;
-            }
-
-            if (!in_array($qType, ['radio', 'checkbox', 'input'], true)) {
-                $errors[] = "Вопрос #{$num}: неверный тип вопроса";
-                continue;
-            }
-
-            if ($qType === 'input') {
-                $answers = $q['answers'] ?? [];
-                if (!is_array($answers)) {
-                    $answers = [];
-                }
-
-                $answers = array_values(array_filter($answers, fn($a) => trim((string)$a) !== ''));
-
-                if (count($answers) < 1) {
-                    $errors[] = "Вопрос #{$num}: укажи хотя бы один правильный текстовый ответ";
-                    continue;
-                }
-
-                if (count($answers) > $MAX_INPUT_ANSWERS) {
-                    $errors[] = "Вопрос #{$num}: максимум {$MAX_INPUT_ANSWERS} текстовых ответов";
-                    continue;
-                }
-
-                $seenAnswers = [];
-                foreach ($answers as $a) {
-                    $norm = normalize_input_answer((string)$a);
-
-                    if ($norm === '') {
-                        continue;
-                    }
-
-                    if (isset($seenAnswers[$norm])) {
-                        $errors[] = "Вопрос #{$num}: текстовые ответы не должны повторяться (регистр/пробелы/ё→е)";
-                        continue 2;
-                    }
-
-                    $seenAnswers[$norm] = true;
-                }
-
-                foreach ($answers as $a) {
-                    $aText = trim((string)$a);
-                    $aLen = mb_strlen($aText);
-
-                    if ($aLen < 1 || $aLen > $MAX_INPUT_ANSWER_LEN) {
-                        $errors[] = "Вопрос #{$num}: текстовый ответ должен быть от 1 до {$MAX_INPUT_ANSWER_LEN} символов";
-                        break;
-                    }
-                }
-            } else {
-                $options = $q['options'] ?? [];
-                if (!is_array($options)) {
-                    $options = [];
-                }
-
-                $options = array_values(array_filter($options, fn($o) => trim((string)($o['text'] ?? '')) !== ''));
-
-                if (count($options) < 2) {
-                    $errors[] = "Вопрос #{$num}: минимум два варианта ответа";
-                    continue;
-                }
-
-                if (count($options) > $MAX_OPTIONS) {
-                    $errors[] = "Вопрос #{$num}: максимум {$MAX_OPTIONS} вариантов ответа";
-                    continue;
-                }
-
-                $seen = [];
-                foreach ($options as $o) {
-                    $t = trim((string)($o['text'] ?? ''));
-                    $t = preg_replace('/\s+/u', ' ', $t) ?? $t;
-                    $t = mb_strtolower($t);
-
-                    if ($t === '') {
-                        continue;
-                    }
-
-                    if (isset($seen[$t])) {
-                        $errors[] = "Вопрос #{$num}: варианты ответа не должны повторяться";
-                        continue 2;
-                    }
-
-                    $seen[$t] = true;
-                }
-
-                foreach ($options as $o) {
-                    $optText = trim((string)($o['text'] ?? ''));
-                    $len = mb_strlen($optText);
-
-                    if ($len < 1 || $len > 1000) {
-                        $errors[] = "Вопрос #{$num}: вариант ответа должен быть от 1 до 1000 символов";
-                        break;
-                    }
-                }
-
-                $correctCount = 0;
-                foreach ($options as $o) {
-                    $isCorrect = (int)($o['is_correct'] ?? 0);
-                    if ($isCorrect === 1) {
-                        $correctCount++;
-                    }
-                }
-
-                if ($qType === 'radio' && $correctCount !== 1) {
-                    $errors[] = "Вопрос #{$num}: при radio должен быть ровно 1 правильный вариант";
-                    continue;
-                }
-
-                if ($qType === 'checkbox' && $correctCount < 1) {
-                    $errors[] = "Вопрос #{$num}: при checkbox отметь хотя бы 1 правильный вариант";
-                    continue;
-                }
-            }
-        }
-    }
+    $normalized = tests_collect_form_payload($_POST, true);
+    $payload = $normalized['payload'];
+    $errors = $normalized['errors'];
 
     if (!empty($errors)) {
-        view_render('test_create', [
-            'title' => 'Редактировать тест',
-            'styles' => ['/assets/css/test-create.css'],
-            'is_edit' => true,
-            'form_action' => '/my/tests/' . $testId,
-            'submit_label' => 'Сохранить изменения',
-            'errors' => $errors,
-            'old' => [
-                'title' => $_POST['title'] ?? '',
-                'description' => $_POST['description'] ?? '',
-                'access_level' => $_POST['access_level'] ?? 'public',
-                'category_names' => $_POST['category_names'] ?? [],
-                'time_limit' => $_POST['time_limit'] ?? '',
-                'cover_image'  => $_POST['cover_image'] ?? null,
-                'questions'    => $_POST['questions'] ?? [],
-            ],
-        ]);
+        tests_render_form_with_errors('Редактировать тест', $errors, [
+            'id' => $testId,
+            'title' => $_POST['title'] ?? '',
+            'description' => $_POST['description'] ?? '',
+            'access_level' => $_POST['access_level'] ?? 'public',
+            'category_names' => $_POST['category_names'] ?? [],
+            'time_limit' => $_POST['time_limit'] ?? '',
+            'cover_image' => $_POST['cover_image'] ?? null,
+            'questions' => $_POST['questions'] ?? [],
+            'status' => (string)($existingTest['status'] ?? test_status_published()),
+            'published_at' => (string)($existingTest['published_at'] ?? ''),
+            'last_saved_at' => (string)($existingTest['last_saved_at'] ?? ''),
+        ], true, $testId, tests_is_draft_row($existingTest) ? 'Опубликовать' : 'Сохранить изменения');
         return;
     }
 
@@ -658,78 +760,32 @@ function my_tests_update(int $testId): void
     try {
         $pdo->beginTransaction();
 
-        $coverImage = trim($_POST['cover_image'] ?? '');
-        $coverImage = ($coverImage !== '' && str_starts_with($coverImage, '/uploads/')) ? $coverImage : null;
+        $publishedAt = tests_is_draft_row($existingTest)
+            ? date('Y-m-d H:i:s')
+            : ((string)($existingTest['published_at'] ?? '') !== '' ? (string)$existingTest['published_at'] : date('Y-m-d H:i:s'));
 
-        tests_update_by_id_and_user_id($testId, $userId, $title, $description, $accessLevel, $categoryNames, $coverImage, $timeLimitSec);
-        test_categories_replace_by_test_id($testId, $categoryNames);
-
-        questions_delete_by_test_id($testId);
-
-        $questions = array_values($questions);
-        foreach ($questions as $qIndex => $q) {
-            if (!is_array($q)) {
-                continue;
-            }
-
-            $qType = (string)($q['type'] ?? '');
-            $qText = trim((string)($q['text'] ?? ''));
-            $qPos  = $qIndex + 1;
-            $qImg  = trim((string)($q['image_path'] ?? ''));
-            $qImg  = ($qImg !== '' && str_starts_with($qImg, '/uploads/')) ? $qImg : null;
-
-            $questionId = questions_create($testId, $qType, $qText, $qPos, $qImg);
-
-            if ($qType === 'radio' || $qType === 'checkbox') {
-                $options = $q['options'] ?? [];
-                if (!is_array($options)) {
-                    $options = [];
-                }
-
-                $options = array_values(array_filter(
-                    $options,
-                    fn($o) => trim((string)($o['text'] ?? '')) !== ''
-                ));
-
-                foreach ($options as $i => $opt) {
-                    $optText = trim((string)($opt['text'] ?? ''));
-                    if ($optText === '') {
-                        continue;
-                    }
-
-                    $pos = $i + 1;
-                    $isCorrect = (int)($opt['is_correct'] ?? 0);
-                    $optImg = trim((string)($opt['image_path'] ?? ''));
-                    $optImg = ($optImg !== '' && str_starts_with($optImg, '/uploads/')) ? $optImg : null;
-
-                    options_create($questionId, $optText, $isCorrect, $pos, $optImg);
-                }
-            }
-
-            if ($qType === 'input') {
-                $answers = $q['answers'] ?? [];
-                if (!is_array($answers)) {
-                    $answers = [];
-                }
-
-                $answers = array_values(array_filter(
-                    $answers,
-                    fn($a) => trim((string)$a) !== ''
-                ));
-
-                foreach ($answers as $ansText) {
-                    $text = trim((string)$ansText);
-                    if ($text === '') {
-                        continue;
-                    }
-                    question_text_answers_create($questionId, $text);
-                }
-            }
-        }
+        tests_update_by_id_and_user_id(
+            $testId,
+            $userId,
+            (string)$payload['title'],
+            (string)$payload['description'],
+            (string)$payload['access_level'],
+            (array)$payload['category_names'],
+            $payload['cover_image'],
+            $payload['time_limit_sec'],
+            test_status_published(),
+            $publishedAt,
+            true
+        );
+        test_categories_replace_by_test_id($testId, (array)$payload['category_names']);
+        tests_replace_questions_payload($testId, (array)$payload['questions']);
 
         $pdo->commit();
         tests_payload_cache_invalidate($testId);
-        flash_set('toast', ['type' => 'success', 'text' => 'Тест обновлён']);
+        flash_set('toast', [
+            'type' => 'success',
+            'text' => tests_is_draft_row($existingTest) ? 'Черновик опубликован' : 'Тест обновлён',
+        ]);
         redirect('/my/tests');
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {
@@ -741,7 +797,6 @@ function my_tests_update(int $testId): void
             'title' => 'Ошибка',
             'message' => 'Не удалось сохранить изменения теста. Попробуйте ещё раз.',
         ]);
-        return;
     }
 }
 
@@ -910,10 +965,10 @@ function my_tests_destroy(int $testId): void
     try {
         $deleted = tests_destroy_by_id_and_user_id($testId, $userId);
     } catch (Throwable $e) {
-        http_response_code(409);
+        http_response_code(500);
         view_render('error', [
-            'title' => 'Нельзя удалить тест',
-            'message' => 'Тест связан с историей прохождений. Сначала обновите ограничения БД для безопасного удаления.',
+            'title' => 'Ошибка',
+            'message' => 'Не удалось удалить тест навсегда. Попробуйте ещё раз.',
         ]);
         return;
     }

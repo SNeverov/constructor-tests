@@ -27,4 +27,14 @@ if (!function_exists('redirect')) {
         exit();
     }
 }
+
+if (!function_exists('request_expects_json')) {
+    function request_expects_json(): bool
+    {
+        $requestedWith = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? ''));
+        $accept = strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? ''));
+
+        return $requestedWith === 'xmlhttprequest' || str_contains($accept, 'application/json');
+    }
+}
 ?>

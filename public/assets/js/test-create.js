@@ -4,6 +4,7 @@ const QUESTION_TEXT_MAX = 1000;
 const QUESTION_TEXT_MIN_HEIGHT = 36;
 const TEST_DESCRIPTION_MAX = 500;
 const TEST_DESCRIPTION_MIN_HEIGHT = 76;
+const DRAFT_AUTOSAVE_DELAY = 3000;
 
 // ─── Lightbox ────────────────────────────────────────────────────────────────
 
@@ -139,7 +140,7 @@ function initImgUpload(wrap) {
                 if (btnLabel) btnLabel.textContent = oldLabel;
             } else {
                 setImgUploadValue(wrap, json.path);
-                formDirty = true;
+                markFormDirty();
             }
         } catch {
             if (err) err.textContent = 'Ошибка сети';
@@ -153,7 +154,7 @@ function initImgUpload(wrap) {
     if (remove) {
         remove.addEventListener('click', () => {
             resetImgUploadWrap(wrap);
-            formDirty = true;
+            markFormDirty();
         });
     }
 
@@ -358,6 +359,7 @@ function initQuestion(q) {
                 });
                 const imgWrap = opt.querySelector('[data-img-upload]');
                 if (imgWrap) resetImgUploadWrap(imgWrap);
+                markFormDirty();
                 return;
             }
 
@@ -365,6 +367,7 @@ function initQuestion(q) {
             reindexOptions(q);
             sync();
             updateAddOptionVisibility(q);
+            markFormDirty();
         });
 
         optionsBlock.addEventListener('change', (e) => {
@@ -389,11 +392,13 @@ function initQuestion(q) {
                 row.querySelectorAll('input').forEach((input) => {
                     if (input.type === 'text') input.value = '';
                 });
+                markFormDirty();
                 return;
             }
             row.remove();
             reindexAnswers(q);
             updateAddAnswerVisibility(q);
+            markFormDirty();
         });
     }
 
@@ -471,6 +476,7 @@ function initQuestion(q) {
             updateAddOptionVisibility(q);
 
             if (imgWrap) initImgUpload(imgWrap);
+            markFormDirty();
         });
     }
 
@@ -493,6 +499,7 @@ function initQuestion(q) {
 
             reindexAnswers(q);
             updateAddAnswerVisibility(q);
+            markFormDirty();
         });
     }
 
@@ -699,6 +706,7 @@ document.addEventListener('DOMContentLoaded', () => {
             current.after(clone);
             initQuestion(clone);
             reindexQuestions();
+            markFormDirty();
             return;
         }
 
@@ -715,6 +723,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             current.remove();
             reindexQuestions();
+            markFormDirty();
         }
     });
 });
@@ -723,6 +732,123 @@ document.addEventListener('DOMContentLoaded', () => {
 
 let formDirty = false;
 let isSubmitting = false;
+let autosaveTimer = 0;
+let autosaveInFlight = false;
+let draftChangeVersion = 0;
+
+function getTestCreateForm() {
+    return document.querySelector('#testCreateForm');
+}
+
+function getSaveStatusEl() {
+    return document.querySelector('[data-save-status]');
+}
+
+function setSaveStatus(text) {
+    const el = getSaveStatusEl();
+    if (el) el.textContent = text;
+}
+
+function isDraftEnabled() {
+    const form = getTestCreateForm();
+    return !!form && form.dataset.draftEnabled === '1';
+}
+
+function scheduleDraftAutosave() {
+    if (!isDraftEnabled() || isSubmitting) return;
+    window.clearTimeout(autosaveTimer);
+    autosaveTimer = window.setTimeout(() => {
+        void saveDraft('auto');
+    }, DRAFT_AUTOSAVE_DELAY);
+}
+
+function markFormDirty() {
+    draftChangeVersion += 1;
+    formDirty = true;
+    if (isDraftEnabled()) {
+        setSaveStatus('Есть несохранённые изменения');
+        scheduleDraftAutosave();
+    }
+}
+
+function updateDraftRouting(payload) {
+    const form = getTestCreateForm();
+    if (!form || !payload || !payload.test_id) return;
+
+    const testId = String(payload.test_id);
+    form.dataset.testId = testId;
+    form.dataset.testStatus = payload.status || 'draft';
+    form.action = `/my/tests/${testId}`;
+    if (payload.draft_url) form.dataset.draftUrl = payload.draft_url;
+    if (payload.edit_url) {
+        form.dataset.editUrl = payload.edit_url;
+        if (window.location.pathname === '/my/tests/create') {
+            window.history.replaceState({}, '', payload.edit_url);
+        }
+    }
+
+    const idInput = form.querySelector('[data-draft-test-id]');
+    if (idInput) idInput.value = testId;
+}
+
+async function parseResponsePayload(response) {
+    const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+
+    if (contentType.includes('application/json')) {
+        return await response.json();
+    }
+
+    const text = await response.text();
+    const compactText = text.replace(/\s+/g, ' ').trim();
+    return {
+        ok: false,
+        message: compactText !== '' ? compactText.slice(0, 300) : `HTTP ${response.status}`
+    };
+}
+
+async function saveDraft(reason = 'manual') {
+    const form = getTestCreateForm();
+    if (!form || !isDraftEnabled() || autosaveInFlight) return false;
+    if (!formDirty && reason === 'auto') return true;
+    const requestedVersion = draftChangeVersion;
+
+    autosaveInFlight = true;
+    window.clearTimeout(autosaveTimer);
+    setSaveStatus(reason === 'auto' ? 'Автосохранение…' : 'Сохранение черновика…');
+
+    try {
+        const response = await fetch(form.dataset.draftUrl || '/my/tests/draft', {
+            method: 'POST',
+            body: new FormData(form),
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        });
+
+        const data = await parseResponsePayload(response);
+        if (!response.ok || !data.ok) {
+            throw new Error(data.message || `HTTP ${response.status}`);
+        }
+
+        if (data.saved) {
+            updateDraftRouting(data);
+            if (requestedVersion === draftChangeVersion) {
+                formDirty = false;
+            }
+        } else if (requestedVersion === draftChangeVersion) {
+            formDirty = false;
+        }
+
+        setSaveStatus(data.message || 'Черновик сохранён');
+        return true;
+    } catch (error) {
+        setSaveStatus(error instanceof Error ? error.message : 'Ошибка сохранения черновика');
+        return false;
+    } finally {
+        autosaveInFlight = false;
+    }
+}
 
 function hasPrefilledData() {
     const form = document.querySelector('#testCreateForm');
@@ -746,19 +872,30 @@ function hasPrefilledData() {
 
 document.addEventListener('DOMContentLoaded', () => {
     formDirty = hasPrefilledData();
+    if (isDraftEnabled()) {
+        setSaveStatus(formDirty ? 'Есть несохранённые изменения' : 'Черновик ещё не сохранён');
+    }
+
+    const saveDraftBtn = document.querySelector('[data-save-draft]');
+    if (saveDraftBtn) {
+        saveDraftBtn.addEventListener('click', async () => {
+            await saveDraft('manual');
+        });
+    }
 });
 
 document.addEventListener('input', (e) => {
-    if (e.target.closest('form')) formDirty = true;
+    if (e.target.closest('form')) markFormDirty();
 });
 
 document.addEventListener('change', (e) => {
-    if (e.target.closest('form')) formDirty = true;
+    if (e.target.closest('form')) markFormDirty();
 });
 
 document.addEventListener('submit', (e) => {
     if (e.target.id === 'testCreateForm') {
         isSubmitting = true;
+        window.clearTimeout(autosaveTimer);
         formDirty = false;
     }
 }, true);
@@ -766,6 +903,9 @@ document.addEventListener('submit', (e) => {
 window.addEventListener('pageshow', () => {
     isSubmitting = false;
     formDirty = hasPrefilledData();
+    if (isDraftEnabled()) {
+        setSaveStatus(formDirty ? 'Есть несохранённые изменения' : 'Черновик сохранён');
+    }
 });
 
 window.addEventListener('beforeunload', (e) => {

@@ -1,46 +1,66 @@
 <div class="test-create">
     <?php
-        $old = is_array($old ?? null) ? $old : [];
+        $oldData = isset($old) && is_array($old) ? $old : [];
+        $viewErrors = isset($errors) && is_array($errors) ? $errors : [];
         $isEdit = !empty($is_edit);
         $formAction = (string)($form_action ?? '/my/tests');
         $pageHeading = $isEdit ? 'Редактировать тест' : 'Создать тест';
-        $submitLabel = (string)($submit_label ?? ($isEdit ? 'Сохранить изменения' : 'Сохранить тест'));
-        $oldCover = (string)($old['cover_image'] ?? '');
+        $submitLabel = (string)($submit_label ?? ($isEdit ? 'Сохранить изменения' : 'Опубликовать'));
+        $oldCover = (string)($oldData['cover_image'] ?? '');
+        $testId = (int)($oldData['id'] ?? 0);
+        $testStatus = (string)($oldData['status'] ?? ($isEdit ? 'published' : 'draft'));
+        $isDraft = $testStatus === 'draft';
+        $lastSavedAt = trim((string)($oldData['last_saved_at'] ?? ''));
         $categoryOptions = test_categories_catalog();
         $selectedCategories = [];
-        if (array_key_exists('category_names', $old)) {
-            $selectedCategories = test_category_names_from_input($old['category_names']);
-        } elseif ($isEdit || array_key_exists('category_name', $old)) {
-            $selectedCategories = test_category_display_names($old['category_name'] ?? null);
+        if (array_key_exists('category_names', $oldData)) {
+            $selectedCategories = test_category_names_from_input($oldData['category_names']);
+        } elseif ($isEdit || array_key_exists('category_name', $oldData)) {
+            $selectedCategories = test_category_display_names($oldData['category_name'] ?? null);
         }
         $selectedCategoryText = test_category_trigger_text($selectedCategories);
+        $testCreateJs = '/assets/js/test-create.js';
+        $testCategoryPickerJs = '/assets/js/test-category-picker.js';
+        $documentRoot = rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), '/\\');
+        $testCreateJsVersion = is_file($documentRoot . $testCreateJs) ? (string)filemtime($documentRoot . $testCreateJs) : '1';
+        $testCategoryPickerJsVersion = is_file($documentRoot . $testCategoryPickerJs) ? (string)filemtime($documentRoot . $testCategoryPickerJs) : '1';
     ?>
 
     <div class="page-head">
         <h1><?= htmlspecialchars($pageHeading, ENT_QUOTES, 'UTF-8') ?></h1>
+        <?php if ($isDraft): ?>
+            <div class="badge badge--warn">Черновик</div>
+        <?php endif; ?>
     </div>
 
-    <?php if (!empty($errors)): ?>
+    <?php if (!empty($viewErrors)): ?>
 		<div class="form-errors">
 			<div class="form-errors__title">Не получилось сохранить тест</div>
 			<ul>
-				<?php foreach ($errors as $error): ?>
+				<?php foreach ($viewErrors as $error): ?>
 					<li><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></li>
 				<?php endforeach; ?>
 			</ul>
 		</div>
 	<?php endif; ?>
-
-
-
-    <?= form_open($formAction, 'post', ['class' => 'form', 'id' => 'testCreateForm', 'enctype' => 'multipart/form-data']) ?>
+    <?= form_open($formAction, 'post', [
+        'class' => 'form',
+        'id' => 'testCreateForm',
+        'enctype' => 'multipart/form-data',
+        'data-draft-enabled' => $isDraft || !$isEdit ? '1' : '0',
+        'data-draft-url' => $testId > 0 ? '/my/tests/' . $testId . '/draft' : '/my/tests/draft',
+        'data-edit-url' => $testId > 0 ? '/my/tests/' . $testId . '/edit' : '',
+        'data-test-id' => (string)$testId,
+        'data-test-status' => $testStatus,
+    ]) ?>
+        <input type="hidden" name="draft_test_id" value="<?= $testId > 0 ? (int)$testId : '' ?>" data-draft-test-id>
         <div class="form-section">
             <div class="section-title">Параметры теста</div>
             <div class="form-row">
                 <label>
 					<label class="sr-only" for="test_title">Название теста</label>
                     <input placeholder="Название теста" type="text" name="title" required class="input"
-                        value="<?= htmlspecialchars((string)($old['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                        value="<?= htmlspecialchars((string)($oldData['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                     >
 
                 </label>
@@ -48,21 +68,21 @@
 
             <div class="form-row">
                 <div class="test-description-wrap">
-				    <textarea
+                    <textarea
                         placeholder="Кратко описание, например, о чём или для чего данный тест."
                         name="description"
                         rows="1"
                         maxlength="500"
                         class="textarea"
                         data-test-description
-                    ><?= htmlspecialchars((string)($old['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea>
+                    ><?= htmlspecialchars((string)($oldData['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea>
                     <div class="test-description-limit" data-test-description-limit>0/500</div>
                 </div>
             </div>
 
             <div class="form-row">
                 <label>
-					<?php $access = (string)($old['access_level'] ?? 'public'); ?>
+					<?php $access = (string)($oldData['access_level'] ?? 'public'); ?>
 
 					<div class="segmented" role="radiogroup" aria-label="Доступ к тесту">
 						<label class="segmented__item">
@@ -92,7 +112,7 @@
                         name="time_limit"
                         class="tc-setting__control tc-setting__time-input"
                         step="1"
-                        value="<?= htmlspecialchars((string)($old['time_limit'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                        value="<?= htmlspecialchars((string)($oldData['time_limit'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                     >
                 </label>
 
@@ -371,15 +391,31 @@
         </div>
 
         <div class="test-create-submit">
+            <?php if ($isDraft || !$isEdit): ?>
+                <button type="button" class="btn btn--ghost" data-save-draft>
+                    <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                    Сохранить черновик
+                </button>
+            <?php endif; ?>
+
             <button type="submit" class="btn btn--primary">
                 <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
                 <?= htmlspecialchars($submitLabel, ENT_QUOTES, 'UTF-8') ?>
             </button>
+            <div class="test-create-save-status" data-save-status>
+                <?php if ($isDraft && $lastSavedAt !== ''): ?>
+                    Черновик сохранён
+                <?php elseif ($isDraft): ?>
+                    Черновик ещё не сохранён
+                <?php else: ?>
+                    Публикация без черновика
+                <?php endif; ?>
+            </div>
         </div>
     </form>
 
     <script>
-        window.__OLD_QUESTIONS__ = <?= json_encode(array_values($old['questions'] ?? []), JSON_UNESCAPED_UNICODE) ?>;
+        window.__OLD_QUESTIONS__ = <?= json_encode(array_values($oldData['questions'] ?? []), JSON_UNESCAPED_UNICODE) ?>;
     </script>
 
     <div id="imgLightbox" class="img-lightbox" aria-hidden="true" role="dialog" aria-label="Просмотр изображения">
@@ -392,7 +428,7 @@
         </div>
     </div>
 
-    <script src="/assets/js/test-create.js"></script>
-    <script src="/assets/js/test-category-picker.js"></script>
+    <script src="<?= htmlspecialchars($testCreateJs . '?v=' . rawurlencode($testCreateJsVersion), ENT_QUOTES, 'UTF-8') ?>"></script>
+    <script src="<?= htmlspecialchars($testCategoryPickerJs . '?v=' . rawurlencode($testCategoryPickerJsVersion), ENT_QUOTES, 'UTF-8') ?>"></script>
 
 </div>

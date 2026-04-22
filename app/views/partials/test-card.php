@@ -40,6 +40,8 @@ if ($createdAt !== '') {
     $createdDate = $dateObj ? $dateObj->format('d-m-Y') : $datePart;
 }
 $isOwner = $currentUserId > 0 && (int)($test['user_id'] ?? 0) === $currentUserId;
+$testStatus = (string)($test['status'] ?? 'published');
+$isDraft = $testStatus === 'draft';
 
 $availability = (string)($test['bookmark_availability'] ?? ($isTrashContext ? 'trashed' : 'available'));
 $isUnavailable = $availability !== 'available';
@@ -54,15 +56,18 @@ if ($availability === 'trashed') {
     $stateClass = ' test-card--deleted';
     $statusLabel = 'Удалён';
     $statusText = 'Тест больше недоступен';
+} elseif ($isDraft) {
+    $statusLabel = 'Черновик';
+    $statusText = 'Тест сохранён как черновик и виден только вам';
 }
 
-$showPass = !$isUnavailable && !$isTrashContext && $canPass;
-$showBookmark = !$isTrashContext && auth_is_logged_in();
-$showShare = !$isUnavailable && !$isTrashContext;
+$showPass = !$isDraft && !$isUnavailable && !$isTrashContext && $canPass;
+$showBookmark = !$isDraft && !$isTrashContext && auth_is_logged_in();
+$showShare = !$isDraft && !$isUnavailable && !$isTrashContext;
 $showEdit = !$isUnavailable && !$isTrashContext && $isOwner;
 $showDeleteToTrash = !$isUnavailable && $cardContext === 'my_tests' && $isOwner;
 $showRestoreDestroy = $isTrashContext;
-$showStats = !$isUnavailable && !$isTrashContext;
+$showStats = !$isDraft && !$isUnavailable && !$isTrashContext;
 
 $formatTimeLimitShort = static function (?int $seconds): string {
     if ($seconds === null || $seconds <= 0) {
@@ -99,7 +104,11 @@ $formatTimeLimitShort = static function (?int $seconds): string {
     </div>
 
     <div class="test-card__content">
-        <?php if (!$isUnavailable && !$isTrashContext): ?>
+        <?php if ($isDraft && $isOwner && !$isTrashContext): ?>
+            <a class="test-title-link" href="/my/tests/<?= $testId ?>/edit">
+                <?= htmlspecialchars($cardTitle, ENT_QUOTES, 'UTF-8') ?>
+            </a>
+        <?php elseif (!$isUnavailable && !$isTrashContext): ?>
             <a class="test-title-link" href="/tests/<?= $testId ?>">
                 <?= htmlspecialchars($cardTitle, ENT_QUOTES, 'UTF-8') ?>
             </a>
@@ -119,9 +128,9 @@ $formatTimeLimitShort = static function (?int $seconds): string {
                 <?php endforeach; ?>
             <?php endif; ?>
 
-            <?php if ($isUnavailable || $isTrashContext): ?>
-                <span class="badge <?= $availability === 'deleted' ? 'badge--deleted' : 'badge--trashed' ?>">
-                    <?= htmlspecialchars($statusLabel !== '' ? $statusLabel : 'В корзине', ENT_QUOTES, 'UTF-8') ?>
+            <?php if ($isUnavailable || $isTrashContext || $isDraft): ?>
+                <span class="badge <?= $isDraft ? 'badge--warn' : ($availability === 'deleted' ? 'badge--deleted' : 'badge--trashed') ?>">
+                    <?= htmlspecialchars($statusLabel !== '' ? $statusLabel : ($isDraft ? 'Черновик' : 'В корзине'), ENT_QUOTES, 'UTF-8') ?>
                 </span>
             <?php else: ?>
                 <span class="badge <?= $isPublic ? 'badge--ok' : 'badge--warn' ?>">
@@ -153,7 +162,7 @@ $formatTimeLimitShort = static function (?int $seconds): string {
         </div>
 
         <p class="test-description">
-            <?= htmlspecialchars(($isUnavailable || $isTrashContext) && $statusText !== '' ? $statusText : $descriptionText, ENT_QUOTES, 'UTF-8') ?>
+            <?= htmlspecialchars((($isUnavailable || $isTrashContext || $isDraft) && $statusText !== '') ? $statusText : $descriptionText, ENT_QUOTES, 'UTF-8') ?>
         </p>
 
         <div class="test-card__icon-actions">

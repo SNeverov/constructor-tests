@@ -29,6 +29,16 @@ if (!function_exists('csrf_verify')) {
         $postedToken  = $_POST['csrf_token'] ?? '';
 
         if (!is_string($sessionToken) || $sessionToken === '' || !is_string($postedToken) || $postedToken === '') {
+            if (request_expects_json()) {
+                http_response_code(403);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode([
+                    'ok' => false,
+                    'message' => 'CSRF-токен отсутствует. Обновите страницу и повторите действие.',
+                ], JSON_UNESCAPED_UNICODE);
+                exit();
+            }
+
             http_response_code(403);
             view_render('error', [
                 'title' => 'Ошибка 403',
@@ -38,6 +48,16 @@ if (!function_exists('csrf_verify')) {
         }
 
         if (!hash_equals($sessionToken, $postedToken)) {
+            if (request_expects_json()) {
+                http_response_code(403);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode([
+                    'ok' => false,
+                    'message' => 'CSRF-токен неверный. Обновите страницу и повторите действие.',
+                ], JSON_UNESCAPED_UNICODE);
+                exit();
+            }
+
             http_response_code(403);
             view_render('error', [
                 'title' => 'Ошибка 403',

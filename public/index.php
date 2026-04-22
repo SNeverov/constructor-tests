@@ -141,6 +141,11 @@ if ($path === '/my/tests/upload-image' && $method === 'POST') {
     exit();
 }
 
+if ($path === '/my/tests/draft' && $method === 'POST') {
+    my_tests_draft_save();
+    exit();
+}
+
 if ($method === 'GET' && preg_match('~^/my/tests/(\d+)/edit$~', $path, $m)) {
     my_tests_edit_form((int)$m[1]);
     exit();
@@ -153,6 +158,11 @@ if ($path === '/my/tests' && $method === 'POST') {
 
 if ($method === 'POST' && preg_match('~^/my/tests/(\d+)$~', $path, $m)) {
     my_tests_update((int)$m[1]);
+    exit();
+}
+
+if ($method === 'POST' && preg_match('~^/my/tests/(\d+)/draft$~', $path, $m)) {
+    my_tests_draft_update((int)$m[1]);
     exit();
 }
 

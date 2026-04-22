@@ -63,6 +63,31 @@ function format_time_limit_hms(?int $seconds): string
     return sprintf('%02d:%02d:%02d', $hours, $minutes, $secs);
 }
 
+function test_status_draft(): string
+{
+    return 'draft';
+}
+
+function test_status_published(): string
+{
+    return 'published';
+}
+
+function test_status_is_valid(string $status): bool
+{
+    return in_array($status, [test_status_draft(), test_status_published()], true);
+}
+
+function tests_is_draft_row(array $test): bool
+{
+    return (string)($test['status'] ?? test_status_published()) === test_status_draft();
+}
+
+function tests_is_published_row(array $test): bool
+{
+    return (string)($test['status'] ?? test_status_published()) === test_status_published();
+}
+
 // --- Tests ---
 
 function tests_list_by_user_id(int $userId): array
@@ -76,6 +101,9 @@ function tests_list_by_user_id(int $userId): array
             title,
             description,
             access_level,
+            status,
+            published_at,
+            last_saved_at,
             COALESCE(time_limit_sec, CASE WHEN time_limit_min IS NOT NULL THEN time_limit_min * 60 ELSE NULL END) AS time_limit_sec,
             time_limit_min,
             created_at,
@@ -200,15 +228,43 @@ function tests_create(
     string $accessLevel,
     array $categoryNames,
     ?string $coverImage = null,
-    ?int $timeLimitSec = null
+    ?int $timeLimitSec = null,
+    string $status = 'published',
+    ?string $publishedAt = null,
+    ?string $lastSavedAt = null
 ): int
 {
     $pdo = db();
     $primaryCategoryName = $categoryNames[0] ?? test_category_default_name();
+    if (!test_status_is_valid($status)) {
+        $status = test_status_published();
+    }
 
     $stmt = $pdo->prepare("
-        INSERT INTO tests (user_id, title, description, access_level, category_name, cover_image, time_limit_sec)
-        VALUES (:user_id, :title, :description, :access_level, :category_name, :cover_image, :time_limit_sec)
+        INSERT INTO tests (
+            user_id,
+            title,
+            description,
+            access_level,
+            category_name,
+            cover_image,
+            time_limit_sec,
+            status,
+            published_at,
+            last_saved_at
+        )
+        VALUES (
+            :user_id,
+            :title,
+            :description,
+            :access_level,
+            :category_name,
+            :cover_image,
+            :time_limit_sec,
+            :status,
+            :published_at,
+            :last_saved_at
+        )
     ");
 
     $stmt->execute([
@@ -219,6 +275,9 @@ function tests_create(
         ':category_name' => $primaryCategoryName,
         ':cover_image' => $coverImage,
         ':time_limit_sec' => ($timeLimitSec !== null && $timeLimitSec > 0) ? $timeLimitSec : null,
+        ':status' => $status,
+        ':published_at' => $publishedAt,
+        ':last_saved_at' => $lastSavedAt,
     ]);
 
     return (int)$pdo->lastInsertId();
@@ -319,6 +378,9 @@ function tests_find_by_id(int $testId): ?array
             t.title,
             t.description,
             t.access_level,
+            t.status,
+            t.published_at,
+            t.last_saved_at,
             t.category_name,
             COALESCE(t.time_limit_sec, CASE WHEN t.time_limit_min IS NOT NULL THEN t.time_limit_min * 60 ELSE NULL END) AS time_limit_sec,
             t.time_limit_min,
@@ -333,7 +395,9 @@ function tests_find_by_id(int $testId): ?array
             (SELECT COUNT(*) FROM attempts a WHERE a.test_id = t.id) AS attempts_count
 		FROM tests t
         LEFT JOIN users u ON u.id = t.user_id
-		WHERE t.id = :id AND t.deleted_at IS NULL
+		WHERE t.id = :id
+          AND t.deleted_at IS NULL
+          AND t.status = 'published'
 		LIMIT 1
 	");
 
@@ -384,6 +448,9 @@ function tests_list_by_user_id_paginated(int $userId, int $limit, int $offset): 
             t.title,
             t.description,
             t.access_level,
+            t.status,
+            t.published_at,
+            t.last_saved_at,
             t.category_name,
             COALESCE(t.time_limit_sec, CASE WHEN t.time_limit_min IS NOT NULL THEN t.time_limit_min * 60 ELSE NULL END) AS time_limit_sec,
             t.time_limit_min,
@@ -410,7 +477,7 @@ function tests_list_by_user_id_paginated(int $userId, int $limit, int $offset): 
         LEFT JOIN users u ON u.id = t.user_id
         LEFT JOIN test_bookmarks tb ON tb.test_id = t.id AND tb.user_id = :viewer_id
 		WHERE t.user_id = :user_id AND t.deleted_at IS NULL
-		ORDER BY t.created_at DESC
+		ORDER BY COALESCE(t.last_saved_at, t.updated_at, t.created_at) DESC, t.id DESC
         LIMIT {$limit} OFFSET {$offset}
 	");
 
@@ -426,7 +493,7 @@ function tests_count_for_home(): int
 {
     $pdo = db();
 
-    $where = 't.deleted_at IS NULL';
+    $where = "t.deleted_at IS NULL AND t.status = 'published'";
     if (!auth_is_logged_in()) {
         $where .= " AND t.access_level = 'public'";
     }
@@ -445,7 +512,9 @@ function tests_count_for_category(string $categoryName): int
 {
     $pdo = db();
 
-    $where = "t.deleted_at IS NULL AND EXISTS (
+    $where = "t.deleted_at IS NULL
+      AND t.status = 'published'
+      AND EXISTS (
         SELECT 1
         FROM test_category_links tcl
         WHERE tcl.test_id = t.id
@@ -475,7 +544,7 @@ function tests_list_for_home(int $limit = 20, int $offset = 0): array
     $offset = max(0, $offset);
     $viewerId = auth_is_logged_in() ? (int)(auth_user()['id'] ?? 0) : 0;
 
-    $where = 't.deleted_at IS NULL';
+    $where = "t.deleted_at IS NULL AND t.status = 'published'";
     if (!auth_is_logged_in()) {
         $where .= " AND t.access_level = 'public'";
     }
@@ -492,11 +561,14 @@ function tests_list_for_home(int $limit = 20, int $offset = 0): array
             t.title,
             t.description,
             t.access_level,
+            t.status,
             t.category_name,
             COALESCE(t.time_limit_sec, CASE WHEN t.time_limit_min IS NOT NULL THEN t.time_limit_min * 60 ELSE NULL END) AS time_limit_sec,
             t.time_limit_min,
             t.created_at,
             t.updated_at,
+            t.published_at,
+            t.last_saved_at,
             t.bookmarks_count,
             t.views_count,
             t.rating_count,
@@ -537,7 +609,9 @@ function tests_list_for_category(string $categoryName, int $limit = 20, int $off
     $offset = max(0, $offset);
     $viewerId = auth_is_logged_in() ? (int)(auth_user()['id'] ?? 0) : 0;
 
-    $where = "t.deleted_at IS NULL AND EXISTS (
+    $where = "t.deleted_at IS NULL
+      AND t.status = 'published'
+      AND EXISTS (
         SELECT 1
         FROM test_category_links tcl
         WHERE tcl.test_id = t.id
@@ -641,6 +715,7 @@ function tests_list_bookmarked_by_user_id_paginated(int $userId, int $limit, int
                 WHEN t.id IS NULL THEN 'deleted'
                 WHEN t.deleted_forever_at IS NOT NULL THEN 'deleted'
                 WHEN t.deleted_at IS NOT NULL THEN 'trashed'
+                WHEN t.status <> 'published' THEN 'deleted'
                 ELSE 'available'
             END AS bookmark_availability,
             (
@@ -701,6 +776,7 @@ function tests_bookmark_toggle_by_user_id(int $userId, int $testId): ?array
                 WHERE t.id = :test_id
                   AND t.deleted_at IS NULL
                   AND t.deleted_forever_at IS NULL
+                  AND t.status = 'published'
                 LIMIT 1
             ");
             $insStmt->execute([
@@ -725,6 +801,7 @@ function tests_bookmark_toggle_by_user_id(int $userId, int $testId): ?array
                     WHERE id = :id
                       AND deleted_at IS NULL
                       AND deleted_forever_at IS NULL
+                      AND status = 'published'
                     LIMIT 1
                 ");
                 $testStmt->execute([':id' => $testId]);
@@ -908,6 +985,9 @@ function tests_find_active_by_id_and_user_id(int $testId, int $userId): ?array
             title,
             description,
             access_level,
+            status,
+            published_at,
+            last_saved_at,
             category_name,
             cover_image,
             COALESCE(time_limit_sec, CASE WHEN time_limit_min IS NOT NULL THEN time_limit_min * 60 ELSE NULL END) AS time_limit_sec,
@@ -1000,23 +1080,42 @@ function tests_restore_by_id_and_user_id(int $testId, int $userId): bool
 function tests_destroy_by_id_and_user_id(int $testId, int $userId): bool
 {
     $pdo = db();
+    $uploadPaths = [];
 
-    $stmt = $pdo->prepare("
-        UPDATE tests
-        SET deleted_forever_at = NOW()
-        WHERE id = :id
-          AND user_id = :user_id
-          AND deleted_at IS NOT NULL
-          AND deleted_forever_at IS NULL
-        LIMIT 1
-    ");
+    $pdo->beginTransaction();
+    try {
+        $uploadPaths = tests_upload_paths_by_test_ids([$testId], $pdo);
 
-    $stmt->execute([
-        ':id' => $testId,
-        ':user_id' => $userId,
-    ]);
+        $stmt = $pdo->prepare("
+            DELETE FROM tests
+            WHERE id = :id
+              AND user_id = :user_id
+              AND deleted_at IS NOT NULL
+              AND deleted_forever_at IS NULL
+            LIMIT 1
+        ");
 
-    return $stmt->rowCount() === 1;
+        $stmt->execute([
+            ':id' => $testId,
+            ':user_id' => $userId,
+        ]);
+
+        $deleted = $stmt->rowCount() === 1;
+        if (!$deleted) {
+            $pdo->rollBack();
+            return false;
+        }
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+
+    tests_delete_unreferenced_uploads($uploadPaths);
+    return true;
 }
 
 function tests_trash_restore_all_by_user_id(int $userId): int
@@ -1041,20 +1140,50 @@ function tests_trash_restore_all_by_user_id(int $userId): int
 function tests_trash_empty_by_user_id(int $userId): int
 {
     $pdo = db();
+    $uploadPaths = [];
 
-    $stmt = $pdo->prepare("
-        UPDATE tests
-        SET deleted_forever_at = NOW()
-        WHERE user_id = :user_id
-          AND deleted_at IS NOT NULL
-          AND deleted_forever_at IS NULL
-    ");
+    $pdo->beginTransaction();
+    try {
+        $idStmt = $pdo->prepare("
+            SELECT id
+            FROM tests
+            WHERE user_id = :user_id
+              AND deleted_at IS NOT NULL
+              AND deleted_forever_at IS NULL
+        ");
+        $idStmt->execute([
+            ':user_id' => $userId,
+        ]);
+        $testIds = array_map('intval', $idStmt->fetchAll(PDO::FETCH_COLUMN));
+        if ($testIds === []) {
+            $pdo->rollBack();
+            return 0;
+        }
 
-    $stmt->execute([
-        ':user_id' => $userId,
-    ]);
+        $uploadPaths = tests_upload_paths_by_test_ids($testIds, $pdo);
 
-    return (int)$stmt->rowCount();
+        $stmt = $pdo->prepare("
+            DELETE FROM tests
+            WHERE user_id = :user_id
+              AND deleted_at IS NOT NULL
+              AND deleted_forever_at IS NULL
+        ");
+
+        $stmt->execute([
+            ':user_id' => $userId,
+        ]);
+
+        $deletedCount = (int)$stmt->rowCount();
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+
+    tests_delete_unreferenced_uploads($uploadPaths);
+    return $deletedCount;
 }
 
 function tests_trash_count_by_user_id(int $userId): int
@@ -1280,11 +1409,17 @@ function tests_update_by_id_and_user_id(
     string $accessLevel,
     array $categoryNames,
     ?string $coverImage = null,
-    ?int $timeLimitSec = null
+    ?int $timeLimitSec = null,
+    ?string $status = null,
+    ?string $publishedAt = null,
+    bool $touchLastSavedAt = true
 ): bool
 {
     $pdo = db();
     $primaryCategoryName = $categoryNames[0] ?? test_category_default_name();
+    if ($status !== null && !test_status_is_valid($status)) {
+        $status = null;
+    }
     $stmt = $pdo->prepare("
         UPDATE tests
         SET title = :title,
@@ -1293,6 +1428,15 @@ function tests_update_by_id_and_user_id(
             category_name = :category_name,
             cover_image = :cover_image,
             time_limit_sec = :time_limit_sec,
+            status = COALESCE(:status, status),
+            published_at = CASE
+                WHEN :published_at_check IS NULL THEN published_at
+                ELSE :published_at_value
+            END,
+            last_saved_at = CASE
+                WHEN :touch_last_saved_at = 1 THEN NOW()
+                ELSE last_saved_at
+            END,
             updated_at = NOW()
         WHERE id = :id
           AND user_id = :user_id
@@ -1307,6 +1451,10 @@ function tests_update_by_id_and_user_id(
         ':category_name' => $primaryCategoryName,
         ':cover_image' => $coverImage,
         ':time_limit_sec' => ($timeLimitSec !== null && $timeLimitSec > 0) ? $timeLimitSec : null,
+        ':status' => $status,
+        ':published_at_check' => $publishedAt,
+        ':published_at_value' => $publishedAt,
+        ':touch_last_saved_at' => $touchLastSavedAt ? 1 : 0,
         ':id' => $testId,
         ':user_id' => $userId,
     ]);
@@ -1382,4 +1530,84 @@ function tests_count_deleted_by_user_id(int $userId): int
     ]);
 
     return (int)$stmt->fetchColumn();
+}
+
+function tests_upload_paths_by_test_ids(array $testIds, ?PDO $pdo = null): array
+{
+    $testIds = array_values(array_unique(array_filter(array_map('intval', $testIds), static fn(int $id): bool => $id > 0)));
+    if ($testIds === []) {
+        return [];
+    }
+
+    $pdo ??= db();
+    $placeholders = implode(',', array_fill(0, count($testIds), '?'));
+    $paths = [];
+
+    $queries = [
+        "SELECT cover_image AS path FROM tests WHERE id IN ($placeholders) AND cover_image IS NOT NULL AND cover_image <> ''",
+        "SELECT q.image_path AS path FROM questions q WHERE q.test_id IN ($placeholders) AND q.image_path IS NOT NULL AND q.image_path <> ''",
+        "SELECT o.image_path AS path
+         FROM options o
+         INNER JOIN questions q ON q.id = o.question_id
+         WHERE q.test_id IN ($placeholders)
+           AND o.image_path IS NOT NULL
+           AND o.image_path <> ''",
+    ];
+
+    foreach ($queries as $sql) {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($testIds);
+        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $path) {
+            $path = trim((string)$path);
+            if ($path === '' || !str_starts_with($path, '/uploads/')) {
+                continue;
+            }
+            $paths[$path] = true;
+        }
+    }
+
+    return array_keys($paths);
+}
+
+function tests_upload_path_is_still_referenced(string $path, ?PDO $pdo = null): bool
+{
+    $path = trim($path);
+    if ($path === '' || !str_starts_with($path, '/uploads/')) {
+        return false;
+    }
+
+    $pdo ??= db();
+    $queries = [
+        'SELECT 1 FROM tests WHERE cover_image = :path LIMIT 1',
+        'SELECT 1 FROM questions WHERE image_path = :path LIMIT 1',
+        'SELECT 1 FROM options WHERE image_path = :path LIMIT 1',
+    ];
+
+    foreach ($queries as $sql) {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            ':path' => $path,
+        ]);
+        if ($stmt->fetchColumn() !== false) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function tests_delete_unreferenced_uploads(array $paths): void
+{
+    if ($paths === []) {
+        return;
+    }
+
+    $pdo = db();
+    foreach (array_values(array_unique(array_filter(array_map('strval', $paths)))) as $path) {
+        if (tests_upload_path_is_still_referenced($path, $pdo)) {
+            continue;
+        }
+
+        upload_delete_file($path);
+    }
 }

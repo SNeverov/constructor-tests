@@ -12,6 +12,16 @@ if (!function_exists('auth_required')) {
     function auth_required(): void
     {
         if (!auth_is_logged_in()) {
+            if (request_expects_json()) {
+                http_response_code(401);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode([
+                    'ok' => false,
+                    'message' => 'Сессия истекла. Войдите снова.',
+                ], JSON_UNESCAPED_UNICODE);
+                exit();
+            }
+
             // Запоминаем, куда пользователь шёл
             $_SESSION['redirect_to'] = $_SERVER['REQUEST_URI'] ?? '/';
 
