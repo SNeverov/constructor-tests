@@ -1,6 +1,70 @@
 <?php
 declare(strict_types=1);
 
+// --- Domain helpers (also used by controllers) ---
+
+function normalize_input_answer(string $s): string
+{
+    $s = trim($s);
+    if ($s === '') {
+        return '';
+    }
+
+    $s = preg_replace('/\s+/u', ' ', $s) ?? $s;
+    $s = mb_strtolower($s);
+    $s = str_replace('ё', 'е', $s);
+
+    return $s;
+}
+
+function normalize_test_time_limit_sec(?string $raw): ?int
+{
+    $raw = trim((string)$raw);
+    if ($raw === '' || $raw === '00:00' || $raw === '00:00:00') {
+        return null;
+    }
+
+    if (!preg_match('/^(?<hours>\d{2}):(?<minutes>\d{2})(?::(?<seconds>\d{2}))?$/', $raw, $m)) {
+        throw new InvalidArgumentException('Некорректный формат лимита времени');
+    }
+
+    $hours = (int)($m['hours'] ?? 0);
+    $minutes = (int)($m['minutes'] ?? 0);
+    $seconds = isset($m['seconds']) ? (int)$m['seconds'] : 0;
+
+    if ($minutes > 59 || $seconds > 59) {
+        throw new InvalidArgumentException('Некорректное значение лимита времени');
+    }
+
+    $total = ($hours * 3600) + ($minutes * 60) + $seconds;
+    if ($total <= 0) {
+        return null;
+    }
+
+    $max = 23 * 3600 + 59 * 60 + 59;
+    if ($total > $max) {
+        throw new InvalidArgumentException('Лимит времени слишком большой');
+    }
+
+    return $total;
+}
+
+function format_time_limit_hms(?int $seconds): string
+{
+    $seconds = ($seconds !== null) ? max(0, (int)$seconds) : 0;
+    if ($seconds <= 0) {
+        return '00:00:00';
+    }
+
+    $hours = intdiv($seconds, 3600);
+    $minutes = intdiv($seconds % 3600, 60);
+    $secs = $seconds % 60;
+
+    return sprintf('%02d:%02d:%02d', $hours, $minutes, $secs);
+}
+
+// --- Tests ---
+
 function tests_list_by_user_id(int $userId): array
 {
     $pdo = db();
@@ -20,7 +84,6 @@ function tests_list_by_user_id(int $userId): array
 		WHERE user_id = :user_id AND deleted_at IS NULL
 		ORDER BY created_at DESC
 	");
-
 
     $stmt->execute([
         ':user_id' => $userId,
@@ -48,23 +111,86 @@ function test_time_limit_sec_from_row(array $test): ?int
     return null;
 }
 
-function attempt_is_expired(array $attempt): bool
+function test_categories_replace_by_test_id(int $testId, array $categoryNames): void
 {
-    if (($attempt['finished_at'] ?? null) !== null) {
-        return false;
+    $pdo = db();
+
+    $deleteStmt = $pdo->prepare('DELETE FROM test_category_links WHERE test_id = :test_id');
+    $deleteStmt->execute([
+        ':test_id' => $testId,
+    ]);
+
+    $insertStmt = $pdo->prepare('
+        INSERT INTO test_category_links (test_id, category_name)
+        VALUES (:test_id, :category_name)
+    ');
+
+    foreach ($categoryNames as $categoryName) {
+        $insertStmt->execute([
+            ':test_id' => $testId,
+            ':category_name' => $categoryName,
+        ]);
+    }
+}
+
+function test_categories_names_map_by_test_ids(array $testIds): array
+{
+    $testIds = array_values(array_unique(array_filter(array_map('intval', $testIds), static fn(int $id): bool => $id > 0)));
+    if ($testIds === []) {
+        return [];
     }
 
-    $expiresAt = trim((string)($attempt['expires_at'] ?? ''));
-    if ($expiresAt === '') {
-        return false;
+    $pdo = db();
+    $placeholders = [];
+    $params = [];
+    foreach ($testIds as $index => $testId) {
+        $key = ':id_' . $index;
+        $placeholders[] = $key;
+        $params[$key] = $testId;
     }
 
-    $expiresTs = strtotime($expiresAt);
-    if ($expiresTs === false) {
-        return false;
+    $stmt = $pdo->prepare('
+        SELECT test_id, category_name
+        FROM test_category_links
+        WHERE test_id IN (' . implode(', ', $placeholders) . ')
+        ORDER BY category_name ASC
+    ');
+    $stmt->execute($params);
+
+    $map = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $testId = (int)($row['test_id'] ?? 0);
+        $categoryName = trim((string)($row['category_name'] ?? ''));
+        if ($testId <= 0 || $categoryName === '') {
+            continue;
+        }
+
+        $map[$testId] ??= [];
+        $map[$testId][] = $categoryName;
     }
 
-    return $expiresTs <= time();
+    return $map;
+}
+
+function tests_attach_category_names(array $tests): array
+{
+    if ($tests === []) {
+        return [];
+    }
+
+    $testIds = [];
+    foreach ($tests as $test) {
+        $testIds[] = (int)($test['id'] ?? 0);
+    }
+
+    $categoryMap = test_categories_names_map_by_test_ids($testIds);
+
+    foreach ($tests as $index => $test) {
+        $testId = (int)($test['id'] ?? 0);
+        $tests[$index]['category_names'] = $categoryMap[$testId] ?? test_category_display_names($test['category_name'] ?? null);
+    }
+
+    return $tests;
 }
 
 function tests_create(
@@ -72,15 +198,17 @@ function tests_create(
     string $title,
     string $description,
     string $accessLevel,
+    array $categoryNames,
     ?string $coverImage = null,
     ?int $timeLimitSec = null
 ): int
 {
     $pdo = db();
+    $primaryCategoryName = $categoryNames[0] ?? test_category_default_name();
 
     $stmt = $pdo->prepare("
-        INSERT INTO tests (user_id, title, description, access_level, cover_image, time_limit_sec)
-        VALUES (:user_id, :title, :description, :access_level, :cover_image, :time_limit_sec)
+        INSERT INTO tests (user_id, title, description, access_level, category_name, cover_image, time_limit_sec)
+        VALUES (:user_id, :title, :description, :access_level, :category_name, :cover_image, :time_limit_sec)
     ");
 
     $stmt->execute([
@@ -88,6 +216,7 @@ function tests_create(
         ':title' => $title,
         ':description' => $description,
         ':access_level' => $accessLevel,
+        ':category_name' => $primaryCategoryName,
         ':cover_image' => $coverImage,
         ':time_limit_sec' => ($timeLimitSec !== null && $timeLimitSec > 0) ? $timeLimitSec : null,
     ]);
@@ -120,7 +249,6 @@ function questions_create(
 
     return (int)$pdo->lastInsertId();
 }
-
 
 function options_create(
     int $questionId,
@@ -209,14 +337,17 @@ function tests_find_by_id(int $testId): ?array
 		LIMIT 1
 	");
 
-
     $stmt->execute([
         ':id' => $testId,
     ]);
 
     $row = $stmt->fetch();
+    if ($row === false) {
+        return null;
+    }
 
-    return $row !== false ? $row : null;
+    $rows = tests_attach_category_names([$row]);
+    return $rows[0] ?? null;
 }
 
 function test_rating_find_by_test_id_and_user_id(int $testId, int $userId): ?int
@@ -238,24 +369,6 @@ function test_rating_find_by_test_id_and_user_id(int $testId, int $userId): ?int
         return null;
     }
     return (int)$value;
-}
-
-function attempts_has_finished_by_test_id_and_user_id(int $testId, int $userId): bool
-{
-    $pdo = db();
-    $stmt = $pdo->prepare("
-        SELECT 1
-        FROM attempts
-        WHERE test_id = :test_id
-          AND user_id = :user_id
-          AND finished_at IS NOT NULL
-        LIMIT 1
-    ");
-    $stmt->execute([
-        ':test_id' => $testId,
-        ':user_id' => $userId,
-    ]);
-    return $stmt->fetchColumn() !== false;
 }
 
 function tests_list_by_user_id_paginated(int $userId, int $limit, int $offset): array
@@ -306,7 +419,7 @@ function tests_list_by_user_id_paginated(int $userId, int $limit, int $offset): 
         ':viewer_id' => $userId,
     ]);
 
-    return $stmt->fetchAll();
+    return tests_attach_category_names($stmt->fetchAll());
 }
 
 function tests_count_for_home(): int
@@ -325,6 +438,33 @@ function tests_count_for_home(): int
     ");
 
     $stmt->execute();
+    return (int)$stmt->fetchColumn();
+}
+
+function tests_count_for_category(string $categoryName): int
+{
+    $pdo = db();
+
+    $where = "t.deleted_at IS NULL AND EXISTS (
+        SELECT 1
+        FROM test_category_links tcl
+        WHERE tcl.test_id = t.id
+          AND tcl.category_name = :category_name
+    )";
+    if (!auth_is_logged_in()) {
+        $where .= " AND t.access_level = 'public'";
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM tests t
+        WHERE {$where}
+    ");
+
+    $stmt->execute([
+        ':category_name' => $categoryName,
+    ]);
+
     return (int)$stmt->fetchColumn();
 }
 
@@ -387,7 +527,77 @@ function tests_list_for_home(int $limit = 20, int $offset = 0): array
         $params[':viewer_id'] = $viewerId;
     }
     $stmt->execute($params);
-    return $stmt->fetchAll();
+    return tests_attach_category_names($stmt->fetchAll());
+}
+
+function tests_list_for_category(string $categoryName, int $limit = 20, int $offset = 0): array
+{
+    $pdo = db();
+    $limit = max(1, min(100, $limit));
+    $offset = max(0, $offset);
+    $viewerId = auth_is_logged_in() ? (int)(auth_user()['id'] ?? 0) : 0;
+
+    $where = "t.deleted_at IS NULL AND EXISTS (
+        SELECT 1
+        FROM test_category_links tcl
+        WHERE tcl.test_id = t.id
+          AND tcl.category_name = :category_name
+    )";
+    if (!auth_is_logged_in()) {
+        $where .= " AND t.access_level = 'public'";
+    }
+
+    $bookmarksJoin = '';
+    if ($viewerId > 0) {
+        $bookmarksJoin = 'LEFT JOIN test_bookmarks tb ON tb.test_id = t.id AND tb.user_id = :viewer_id';
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT
+            t.id,
+            t.user_id,
+            t.title,
+            t.description,
+            t.access_level,
+            t.category_name,
+            COALESCE(t.time_limit_sec, CASE WHEN t.time_limit_min IS NOT NULL THEN t.time_limit_min * 60 ELSE NULL END) AS time_limit_sec,
+            t.time_limit_min,
+            t.created_at,
+            t.updated_at,
+            t.bookmarks_count,
+            t.views_count,
+            t.rating_count,
+            t.rating_sum,
+            COALESCE(u.login, '') AS creator_login,
+            t.cover_image,
+            " . ($viewerId > 0 ? 'CASE WHEN tb.user_id IS NULL THEN 0 ELSE 1 END' : '0') . " AS is_bookmarked,
+            (
+                SELECT COUNT(*)
+                FROM questions q
+                WHERE q.test_id = t.id
+            ) AS questions_count,
+            (
+                SELECT COUNT(*)
+                FROM attempts a
+                WHERE a.test_id = t.id
+            ) AS attempts_count
+        FROM tests t
+        LEFT JOIN users u ON u.id = t.user_id
+        {$bookmarksJoin}
+        WHERE {$where}
+        ORDER BY t.created_at DESC
+        LIMIT {$limit} OFFSET {$offset}
+    ");
+
+    $params = [
+        ':category_name' => $categoryName,
+    ];
+    if ($viewerId > 0) {
+        $params[':viewer_id'] = $viewerId;
+    }
+
+    $stmt->execute($params);
+    return tests_attach_category_names($stmt->fetchAll());
 }
 
 function tests_count_bookmarked_by_user_id(int $userId): int
@@ -451,7 +661,7 @@ function tests_list_bookmarked_by_user_id_paginated(int $userId, int $limit, int
         LIMIT {$limit} OFFSET {$offset}
     ");
     $stmt->execute([':user_id' => $userId]);
-    return $stmt->fetchAll();
+    return tests_attach_category_names($stmt->fetchAll());
 }
 
 function tests_bookmark_toggle_by_user_id(int $userId, int $testId): ?array
@@ -462,7 +672,6 @@ function tests_bookmark_toggle_by_user_id(int $userId, int $testId): ?array
     try {
         $isBookmarked = false;
 
-        // First try to remove current bookmark.
         $delStmt = $pdo->prepare("
             DELETE FROM test_bookmarks
             WHERE user_id = :user_id
@@ -485,7 +694,6 @@ function tests_bookmark_toggle_by_user_id(int $userId, int $testId): ?array
             $updStmt->execute([':id' => $testId]);
             $isBookmarked = false;
         } else {
-            // Then try to add bookmark atomically only for active test.
             $insStmt = $pdo->prepare("
                 INSERT IGNORE INTO test_bookmarks (user_id, test_id, created_at)
                 SELECT :user_id, t.id, NOW()
@@ -511,8 +719,6 @@ function tests_bookmark_toggle_by_user_id(int $userId, int $testId): ?array
                 $updStmt->execute([':id' => $testId]);
                 $isBookmarked = true;
             } else {
-                // No row inserted: either test does not exist/trashed or
-                // bookmark already exists because of a concurrent request.
                 $testStmt = $pdo->prepare("
                     SELECT id
                     FROM tests
@@ -586,9 +792,6 @@ function test_views_track(int $testId, ?int $userId = null): void
         $sessionKey = bin2hex(random_bytes(16));
     }
 
-    // One unique viewer key per test:
-    // - logged user: stable user-based key
-    // - guest: session-based key
     $viewerKey = $viewerId > 0
         ? 'u:' . (string)$viewerId
         : 'g:' . $sessionKey;
@@ -705,6 +908,7 @@ function tests_find_active_by_id_and_user_id(int $testId, int $userId): ?array
             title,
             description,
             access_level,
+            category_name,
             cover_image,
             COALESCE(time_limit_sec, CASE WHEN time_limit_min IS NOT NULL THEN time_limit_min * 60 ELSE NULL END) AS time_limit_sec,
             time_limit_min,
@@ -721,7 +925,12 @@ function tests_find_active_by_id_and_user_id(int $testId, int $userId): ?array
     ]);
 
     $row = $stmt->fetch();
-    return $row !== false ? $row : null;
+    if ($row === false) {
+        return null;
+    }
+
+    $rows = tests_attach_category_names([$row]);
+    return $rows[0] ?? null;
 }
 
 function tests_delete_by_id_and_user_id(int $testId, int $userId): bool
@@ -737,7 +946,6 @@ function tests_delete_by_id_and_user_id(int $testId, int $userId): bool
           AND deleted_forever_at IS NULL
 		LIMIT 1
 	");
-
 
     $stmt->execute([
         ':id' => $testId,
@@ -868,6 +1076,8 @@ function tests_trash_count_by_user_id(int $userId): int
     return (int)$stmt->fetchColumn();
 }
 
+// --- Cache ---
+
 function tests_payload_cache_key(int $testId): string
 {
     return 'test:' . $testId . ':payload';
@@ -911,7 +1121,7 @@ function tests_payload_cache_invalidate(int $testId): void
     cache_forget(tests_payload_cache_key($testId));
 }
 
-
+// --- Questions & Options ---
 
 function questions_list_by_test_id(int $testId): array
 {
@@ -954,7 +1164,6 @@ function options_list_by_question_ids(array $questionIds): array
 
     $rows = $stmt->fetchAll();
 
-    // сгруппируем по question_id для удобства в шаблоне
     $grouped = [];
     foreach ($rows as $row) {
         $qid = (int)($row['question_id'] ?? 0);
@@ -1063,247 +1272,25 @@ function text_answers_by_question_ids(array $questionIds): array
     return $grouped;
 }
 
-function attempt_create(int $testId, ?int $userId): int
-{
-    $pdo = db();
-
-	// snapshots (на момент старта попытки)
-	$stmt = $pdo->prepare("
-		SELECT title, access_level, time_limit_sec, time_limit_min
-		FROM tests
-		WHERE id = :test_id
-		LIMIT 1
-	");
-	$stmt->execute([':test_id' => $testId]);
-	$testRow = $stmt->fetch();
-
-	$testTitleSnapshot  = (string)($testRow['title'] ?? '');
-	$testAccessSnapshot = (string)($testRow['access_level'] ?? '');
-    $timeLimitSecSnapshot = test_time_limit_sec_from_row(is_array($testRow) ? $testRow : []);
-    $expiresAt = null;
-    if ($timeLimitSecSnapshot !== null && $timeLimitSecSnapshot > 0) {
-        $expiresAt = date('Y-m-d H:i:s', time() + $timeLimitSecSnapshot);
-    }
-
-
-    // 1. Получаем номер следующей попытки
-    $stmt = $pdo->prepare("
-        SELECT COALESCE(MAX(attempt_no), 0) + 1
-        FROM attempts
-        WHERE test_id = :test_id
-          AND user_id = :user_id
-    ");
-    $stmt->execute([
-        ':test_id' => $testId,
-        ':user_id' => $userId,
-    ]);
-
-    $attemptNo = (int)$stmt->fetchColumn();
-
-    // 2. Создаём попытку с зафиксированным attempt_no
-    $stmt = $pdo->prepare("
-		INSERT INTO attempts (
-            test_id,
-            test_title_snapshot,
-            test_access_snapshot,
-            user_id,
-            attempt_no,
-            started_at,
-            time_limit_sec_snapshot,
-            expires_at,
-            status
-        )
-		VALUES (
-            :test_id,
-            :test_title_snapshot,
-            :test_access_snapshot,
-            :user_id,
-            :attempt_no,
-            CURRENT_TIMESTAMP,
-            :time_limit_sec_snapshot,
-            :expires_at,
-            'in_progress'
-        )
-	");
-
-
-    $stmt->execute([
-		':test_id' => $testId,
-		':test_title_snapshot' => $testTitleSnapshot,
-		':test_access_snapshot' => $testAccessSnapshot,
-		':user_id' => $userId,
-		':attempt_no' => $attemptNo,
-        ':time_limit_sec_snapshot' => $timeLimitSecSnapshot,
-        ':expires_at' => $expiresAt,
-	]);
-
-
-    return (int)$pdo->lastInsertId();
-}
-
-function test_snapshot_hash_by_test_id(int $testId): string
-{
-    $pdo = db();
-
-    $stmt = $pdo->prepare("
-        SELECT
-            t.updated_at AS updated_at,
-            (SELECT COUNT(*) FROM questions q WHERE q.test_id = t.id) AS questions_count,
-            (
-                SELECT COUNT(*)
-                FROM options o
-                JOIN questions q2 ON q2.id = o.question_id
-                WHERE q2.test_id = t.id
-            ) AS options_count
-        FROM tests t
-        WHERE t.id = :test_id
-        LIMIT 1
-    ");
-
-    $stmt->execute([
-        ':test_id' => $testId,
-    ]);
-
-    $row = $stmt->fetch();
-    if ($row === false) {
-        return hash('sha256', 'missing-test|' . $testId);
-    }
-
-    $updatedAt = (string)($row['updated_at'] ?? '');
-    $qCount = (int)($row['questions_count'] ?? 0);
-    $oCount = (int)($row['options_count'] ?? 0);
-
-    return hash('sha256', $testId . '|' . $updatedAt . '|' . $qCount . '|' . $oCount);
-}
-
-
-function attempt_finish_update(
-    int $attemptId,
-    int $correctCount,
-    int $wrongCount,
-    float $percent,
-    int $totalQuestions,
-    string $testSnapshotHash,
-    string $status = 'finished'
-): bool
-{
-    $pdo = db();
-
-    $stmt = $pdo->prepare("
-        UPDATE attempts
-        SET finished_at = CASE
-                WHEN :status_for_finished_at = 'expired' AND expires_at IS NOT NULL THEN expires_at
-                ELSE CURRENT_TIMESTAMP
-            END,
-            duration_sec = TIMESTAMPDIFF(
-                SECOND,
-                started_at,
-                CASE
-                    WHEN :status_for_duration = 'expired' AND expires_at IS NOT NULL THEN expires_at
-                    ELSE CURRENT_TIMESTAMP
-                END
-            ),
-            total_questions = :total_questions,
-            test_snapshot_hash = :test_snapshot_hash,
-            correct_count = :correct_count,
-            wrong_count = :wrong_count,
-            percent = :percent,
-            status = :status
-        WHERE id = :id
-          AND finished_at IS NULL
-          AND status = 'in_progress'
-        LIMIT 1
-    ");
-
-    $stmt->execute([
-        ':total_questions' => $totalQuestions,
-        ':test_snapshot_hash' => $testSnapshotHash,
-        ':correct_count' => $correctCount,
-        ':wrong_count' => $wrongCount,
-        ':percent' => $percent,
-        ':status' => ($status === 'expired') ? 'expired' : 'finished',
-        ':status_for_finished_at' => ($status === 'expired') ? 'expired' : 'finished',
-        ':status_for_duration' => ($status === 'expired') ? 'expired' : 'finished',
-        ':id' => $attemptId,
-    ]);
-
-    return $stmt->rowCount() === 1;
-}
-
-
-/**
- * $rows формат:
- * [
- *   ['question_id' => 1, 'option_id' => 10, 'text_answer' => null],
- *   ['question_id' => 2, 'option_id' => null, 'text_answer' => 'молоко'],
- * ]
- */
-function answers_insert_batch(int $attemptId, array $rows): void
-{
-    if (empty($rows)) {
-        return;
-    }
-
-    $pdo = db();
-
-    $values = [];
-    $params = [];
-
-    foreach ($rows as $i => $row) {
-        $values[] = "(?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)";
-        $params[] = $attemptId;
-        $params[] = (int)($row['question_id'] ?? 0);
-
-        $optionId = $row['option_id'] ?? null;
-        $params[] = ($optionId === null || $optionId === '') ? null : (int)$optionId;
-
-        $text = $row['text_answer'] ?? null;
-        $params[] = ($text === null) ? null : (string)$text;
-		$params[] = (string)($row['question_type_snapshot'] ?? '');
-		$params[] = (string)($row['question_text_snapshot'] ?? '');
-		$params[] = array_key_exists('option_text_snapshot', $row) ? $row['option_text_snapshot'] : null;
-		$params[] = (int)($row['is_correct_snapshot'] ?? 0);
-		$params[] = array_key_exists('correct_payload_snapshot', $row) ? $row['correct_payload_snapshot'] : null;
-
-    }
-
-    $sql = "
-        INSERT INTO answers (
-			attempt_id,
-			question_id,
-			option_id,
-			text_answer,
-			question_type_snapshot,
-			question_text_snapshot,
-			option_text_snapshot,
-			is_correct_snapshot,
-			correct_payload_snapshot,
-			created_at
-		)
-
-        VALUES " . implode(",\n", $values) . "
-    ";
-
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
-}
-
 function tests_update_by_id_and_user_id(
     int $testId,
     int $userId,
     string $title,
     string $description,
     string $accessLevel,
+    array $categoryNames,
     ?string $coverImage = null,
     ?int $timeLimitSec = null
 ): bool
 {
     $pdo = db();
+    $primaryCategoryName = $categoryNames[0] ?? test_category_default_name();
     $stmt = $pdo->prepare("
         UPDATE tests
         SET title = :title,
             description = :description,
             access_level = :access_level,
+            category_name = :category_name,
             cover_image = :cover_image,
             time_limit_sec = :time_limit_sec,
             updated_at = NOW()
@@ -1317,6 +1304,7 @@ function tests_update_by_id_and_user_id(
         ':title' => $title,
         ':description' => $description,
         ':access_level' => $accessLevel,
+        ':category_name' => $primaryCategoryName,
         ':cover_image' => $coverImage,
         ':time_limit_sec' => ($timeLimitSec !== null && $timeLimitSec > 0) ? $timeLimitSec : null,
         ':id' => $testId,
@@ -1338,110 +1326,6 @@ function questions_delete_by_test_id(int $testId): int
     ]);
 
     return (int)$stmt->rowCount();
-}
-
-function attempt_find_by_id(int $attemptId): ?array
-{
-    $pdo = db();
-
-    $stmt = $pdo->prepare("
-        SELECT
-            id,
-            test_id,
-            test_title_snapshot,
-            test_access_snapshot,
-            test_snapshot_hash,
-            user_id,
-            attempt_no,
-            started_at,
-            finished_at,
-            expires_at,
-            duration_sec,
-            status,
-            time_limit_sec_snapshot,
-            total_questions,
-            correct_count,
-            wrong_count,
-            percent
-        FROM attempts
-        WHERE id = :id
-        LIMIT 1
-    ");
-
-    $stmt->execute([
-        ':id' => $attemptId,
-    ]);
-
-    $row = $stmt->fetch();
-
-    return ($row !== false) ? $row : null;
-}
-
-function attempt_find_by_id_for_update(int $attemptId): ?array
-{
-    $pdo = db();
-
-    $stmt = $pdo->prepare("
-        SELECT
-            id,
-            test_id,
-            test_title_snapshot,
-            test_access_snapshot,
-            test_snapshot_hash,
-            user_id,
-            attempt_no,
-            started_at,
-            finished_at,
-            expires_at,
-            duration_sec,
-            status,
-            time_limit_sec_snapshot,
-            total_questions,
-            correct_count,
-            wrong_count,
-            percent
-        FROM attempts
-        WHERE id = :id
-        LIMIT 1
-        FOR UPDATE
-    ");
-
-    $stmt->execute([
-        ':id' => $attemptId,
-    ]);
-
-    $row = $stmt->fetch();
-
-    return ($row !== false) ? $row : null;
-}
-
-function answers_list_by_attempt_id(int $attemptId): array
-{
-    $pdo = db();
-
-    $stmt = $pdo->prepare("
-		SELECT
-			id,
-			attempt_id,
-			question_id,
-			option_id,
-			text_answer,
-			question_type_snapshot,
-			question_text_snapshot,
-			option_text_snapshot,
-			is_correct_snapshot,
-			correct_payload_snapshot,
-			created_at
-		FROM answers
-		WHERE attempt_id = :attempt_id
-		ORDER BY id ASC
-	");
-
-    $stmt->execute([
-        ':attempt_id' => $attemptId,
-    ]);
-
-    return $stmt->fetchAll();
 }
 
 function tests_trash_list_by_user_id_paginated(int $userId, int $limit, int $offset): array
@@ -1498,135 +1382,4 @@ function tests_count_deleted_by_user_id(int $userId): int
     ]);
 
     return (int)$stmt->fetchColumn();
-}
-
-function attempts_count_finished_by_user_id(int $userId): int
-{
-    $pdo = db();
-    $stmt = $pdo->prepare("
-        SELECT COUNT(*)
-        FROM attempts
-        WHERE user_id = :user_id
-          AND finished_at IS NOT NULL
-    ");
-    $stmt->execute([
-        ':user_id' => $userId,
-    ]);
-
-    return (int)$stmt->fetchColumn();
-}
-
-function attempts_avg_percent_by_user_id(int $userId): float
-{
-    $pdo = db();
-    $stmt = $pdo->prepare("
-        SELECT AVG(percent)
-        FROM attempts
-        WHERE user_id = :user_id
-          AND finished_at IS NOT NULL
-    ");
-    $stmt->execute([
-        ':user_id' => $userId,
-    ]);
-
-    $avg = $stmt->fetchColumn();
-    return $avg === null ? 0.0 : (float)$avg;
-}
-
-function attempts_filters_sql(array $filters, array &$params): string
-{
-    $where = [
-        'a.user_id = :user_id',
-        'a.finished_at IS NOT NULL',
-    ];
-
-    $search = trim((string)($filters['search'] ?? ''));
-    if ($search !== '') {
-        $where[] = 'COALESCE(NULLIF(t.title, \'\'), NULLIF(a.test_title_snapshot, \'\'), \'Тест\') LIKE :search';
-        $params[':search'] = '%' . $search . '%';
-    }
-
-    $status = (string)($filters['status'] ?? 'all');
-    if ($status === 'excellent' || $status === 'correct') {
-        $where[] = 'a.percent >= 90';
-    } elseif ($status === 'good') {
-        $where[] = 'a.percent >= 80 AND a.percent < 90';
-    } elseif ($status === 'satisfactory' || $status === 'partial') {
-        $where[] = 'a.percent >= 70 AND a.percent < 80';
-    } elseif ($status === 'bad' || $status === 'wrong') {
-        $where[] = 'a.percent < 70';
-    }
-
-    $dateFrom = (string)($filters['date_from'] ?? '');
-    if ($dateFrom !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFrom)) {
-        $where[] = 'a.finished_at >= :date_from_ts';
-        $params[':date_from_ts'] = $dateFrom . ' 00:00:00';
-    }
-
-    $dateTo = (string)($filters['date_to'] ?? '');
-    if ($dateTo !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo)) {
-        $dateToTs = strtotime($dateTo . ' +1 day');
-        if ($dateToTs !== false) {
-            $where[] = 'a.finished_at < :date_to_next_ts';
-            $params[':date_to_next_ts'] = date('Y-m-d H:i:s', $dateToTs);
-        }
-    }
-
-    return implode(' AND ', $where);
-}
-
-function attempts_count_by_user_id_filtered(int $userId, array $filters): int
-{
-    $pdo = db();
-    $params = [
-        ':user_id' => $userId,
-    ];
-    $whereSql = attempts_filters_sql($filters, $params);
-
-    $sql = "
-        SELECT COUNT(*)
-        FROM attempts a
-        LEFT JOIN tests t ON t.id = a.test_id
-        WHERE {$whereSql}
-    ";
-
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
-    return (int)$stmt->fetchColumn();
-}
-
-function attempts_list_by_user_id_filtered(int $userId, array $filters, int $limit, int $offset): array
-{
-    $pdo = db();
-    $params = [
-        ':user_id' => $userId,
-    ];
-    $whereSql = attempts_filters_sql($filters, $params);
-
-    $limit = max(1, min(100, $limit));
-    $offset = max(0, $offset);
-
-    $sql = "
-        SELECT
-            a.id,
-            a.test_id,
-            a.test_title_snapshot,
-            a.correct_count,
-            a.wrong_count,
-            a.total_questions,
-            a.percent,
-            a.started_at,
-            a.finished_at,
-            t.id AS live_test_id,
-            t.title AS live_test_title
-        FROM attempts a
-        LEFT JOIN tests t ON t.id = a.test_id
-        WHERE {$whereSql}
-        ORDER BY a.finished_at DESC, a.id DESC
-        LIMIT {$limit} OFFSET {$offset}
-    ";
-
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
-    return $stmt->fetchAll();
 }

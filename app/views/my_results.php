@@ -15,6 +15,17 @@
 		'date_from' => (string)($filters['date_from'] ?? ''),
 		'date_to' => (string)($filters['date_to'] ?? ''),
 	];
+    $status = (string)($filters['status'] ?? 'all');
+    $statusOptions = [
+        'all' => 'Все',
+        'excellent' => 'Отлично',
+        'good' => 'Хорошо',
+        'satisfactory' => 'Удовлетворительно',
+        'bad' => 'Плохо',
+    ];
+    if (!array_key_exists($status, $statusOptions)) {
+        $status = 'all';
+    }
 ?>
 
 <div class="results-page" data-list-shell>
@@ -37,14 +48,29 @@
 
             <label class="results-filters__field">
                 <span>Статус</span>
-                <select class="input" name="status">
-                    <?php $status = (string)($filters['status'] ?? 'all'); ?>
-                    <option value="all" <?= $status === 'all' ? 'selected' : '' ?>>Все</option>
-                    <option value="excellent" <?= $status === 'excellent' ? 'selected' : '' ?>>Отлично</option>
-                    <option value="good" <?= $status === 'good' ? 'selected' : '' ?>>Хорошо</option>
-                    <option value="satisfactory" <?= $status === 'satisfactory' ? 'selected' : '' ?>>Удовлетворительно</option>
-                    <option value="bad" <?= $status === 'bad' ? 'selected' : '' ?>>Плохо</option>
-                </select>
+                <div class="results-status" data-results-status-picker>
+                    <input type="hidden" name="status" value="<?= htmlspecialchars($status, ENT_QUOTES, 'UTF-8') ?>" data-results-status-input>
+                    <button type="button" class="input results-status__trigger" data-results-status-trigger aria-haspopup="listbox" aria-expanded="false">
+                        <span class="results-status__value" data-results-status-current><?= htmlspecialchars($statusOptions[$status], ENT_QUOTES, 'UTF-8') ?></span>
+                        <svg class="results-status__icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                    <div class="results-status__panel" data-results-status-panel hidden>
+                        <div class="results-status__list" role="listbox" aria-label="Статус результата">
+                            <?php foreach ($statusOptions as $value => $label): ?>
+                                <button
+                                    type="button"
+                                    class="results-status__option<?= $status === $value ? ' is-selected' : '' ?>"
+                                    data-results-status-option
+                                    data-value="<?= htmlspecialchars($value, ENT_QUOTES, 'UTF-8') ?>"
+                                    role="option"
+                                    aria-selected="<?= $status === $value ? 'true' : 'false' ?>"
+                                >
+                                    <?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?>
+                                </button>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                </div>
             </label>
 
             <label class="results-filters__field">
@@ -130,19 +156,19 @@
                     $rateLabel = 'Хорошо';
                     $rateClass = 'score-pill--good';
                     $itemToneClass = 'result-item--good';
-                } elseif ($percent >= 70.0) {
+                } elseif ($percent >= 60.0) {
                     $rateLabel = 'Удовлетворительно';
                     $rateClass = 'score-pill--ok';
                     $itemToneClass = 'result-item--ok';
                 }
                 $barWidth = max(0.0, min(100.0, $percent));
 
-                $title = trim((string)($row['live_test_title'] ?? ''));
-                if ($title === '') {
-                    $title = trim((string)($row['test_title_snapshot'] ?? ''));
+                $testTitle = trim((string)($row['live_test_title'] ?? ''));
+                if ($testTitle === '') {
+                    $testTitle = trim((string)($row['test_title_snapshot'] ?? ''));
                 }
-                if ($title === '') {
-                    $title = 'Тест';
+                if ($testTitle === '') {
+                    $testTitle = 'Тест';
                 }
 
                 $testIdRaw = $row['test_id'] ?? null;
@@ -152,7 +178,7 @@
                     <div class="result-item__layout">
                         <div class="result-item__main">
                             <div class="result-item__title">
-                                <?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?>
+                                <?= htmlspecialchars($testTitle, ENT_QUOTES, 'UTF-8') ?>
                             </div>
 
                             <div class="result-item__meta">

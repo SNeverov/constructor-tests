@@ -28,17 +28,16 @@ $ratingRaw = $ratingCount > 0 ? ($ratingSum / $ratingCount) : 0.0;
 $ratingValue = max(0.0, min(5.0, (float)$ratingRaw));
 $isBookmarked = (int)($test['is_bookmarked'] ?? 0) === 1;
 $timeLimitSec = isset($test['time_limit_sec']) && (int)$test['time_limit_sec'] > 0 ? (int)$test['time_limit_sec'] : null;
-$categoryName = trim((string)($test['category_name'] ?? ''));
-if ($categoryName === '') {
-    $categoryName = 'Программирование';
-}
+$categoryNames = test_category_display_names($test['category_names'] ?? ($test['category_name'] ?? null));
 $creatorName = trim((string)($test['creator_login'] ?? ''));
 if ($creatorName === '') {
     $creatorName = $currentUserLogin !== '' ? $currentUserLogin : '—';
 }
 $createdDate = '—';
 if ($createdAt !== '') {
-    $createdDate = preg_split('/\s+/', $createdAt)[0] ?? $createdAt;
+    $datePart = preg_split('/\s+/', $createdAt)[0] ?? $createdAt;
+    $dateObj = DateTime::createFromFormat('Y-m-d', $datePart);
+    $createdDate = $dateObj ? $dateObj->format('d-m-Y') : $datePart;
 }
 $isOwner = $currentUserId > 0 && (int)($test['user_id'] ?? 0) === $currentUserId;
 
@@ -112,10 +111,12 @@ $formatTimeLimitShort = static function (?int $seconds): string {
 
         <div class="test-card__footer-tags">
             <?php if (!$isUnavailable && !$isTrashContext): ?>
-                <span class="test-chip test-chip--category">
-                    <img src="/assets/img/test_card_svg/pinpaper-filled.svg" alt="" aria-hidden="true">
-                    <span><?= htmlspecialchars($categoryName, ENT_QUOTES, 'UTF-8') ?></span>
-                </span>
+                <?php foreach ($categoryNames as $categoryName): ?>
+                    <a class="test-chip test-chip--category" href="<?= htmlspecialchars(test_category_url_by_name($categoryName), ENT_QUOTES, 'UTF-8') ?>">
+                        <img src="/assets/img/test_card_svg/pinpaper-filled.svg" alt="" aria-hidden="true">
+                        <span><?= htmlspecialchars($categoryName, ENT_QUOTES, 'UTF-8') ?></span>
+                    </a>
+                <?php endforeach; ?>
             <?php endif; ?>
 
             <?php if ($isUnavailable || $isTrashContext): ?>
@@ -134,9 +135,14 @@ $formatTimeLimitShort = static function (?int $seconds): string {
             </span>
 
             <?php if ($isTrashContext && $deletedAt !== ''): ?>
+                <?php
+                    $deletedDatePart = preg_split('/\s+/', $deletedAt)[0] ?? $deletedAt;
+                    $deletedDateObj = DateTime::createFromFormat('Y-m-d', $deletedDatePart);
+                    $deletedDateFmt = $deletedDateObj ? $deletedDateObj->format('d-m-Y') : $deletedDatePart;
+                ?>
                 <span class="test-chip test-chip--soft">
                     <img src="/assets/img/test_card_svg/calendar.svg" alt="" aria-hidden="true">
-                    <span><?= htmlspecialchars($deletedAt, ENT_QUOTES, 'UTF-8') ?></span>
+                    <span><?= htmlspecialchars($deletedDateFmt, ENT_QUOTES, 'UTF-8') ?></span>
                 </span>
             <?php else: ?>
                 <span class="test-chip test-chip--soft">

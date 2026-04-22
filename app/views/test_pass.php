@@ -39,12 +39,18 @@ declare(strict_types=1);
         </div>
 
         <h1 class="test-pass__title"><?= htmlspecialchars((string)($test['title'] ?? 'Тест'), ENT_QUOTES, 'UTF-8') ?></h1>
-        <div class="test-pass__hint">Во время прохождения правильность не показывается</div>
 
         <?php if ((int)($timeLimitSec ?? 0) > 0): ?>
-            <div class="test-pass__timer" data-test-pass-timer>
-                <div class="test-pass__timer-label">Осталось времени</div>
-                <div class="test-pass__timer-value" data-timer-value>00:00:00</div>
+            <div class="test-pass__timer-wrap">
+                <div class="test-pass__timer" data-test-pass-timer>
+                    <span class="test-pass__timer-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    </span>
+                    <div class="test-pass__timer-body">
+                        <div class="test-pass__timer-label">Осталось времени</div>
+                        <div class="test-pass__timer-value" data-timer-value>00:00:00</div>
+                    </div>
+                </div>
                 <div class="test-pass__timer-note" data-timer-note>По истечении лимита попытка завершится автоматически.</div>
             </div>
         <?php endif; ?>
@@ -153,6 +159,15 @@ declare(strict_types=1);
         <?php endif; ?>
     </form>
 </div>
+
+<?php if ((int)($timeLimitSec ?? 0) > 0): ?>
+<div class="timer-pill" data-timer-pill aria-hidden="true">
+    <span class="timer-pill__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    </span>
+    <span class="timer-pill__value" data-timer-pill-value>—</span>
+</div>
+<?php endif; ?>
 
 <div id="imgLightbox" class="img-lightbox" aria-hidden="true" role="dialog" aria-label="Просмотр изображения">
     <div class="img-lightbox__backdrop" data-lightbox-close></div>

@@ -43,6 +43,10 @@ html,
 body {
     height: 100%;
 }
+html {
+    overflow-y: scroll;
+    scrollbar-gutter: stable;
+}
 body {
     display: flex;
     flex-direction: column;
@@ -518,6 +522,13 @@ p {
     border-radius: var(--radius-sm);
 }
 
+.btn--xs {
+    padding: 3px 8px;
+    font-size: 12px;
+    min-height: 26px;
+    border-radius: 7px;
+}
+
 
 
 .site-header .btn {
@@ -551,6 +562,156 @@ p {
 }
 
 
+
+/* Auth menu (header login/register dropdown) */
+.auth-menu {
+    position: relative;
+}
+
+.auth-menu__btn {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 14px;
+    font-weight: 500;
+    padding: 9px 14px;
+    gap: 6px;
+}
+
+.auth-menu__btn:hover {
+    color: #fff;
+}
+
+.auth-menu__chevron {
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+    opacity: 0.7;
+}
+
+.auth-menu__btn[aria-expanded="true"] .auth-menu__chevron {
+    transform: rotate(180deg);
+    opacity: 1;
+}
+
+.auth-menu__dropdown {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    min-width: 192px;
+    padding: 4px;
+
+    background: rgba(10, 18, 36, 0.94);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    box-shadow:
+        0 0 0 0.5px rgba(0, 0, 0, 0.4),
+        0 8px 32px rgba(0, 0, 0, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.07);
+
+    z-index: 200;
+
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(-6px) scale(0.97);
+    transform-origin: top right;
+    transition:
+        opacity 0.18s ease,
+        transform 0.18s ease,
+        visibility 0.18s;
+}
+
+.auth-menu__dropdown.is-open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+}
+
+.auth-menu__item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 14px;
+    color: rgba(255, 255, 255, 0.82);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    border-radius: 10px;
+    transition: background 0.14s, color 0.14s;
+    white-space: nowrap;
+}
+
+.auth-menu__item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    text-decoration: none;
+}
+
+.auth-menu__item svg {
+    flex-shrink: 0;
+    opacity: 0.65;
+    transition: opacity 0.14s;
+}
+
+.auth-menu__item:hover svg {
+    opacity: 1;
+}
+
+.auth-menu__item--register {
+    color: #7eb8ff;
+}
+
+.auth-menu__item--register:hover {
+    background: rgba(96, 165, 250, 0.1);
+    color: #a8d0ff;
+}
+
+.auth-menu__item--register svg {
+    opacity: 0.8;
+}
+
+.auth-menu__sep {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.07);
+    margin: 3px 10px;
+}
+
+/* Test chips (shared across pages) */
+.test-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 11px;
+    border: 1px solid #d3ddeb;
+    background: #eaf0f8;
+    color: #3f4f67;
+    font-weight: 500;
+}
+
+a.test-chip {
+    text-decoration: none;
+}
+
+a.test-chip:hover {
+    border-color: #bfd0e4;
+    background: #dfe9f5;
+}
+
+.test-chip img {
+    width: 14px;
+    height: 14px;
+    display: block;
+}
+
+.test-chip--soft {
+    border-color: #d7deea;
+    background: #eef2f7;
+    color: #334155;
+    font-weight: 500;
+}
 
 /* Pager */
 .pager {

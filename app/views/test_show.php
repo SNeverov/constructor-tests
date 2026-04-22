@@ -12,6 +12,16 @@ $timeLimitSec  = isset($test['time_limit_sec']) && (int)$test['time_limit_sec'] 
 $viewsCount    = (int)($test['views_count'] ?? 0);
 $attemptsCount = (int)($test['attempts_count'] ?? 0);
 $creatorLogin  = trim((string)($test['creator_login'] ?? ''));
+$defaultCover  = '/assets/img/cover/default_test_cover.webp';
+
+$categoryNames = test_category_display_names($test['category_names'] ?? ($test['category_name'] ?? null));
+$createdAt = trim((string)($test['created_at'] ?? ''));
+$createdDate = '';
+if ($createdAt !== '') {
+    $datePart = preg_split('/\s+/', $createdAt)[0] ?? $createdAt;
+    $dateObj = DateTime::createFromFormat('Y-m-d', $datePart);
+    $createdDate = $dateObj ? $dateObj->format('d-m-Y') : $datePart;
+}
 
 $pluralRu = static function (int $n, string $one, string $few, string $many): string {
     $n  = abs($n) % 100;
@@ -37,33 +47,31 @@ $formatTimeLimit = static function (?int $seconds) use ($pluralRu): array {
         return ['value' => (string)$minutes, 'label' => $pluralRu($minutes, 'минута', 'минуты', 'минут')];
     }
 
-    return ['value' => gmdate('H:i:s', $seconds), 'label' => 'лимит'];
+    return ['value' => gmdate('H:i:s', $seconds), 'label' => ''];
 };
 
 $timeLimitView = $formatTimeLimit($timeLimitSec);
 ?>
 
 <div class="test-show">
-    <?php $showCover = trim((string)($test['cover_image'] ?? '')) !== ''; ?>
+    <?php $coverSrc = trim((string)($test['cover_image'] ?? '')) !== '' ? (string)$test['cover_image'] : $defaultCover; ?>
     <div class="test-show__card">
-        <?php if ($showCover): ?>
-            <div class="test-show__cover">
-                <img
-                    src="<?= htmlspecialchars((string)$test['cover_image'], ENT_QUOTES, 'UTF-8') ?>"
-                    alt=""
-                    class="test-show__cover-img"
-                    loading="lazy"
-                    decoding="async"
-                >
-            </div>
-        <?php endif; ?>
+        <div class="test-show__cover">
+            <img
+                src="<?= htmlspecialchars($coverSrc, ENT_QUOTES, 'UTF-8') ?>"
+                alt=""
+                class="test-show__cover-img"
+                loading="lazy"
+                decoding="async"
+            >
+        </div>
         <div class="test-show__top">
             <div class="test-show__meta">
                 <button
                     type="button"
-                    class="badge badge--copy badge--copy-link"
+                    class="badge badge--copy badge--copy-link ui-tooltip ui-tooltip--bottom"
                     data-copy="/tests/<?= (int)($test['id'] ?? 0) ?>"
-                    title="Скопировать ссылку на тест"
+                    data-tooltip="Скопировать ссылку на тест"
                 >
                     <img
                         src="/assets/img/link-svgrepo-com.svg"
@@ -77,6 +85,25 @@ $timeLimitView = $formatTimeLimit($timeLimitSec);
                 <span class="badge <?= (($test['access_level'] ?? '') === 'public') ? 'badge--ok' : 'badge--warn' ?>">
                     <?= (($test['access_level'] ?? '') === 'public') ? 'Доступен всем' : 'Только для зарегистрированных' ?>
                 </span>
+
+                <?php foreach ($categoryNames as $categoryName): ?>
+                    <a class="test-chip test-chip--category" href="<?= htmlspecialchars(test_category_url_by_name($categoryName), ENT_QUOTES, 'UTF-8') ?>">
+                        <img src="/assets/img/test_card_svg/pinpaper-filled.svg" alt="" aria-hidden="true">
+                        <span><?= htmlspecialchars($categoryName, ENT_QUOTES, 'UTF-8') ?></span>
+                    </a>
+                <?php endforeach; ?>
+                <?php if ($creatorLogin !== ''): ?>
+                    <span class="test-chip test-chip--soft">
+                        <img src="/assets/img/test_card_svg/user.svg" alt="" aria-hidden="true">
+                        <span><?= htmlspecialchars($creatorLogin, ENT_QUOTES, 'UTF-8') ?></span>
+                    </span>
+                <?php endif; ?>
+                <?php if ($createdDate !== ''): ?>
+                    <span class="test-chip test-chip--soft">
+                        <img src="/assets/img/test_card_svg/calendar.svg" alt="" aria-hidden="true">
+                        <span><?= htmlspecialchars($createdDate, ENT_QUOTES, 'UTF-8') ?></span>
+                    </span>
+                <?php endif; ?>
             </div>
 
             <h1 class="test-show__title"><?= htmlspecialchars((string)($test['title'] ?? 'Тест'), ENT_QUOTES, 'UTF-8') ?></h1>

@@ -14,13 +14,19 @@ require __DIR__ . '/../app/core/security.php';
 require __DIR__ . '/../app/core/flash.php';
 require __DIR__ . '/../app/core/view.php';
 require __DIR__ . '/../app/core/error.php';
+require __DIR__ . '/../app/core/test_categories.php';
 require __DIR__ . '/../app/controllers/HomeController.php';
+require __DIR__ . '/../app/controllers/CategoriesController.php';
 require __DIR__ . '/../app/controllers/AuthController.php';
 require __DIR__ . '/../app/controllers/TestsController.php';
+require __DIR__ . '/../app/controllers/AttemptController.php';
+require __DIR__ . '/../app/controllers/BookmarkController.php';
+require __DIR__ . '/../app/controllers/RatingController.php';
 require __DIR__ . '/../app/controllers/AccountController.php';
 require __DIR__ . '/../app/core/auth.php';
 require_once __DIR__ . '/../app/core/db.php';
 require __DIR__ . '/../app/core/tests.php';
+require __DIR__ . '/../app/core/attempts.php';
 require __DIR__ . '/../app/core/csrf.php';
 require __DIR__ . '/../app/core/form.php';
 require __DIR__ . '/../app/core/upload.php';
@@ -71,6 +77,11 @@ if ($path === '/login' && $method === 'POST') {
 
 if ($path === '/' || $path === '') {
     home_index();
+    exit();
+}
+
+if ($method === 'GET' && preg_match('~^/categories/([a-z0-9_-]+)$~', $path, $m)) {
+    category_show($m[1]);
     exit();
 }
 

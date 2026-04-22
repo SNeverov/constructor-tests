@@ -119,6 +119,7 @@ function my_results_index(): void
             '/assets/vendor/air-datepicker/air-datepicker.js',
             '/assets/js/list-loading.js',
             '/assets/js/date-picker.js',
+            '/assets/js/results-status-picker.js',
         ],
         'styles' => [
             '/assets/vendor/air-datepicker/air-datepicker.css',

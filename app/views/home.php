@@ -9,6 +9,11 @@ $currentUserLogin = trim((string)($currentUser['login'] ?? ''));
 $page = (int)($pagination['page'] ?? 1);
 $pages = (int)($pagination['pages'] ?? 1);
 $total = (int)($pagination['total'] ?? 0);
+$pagerPath = (string)($pagination['path'] ?? '/');
+$pageHeading = trim((string)($page_heading ?? 'Главная'));
+$resultsLabel = trim((string)($results_label ?? 'Найдено'));
+$emptyTitle = trim((string)($empty_title ?? 'Пока нет опубликованных тестов'));
+$emptyText = trim((string)($empty_text ?? 'Здесь появятся тесты пользователей.'));
 
 $formatNumber = static function (int $value): string {
     return number_format($value, 0, '', ' ');
@@ -25,18 +30,18 @@ $pluralRu = static function (int $n, string $one, string $few, string $many): st
 ?>
 
 <div class="page-head">
-    <h1>Главная</h1>
+    <h1><?= htmlspecialchars($pageHeading, ENT_QUOTES, 'UTF-8') ?></h1>
 </div>
 
 <?php if (!empty($tests)): ?>
-    <div class="results-meta muted">Найдено: <?= $total ?></div>
+    <div class="results-meta muted"><?= htmlspecialchars($resultsLabel, ENT_QUOTES, 'UTF-8') ?>: <?= $total ?></div>
 <?php endif; ?>
 
 <?php if (empty($tests)): ?>
     <div class="empty-state">
         <div class="empty-state__card">
-            <h3 class="empty-state__title">Пока нет опубликованных тестов</h3>
-            <p class="empty-state__text">Здесь появятся тесты пользователей.</p>
+            <h3 class="empty-state__title"><?= htmlspecialchars($emptyTitle, ENT_QUOTES, 'UTF-8') ?></h3>
+            <p class="empty-state__text"><?= htmlspecialchars($emptyText, ENT_QUOTES, 'UTF-8') ?></p>
         </div>
     </div>
 <?php else: ?>
@@ -52,7 +57,7 @@ $pluralRu = static function (int $n, string $one, string $few, string $many): st
                 <?php $nextPage = min($pages, $page + 1); ?>
 
                 <?php if ($page > 1): ?>
-                    <a class="pager__btn" href="/?page=<?= $prevPage ?>" aria-label="Предыдущая страница">
+                    <a class="pager__btn" href="<?= htmlspecialchars($pagerPath, ENT_QUOTES, 'UTF-8') ?>?page=<?= $prevPage ?>" aria-label="Предыдущая страница">
                         <img src="/assets/img/next-page.svg" class="pager__arrow pager__arrow--prev" alt="" aria-hidden="true">
                     </a>
                 <?php else: ?>
@@ -66,7 +71,7 @@ $pluralRu = static function (int $n, string $one, string $few, string $many): st
                 </span>
 
                 <?php if ($page < $pages): ?>
-                    <a class="pager__btn" href="/?page=<?= $nextPage ?>" aria-label="Следующая страница">
+                    <a class="pager__btn" href="<?= htmlspecialchars($pagerPath, ENT_QUOTES, 'UTF-8') ?>?page=<?= $nextPage ?>" aria-label="Следующая страница">
                         <img src="/assets/img/next-page.svg" class="pager__arrow" alt="" aria-hidden="true">
                     </a>
                 <?php else: ?>

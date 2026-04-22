@@ -389,4 +389,41 @@
 	}
 	});
 
+  // ---------- Auth menu dropdown ----------
+  (function initAuthMenu() {
+    var menu = document.getElementById("authMenu");
+    var trigger = document.getElementById("authMenuTrigger");
+    var dropdown = document.getElementById("authMenuDropdown");
+    if (!menu || !trigger || !dropdown) return;
+
+    function open() {
+      dropdown.classList.add("is-open");
+      trigger.setAttribute("aria-expanded", "true");
+      dropdown.removeAttribute("aria-hidden");
+    }
+
+    function close() {
+      dropdown.classList.remove("is-open");
+      trigger.setAttribute("aria-expanded", "false");
+      dropdown.setAttribute("aria-hidden", "true");
+    }
+
+    trigger.addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (dropdown.classList.contains("is-open")) {
+        close();
+      } else {
+        open();
+      }
+    });
+
+    document.addEventListener("click", function (e) {
+      if (!menu.contains(e.target)) close();
+    });
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") close();
+    });
+  })();
+
 })();

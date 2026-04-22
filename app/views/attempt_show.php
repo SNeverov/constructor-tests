@@ -143,6 +143,23 @@ if (($sourceState ?? 'ok') === 'changed') {
 
 $attemptStatus = (string)($attempt['status'] ?? '');
 $expiredNotice = '';
+$percentVal = (float)($attempt['percent'] ?? 0);
+$scoreGrade = $percentVal >= 90 ? 'excellent' : ($percentVal >= 80 ? 'good' : ($percentVal >= 60 ? 'ok' : 'bad'));
+
+$durationSec = (int)($attempt['duration_sec'] ?? 0);
+$elapsedFormatted = '';
+if ($durationSec > 0) {
+    $eh = intdiv($durationSec, 3600);
+    $em = intdiv($durationSec % 3600, 60);
+    $es = $durationSec % 60;
+    if ($eh > 0) {
+        $elapsedFormatted = sprintf('%d:%02d:%02d', $eh, $em, $es);
+    } elseif ($em > 0) {
+        $elapsedFormatted = sprintf('%d:%02d', $em, $es);
+    } else {
+        $elapsedFormatted = $es . ' сек';
+    }
+}
 if ($attemptStatus === 'expired') {
     $expiredNotice = 'Время на прохождение истекло. Попытка завершена автоматически, засчитаны только ответы, на которые вы успели ответить.';
 }
@@ -193,74 +210,103 @@ if ($attemptStatus === 'expired') {
             <?php endif; ?>
         </div>
 
+        <div class="attempt__meta-sep" aria-hidden="true"></div>
+
         <h1 class="attempt__title"><?= _h((string)($test['title'] ?? 'Тест')) ?></h1>
-
-        <div class="attempt__summary">
-            <div class="sum">
-                <div class="sum__label">Правильных</div>
-                <div class="sum__value sum__value--ok"><?= (int)$summaryCorrect ?></div>
-            </div>
-            <div class="sum">
-                <div class="sum__label">
-                    Частично верно
-                    <span
-                        class="sum__hint ui-tooltip"
-                        data-tooltip="Формула: выбранные верные варианты / все верные варианты вопроса."
-                        tabindex="0"
-                        aria-label="Формула частичного подсчёта"
-                    >?</span>
-                </div>
-                <div class="sum__value sum__value--partial"><?= (int)$summaryPartial ?></div>
-            </div>
-            <div class="sum">
-                <div class="sum__label">Неправильных</div>
-                <div class="sum__value sum__value--bad"><?= (int)$summaryWrong ?></div>
-            </div>
-            <div class="sum">
-                <div class="sum__label">Процент</div>
-                <div class="sum__value"><?= (float)($attempt['percent'] ?? 0) ?>%</div>
-            </div>
-        </div>
-
-        <div class="attempt__legend" aria-label="Легенда цветов результата">
-            <div class="legend-item">
-                <span class="legend-item__swatch legend-item__swatch--ok"></span>
-                <span>Правильный вариант</span>
-            </div>
-            <div class="legend-item">
-                <span class="legend-item__swatch legend-item__swatch--bad"></span>
-                <span>Выбранный неверный</span>
-            </div>
-            <div class="legend-item">
-                <span class="legend-item__swatch legend-item__swatch--partial"></span>
-                <span>Частично верно</span>
-            </div>
-        </div>
-
-        <div class="attempt__actions">
-            <?php if (auth_is_logged_in()): ?>
-                <a class="btn btn--ghost" href="/my/results">Мои результаты</a>
-            <?php endif; ?>
-            <?php if (empty($testMissing)): ?>
-                <a class="btn btn--ghost" href="/tests/<?= (int)($test['id'] ?? 0) ?>">К описанию теста</a>
-                <a class="btn btn--primary" href="/tests/<?= (int)($test['id'] ?? 0) ?>/pass">Пройти ещё раз</a>
-            <?php endif; ?>
-            <a class="btn btn--ghost" href="/">На главную</a>
-        </div>
 
         <?php if ($sourceNotice !== ''): ?>
             <div class="attempt__notice attempt__notice--danger" role="alert">
-                <span class="attempt__notice-icon" aria-hidden="true">!</span>
+                <svg class="attempt__notice-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                 <span><?= _h($sourceNotice) ?></span>
             </div>
         <?php endif; ?>
 
         <?php if ($expiredNotice !== ''): ?>
             <div class="attempt__notice attempt__notice--warn" role="alert">
-                <span class="attempt__notice-icon" aria-hidden="true">!</span>
+                <svg class="attempt__notice-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                 <span><?= _h($expiredNotice) ?></span>
             </div>
         <?php endif; ?>
+
+        <div class="scorecard scorecard--<?= $scoreGrade ?>">
+            <div class="scorecard__body">
+                <div class="scorecard__hero">
+                    <div class="scorecard__percent scorecard__percent--<?= $scoreGrade ?>">
+                        <?= number_format((float)($attempt['percent'] ?? 0), 0) ?>%
+                    </div>
+                    <div class="scorecard__bar-wrap">
+                        <div class="scorecard__bar scorecard__bar--<?= $scoreGrade ?>" style="width: <?= min(100.0, (float)($attempt['percent'] ?? 0)) ?>%"></div>
+                    </div>
+                    <div class="scorecard__hero-label">Результат</div>
+                </div>
+
+                <div class="scorecard__divider" aria-hidden="true"></div>
+
+                <div class="scorecard__stats">
+                    <div class="scorecard__stat">
+                        <span class="scorecard__stat-icon scorecard__stat-icon--ok" aria-hidden="true">✓</span>
+                        <span class="scorecard__stat-val"><?= (int)$summaryCorrect ?></span>
+                        <span class="scorecard__stat-label">Правильных</span>
+                    </div>
+                    <div class="scorecard__stat">
+                        <span class="scorecard__stat-icon scorecard__stat-icon--partial" aria-hidden="true">≈</span>
+                        <span class="scorecard__stat-val"><?= (int)$summaryPartial ?></span>
+                        <span class="scorecard__stat-label">Частично верно</span>
+                    </div>
+                    <div class="scorecard__stat">
+                        <span class="scorecard__stat-icon scorecard__stat-icon--bad" aria-hidden="true">✗</span>
+                        <span class="scorecard__stat-val"><?= (int)$summaryWrong ?></span>
+                        <span class="scorecard__stat-label">Неправильных</span>
+                    </div>
+                    <?php if ($elapsedFormatted !== ''): ?>
+                        <div class="scorecard__stat">
+                            <span class="scorecard__stat-icon scorecard__stat-icon--time" aria-hidden="true">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            </span>
+                            <span class="scorecard__stat-val scorecard__stat-val--time"><?= _h($elapsedFormatted) ?></span>
+                            <span class="scorecard__stat-label">Затрачено</span>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="scorecard__legend" aria-label="Легенда цветов результата">
+                <span class="legend-dot legend-dot--ok" aria-hidden="true"></span>
+                <span>Правильный вариант</span>
+                <span class="legend-sep" aria-hidden="true">·</span>
+                <span class="legend-dot legend-dot--bad" aria-hidden="true"></span>
+                <span>Выбранный неверный</span>
+                <span class="legend-sep" aria-hidden="true">·</span>
+                <span class="legend-dot legend-dot--partial" aria-hidden="true"></span>
+                <span>Частично верно</span>
+            </div>
+        </div>
+
+        <div class="attempt__actions-wrap">
+        <div class="attempt__actions">
+            <?php if (empty($testMissing)): ?>
+                <a class="btn btn--primary" href="/tests/<?= (int)($test['id'] ?? 0) ?>/pass">
+                    <svg class="btn-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3V9M3 9H9M3 9C5.33 6.91 7.48 4.55 10.75 4.09C12.68 3.82 14.65 4.18 16.35 5.12C18.06 6.07 19.42 7.54 20.21 9.32M21 21V15M21 15H15M21 15C18.67 17.09 16.52 19.45 13.25 19.91C11.32 20.18 9.35 19.82 7.65 18.88C5.94 17.93 4.58 16.46 3.79 14.68"/></svg>
+                    Пройти ещё раз
+                </a>
+                <a class="btn btn--ghost" href="/tests/<?= (int)($test['id'] ?? 0) ?>">
+                    <svg class="btn-icon" width="15" height="15" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="4" aria-hidden="true"><path d="M16 10h24l10 10v32H16z" stroke-linejoin="round"/><path d="M40 10v10h10" stroke-linejoin="round"/><path d="M23 30h20M23 38h20M23 46h20" stroke-linecap="round"/></svg>
+                    К описанию теста
+                </a>
+            <?php endif; ?>
+            <?php if (auth_is_logged_in()): ?>
+                <a class="btn btn--ghost" href="/my/results">
+                    <svg class="btn-icon" width="15" height="15" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M10 50h44" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><rect x="14" y="34" width="8" height="14" rx="2.2" fill="currentColor"/><rect x="27" y="25" width="8" height="23" rx="2.2" fill="currentColor"/><rect x="40" y="16" width="8" height="32" rx="2.2" fill="currentColor"/></svg>
+                    Мои результаты
+                </a>
+            <?php endif; ?>
+            <a class="btn btn--ghost" href="/">
+                <svg class="btn-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 9L12 3l7.5 6V21h-5v-6.5h-5V21h-5V9z"/></svg>
+                На главную
+            </a>
+        </div>
+        </div>
+
     </div>
 
     <?php foreach ($questions as $i => $q): ?>

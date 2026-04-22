@@ -296,3 +296,41 @@ document.addEventListener('submit', (e) => {
         }
     }, 1000);
 })();
+
+// ─── Floating timer pill ─────────────────────────────────────────────────────
+
+(function () {
+    const headerTimer = testPassRoot?.querySelector('[data-test-pass-timer]');
+    const pill = document.querySelector('[data-timer-pill]');
+    const pillValue = pill?.querySelector('[data-timer-pill-value]');
+    const headerValue = testPassRoot?.querySelector('[data-timer-value]');
+
+    if (!headerTimer || !pill || !pillValue || !headerValue) return;
+
+    const syncPill = () => {
+        pillValue.textContent = headerValue.textContent;
+        pill.classList.toggle('is-warning', headerTimer.classList.contains('is-warning'));
+        pill.classList.toggle('is-danger', headerTimer.classList.contains('is-danger'));
+    };
+
+    new IntersectionObserver(
+        ([entry]) => {
+            const hidden = !entry.isIntersecting;
+            pill.classList.toggle('is-visible', hidden);
+            pill.setAttribute('aria-hidden', hidden ? 'false' : 'true');
+            if (hidden) syncPill();
+        },
+        { threshold: 0 }
+    ).observe(headerTimer);
+
+    new MutationObserver(syncPill).observe(headerValue, {
+        childList: true,
+        characterData: true,
+        subtree: true,
+    });
+
+    new MutationObserver(syncPill).observe(headerTimer, {
+        attributes: true,
+        attributeFilter: ['class'],
+    });
+})();

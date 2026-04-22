@@ -144,8 +144,25 @@
                                 </form>
                             </div>
                         <?php else: ?>
-                            <a href="/login" class="btn btn--ghost">Войти</a>
-                            <a href="/register" class="btn btn--primary">Регистрация</a>
+                            <div class="auth-menu" id="authMenu">
+                                <button type="button" class="btn auth-menu__btn" id="authMenuTrigger" aria-expanded="false" aria-haspopup="menu">
+                                    Войти
+                                    <svg class="auth-menu__chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                                        <path d="M2 4.5l4 3 4-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                </button>
+                                <div class="auth-menu__dropdown" id="authMenuDropdown" aria-hidden="true" role="menu" aria-labelledby="authMenuTrigger">
+                                    <a href="/login" class="auth-menu__item" role="menuitem">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                        Войти
+                                    </a>
+                                    <div class="auth-menu__sep" aria-hidden="true"></div>
+                                    <a href="/register" class="auth-menu__item auth-menu__item--register" role="menuitem">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM20 8v6M23 11h-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                        Создать аккаунт
+                                    </a>
+                                </div>
+                            </div>
                         <?php endif; ?>
                     </div>
                 </div>

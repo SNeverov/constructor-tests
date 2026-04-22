@@ -1,83 +1,6 @@
 <?php
 declare(strict_types=1);
 
-function normalize_input_answer(string $s): string
-{
-    $s = trim($s);
-    if ($s === '') {
-        return '';
-    }
-
-    $s = preg_replace('/\s+/u', ' ', $s) ?? $s;
-    $s = mb_strtolower($s);
-    $s = str_replace('ё', 'е', $s);
-
-    return $s;
-}
-
-function normalize_test_time_limit_sec(?string $raw): ?int
-{
-    $raw = trim((string)$raw);
-    if ($raw === '' || $raw === '00:00' || $raw === '00:00:00') {
-        return null;
-    }
-
-    if (!preg_match('/^(?<hours>\d{2}):(?<minutes>\d{2})(?::(?<seconds>\d{2}))?$/', $raw, $m)) {
-        throw new InvalidArgumentException('Некорректный формат лимита времени');
-    }
-
-    $hours = (int)($m['hours'] ?? 0);
-    $minutes = (int)($m['minutes'] ?? 0);
-    $seconds = isset($m['seconds']) ? (int)$m['seconds'] : 0;
-
-    if ($minutes > 59 || $seconds > 59) {
-        throw new InvalidArgumentException('Некорректное значение лимита времени');
-    }
-
-    $total = ($hours * 3600) + ($minutes * 60) + $seconds;
-    if ($total <= 0) {
-        return null;
-    }
-
-    $max = 23 * 3600 + 59 * 60 + 59;
-    if ($total > $max) {
-        throw new InvalidArgumentException('Лимит времени слишком большой');
-    }
-
-    return $total;
-}
-
-function format_time_limit_hms(?int $seconds): string
-{
-    $seconds = ($seconds !== null) ? max(0, (int)$seconds) : 0;
-    if ($seconds <= 0) {
-        return '00:00:00';
-    }
-
-    $hours = intdiv($seconds, 3600);
-    $minutes = intdiv($seconds % 3600, 60);
-    $secs = $seconds % 60;
-
-    return sprintf('%02d:%02d:%02d', $hours, $minutes, $secs);
-}
-
-function expire_attempt_by_timeout(int $attemptId, int $testId): void
-{
-    $questions = questions_list_by_test_id($testId);
-    $totalQuestions = count($questions);
-    $testSnapshotHash = test_snapshot_hash_by_test_id($testId);
-
-    attempt_finish_update(
-        $attemptId,
-        0,
-        $totalQuestions,
-        0.0,
-        $totalQuestions,
-        $testSnapshotHash,
-        'expired'
-    );
-}
-
 function test_form_old_from_db(array $test): array
 {
     $testId = (int)($test['id'] ?? 0);
@@ -122,12 +45,12 @@ function test_form_old_from_db(array $test): array
         'title' => (string)($test['title'] ?? ''),
         'description' => (string)($test['description'] ?? ''),
         'access_level' => (string)($test['access_level'] ?? 'public'),
+        'category_names' => test_category_display_names($test['category_names'] ?? ($test['category_name'] ?? null)),
         'time_limit' => format_time_limit_hms(test_time_limit_sec_from_row($test)),
         'cover_image' => $test['cover_image'] ?? null,
         'questions' => $oldQuestions,
     ];
 }
-
 
 function my_tests_index(): void
 {
@@ -162,105 +85,6 @@ function my_tests_index(): void
 		'scripts' => ['/assets/js/list-loading.js', '/assets/js/my-tests-share.js'],
 		'styles' => ['/assets/css/my-tests.css'],
     ]);
-}
-
-function my_bookmarks_index(): void
-{
-    auth_required();
-
-    $user = auth_user();
-    $userId = (int)($user['id'] ?? 0);
-
-    $page = (int)($_GET['page'] ?? 1);
-    if ($page < 1) {
-        $page = 1;
-    }
-
-    $perPage = 10;
-    $total = tests_count_bookmarked_by_user_id($userId);
-    $pages = max(1, (int)ceil($total / $perPage));
-    if ($page > $pages) {
-        $page = $pages;
-    }
-    $offset = ($page - 1) * $perPage;
-
-    $tests = tests_list_bookmarked_by_user_id_paginated($userId, $perPage, $offset);
-
-    view_render('my_bookmarks', [
-        'title' => 'Мои закладки',
-        'tests' => $tests,
-        'pagination' => [
-            'page' => $page,
-            'pages' => $pages,
-            'total' => $total,
-        ],
-        'scripts' => ['/assets/js/list-loading.js', '/assets/js/my-tests-share.js'],
-        'styles' => ['/assets/css/my-tests.css'],
-    ]);
-}
-
-function my_bookmarks_toggle(int $testId): void
-{
-    auth_required();
-    $user = auth_user();
-    $userId = (int)($user['id'] ?? 0);
-    $isAjax = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest'
-        || str_contains(strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json');
-
-    try {
-        $result = tests_bookmark_toggle_by_user_id($userId, $testId);
-        if ($result === null) {
-            if ($isAjax) {
-                http_response_code(404);
-                header('Content-Type: application/json; charset=utf-8');
-                echo json_encode([
-                    'ok' => false,
-                    'message' => 'Тест не найден',
-                ], JSON_UNESCAPED_UNICODE);
-                return;
-            }
-            flash_set('toast', ['type' => 'danger', 'text' => 'Тест не найден']);
-        } elseif ($isAjax) {
-            $result['trash_count'] = tests_trash_count_by_user_id($userId);
-            header('Content-Type: application/json; charset=utf-8');
-            echo json_encode($result, JSON_UNESCAPED_UNICODE);
-            return;
-        }
-    } catch (Throwable $e) {
-        if ($isAjax) {
-            http_response_code(500);
-            header('Content-Type: application/json; charset=utf-8');
-            echo json_encode([
-                'ok' => false,
-                'message' => 'Не удалось изменить закладку',
-            ], JSON_UNESCAPED_UNICODE);
-            return;
-        }
-        flash_set('toast', ['type' => 'danger', 'text' => 'Не удалось изменить закладку']);
-    }
-
-    $back = (string)($_SERVER['HTTP_REFERER'] ?? '');
-    if ($back !== '') {
-        redirect($back);
-        return;
-    }
-
-    redirect('/my/bookmarks');
-}
-
-function header_counters_json(): void
-{
-    auth_required();
-
-    $user = auth_user();
-    $userId = (int)($user['id'] ?? 0);
-
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode([
-        'ok' => true,
-        'bookmarks_count' => tests_count_bookmarked_by_user_id($userId),
-        'trash_count' => tests_trash_count_by_user_id($userId),
-    ], JSON_UNESCAPED_UNICODE);
 }
 
 function my_tests_create_form(): void
@@ -303,7 +127,6 @@ function my_tests_edit_form(int $testId): void
 
 function my_tests_store(): void
 {
-
     auth_required();
 
     $errors = [];
@@ -327,13 +150,22 @@ function my_tests_store(): void
         $errors[] = 'Описание теста должно быть не меньше 30 символов и не больше 500 символов';
     }
 
+    $categoryNames = test_category_default_names();
+    try {
+        $categoryNames = test_category_names_from_input($_POST['category_names'] ?? null);
+    } catch (InvalidArgumentException $e) {
+        $errors[] = $e->getMessage();
+    }
+    if ($categoryNames === []) {
+        $errors[] = 'Выберите хотя бы одну категорию';
+    }
+
     $timeLimitSec = null;
     try {
         $timeLimitSec = normalize_test_time_limit_sec($_POST['time_limit'] ?? null);
     } catch (InvalidArgumentException $e) {
         $errors[] = $e->getMessage();
     }
-
 
     $questions = $_POST['questions'] ?? [];
     if (!is_array($questions) || count($questions) < 1) {
@@ -350,7 +182,6 @@ function my_tests_store(): void
         $questions = array_slice($questions, 0, $MAX_QUESTIONS);
     }
 
-
     if (is_array($questions)) {
         foreach ($questions as $i => $q) {
             $num = $i + 1;
@@ -360,10 +191,8 @@ function my_tests_store(): void
                 continue;
             }
 
-
             $qText = trim($q['text'] ?? '');
             $qType = (string)($q['type'] ?? '');
-
             $qLen = mb_strlen($qText);
 
             if ($qText === '') {
@@ -375,7 +204,6 @@ function my_tests_store(): void
                 $errors[] = "Вопрос #{$num}: текст вопроса должен быть от 5 до 1000 символов";
                 continue;
             }
-
 
             if (!in_array($qType, ['radio', 'checkbox', 'input'], true)) {
                 $errors[] = "Вопрос #{$num}: неверный тип вопроса";
@@ -398,7 +226,6 @@ function my_tests_store(): void
                     continue;
                 }
 
-                // дедуп по нормализованному виду
                 $seenAnswers = [];
                 foreach ($answers as $a) {
                     $norm = normalize_input_answer((string) $a);
@@ -409,13 +236,11 @@ function my_tests_store(): void
 
                     if (isset($seenAnswers[$norm])) {
                         $errors[] = "Вопрос #{$num}: текстовые ответы не должны повторяться (регистр/пробелы/ё→е)";
-                        continue 2; // сразу к следующему вопросу
+                        continue 2;
                     }
 
                     $seenAnswers[$norm] = true;
                 }
-
-
 
                 foreach ($answers as $a) {
                     $aText = trim((string)$a);
@@ -431,7 +256,6 @@ function my_tests_store(): void
                 $options = $q['options'] ?? [];
                 if (!is_array($options)) $options = [];
 
-                // берём только непустые варианты (чтобы не считались пустые строки)
                 $options = array_values(array_filter($options, fn($o) => trim((string)($o['text'] ?? '')) !== ''));
 
                 if (count($options) < 2) {
@@ -443,7 +267,6 @@ function my_tests_store(): void
                     $errors[] = "Вопрос #{$num}: максимум {$MAX_OPTIONS} вариантов ответа";
                     continue;
                 }
-
 
                 $seen = [];
                 foreach ($options as $o) {
@@ -457,12 +280,11 @@ function my_tests_store(): void
 
                     if (isset($seen[$t])) {
                         $errors[] = "Вопрос #{$num}: варианты ответа не должны повторяться";
-                        continue 2; // выйти из foreach и сразу к следующему вопросу
+                        continue 2;
                     }
 
                     $seen[$t] = true;
                 }
-
 
                 foreach ($options as $o) {
                     $optText = trim((string)($o['text'] ?? ''));
@@ -473,7 +295,6 @@ function my_tests_store(): void
                         break;
                     }
                 }
-
 
                 $correctCount = 0;
                 foreach ($options as $o) {
@@ -503,6 +324,7 @@ function my_tests_store(): void
                 'title'        => $_POST['title'] ?? '',
                 'description'  => $_POST['description'] ?? '',
                 'access_level' => $_POST['access_level'] ?? 'public',
+                'category_names' => $_POST['category_names'] ?? [],
                 'time_limit'   => $_POST['time_limit'] ?? '',
                 'cover_image'  => $_POST['cover_image'] ?? null,
                 'questions'    => $_POST['questions'] ?? [],
@@ -510,8 +332,6 @@ function my_tests_store(): void
         ]);
         exit();
     }
-
-
 
     $user = auth_user();
     $userId = (int) $user['id'];
@@ -524,9 +344,9 @@ function my_tests_store(): void
         $coverImage = trim($_POST['cover_image'] ?? '');
         $coverImage = ($coverImage !== '' && str_starts_with($coverImage, '/uploads/')) ? $coverImage : null;
 
-        $testId = tests_create($userId, $title, $description, $accessLevel, $coverImage, $timeLimitSec);
+        $testId = tests_create($userId, $title, $description, $accessLevel, $categoryNames, $coverImage, $timeLimitSec);
+        test_categories_replace_by_test_id($testId, $categoryNames);
 
-        // Отправка вопросов в БД
         $questions = array_values($questions);
 
         foreach ($questions as $qIndex => $q) {
@@ -542,14 +362,12 @@ function my_tests_store(): void
 
             $questionId = questions_create($testId, $qType, $qText, $qPos, $qImg);
 
-            // варианты (radio/checkbox)
             if ($qType === 'radio' || $qType === 'checkbox') {
                 $options = $q['options'] ?? [];
                 if (!is_array($options)) {
                     $options = [];
                 }
 
-                // убираем пустые варианты
                 $options = array_values(array_filter(
                     $options,
                     fn($o) => trim((string)($o['text'] ?? '')) !== ''
@@ -570,7 +388,6 @@ function my_tests_store(): void
                 }
             }
 
-            // текстовые ответы (input)
             if ($qType === 'input') {
                 $answers = $q['answers'] ?? [];
                 if (!is_array($answers)) {
@@ -608,7 +425,6 @@ function my_tests_store(): void
         ]);
         return;
     }
-
 }
 
 function my_tests_update(int $testId): void
@@ -645,6 +461,16 @@ function my_tests_update(int $testId): void
     $descLen = mb_strlen($description);
     if ($descLen < 30 || $descLen > 500) {
         $errors[] = 'Описание теста должно быть не меньше 30 символов и не больше 500 символов';
+    }
+
+    $categoryNames = test_category_default_names();
+    try {
+        $categoryNames = test_category_names_from_input($_POST['category_names'] ?? null);
+    } catch (InvalidArgumentException $e) {
+        $errors[] = $e->getMessage();
+    }
+    if ($categoryNames === []) {
+        $errors[] = 'Выберите хотя бы одну категорию';
     }
 
     $timeLimitSec = null;
@@ -819,6 +645,7 @@ function my_tests_update(int $testId): void
                 'title' => $_POST['title'] ?? '',
                 'description' => $_POST['description'] ?? '',
                 'access_level' => $_POST['access_level'] ?? 'public',
+                'category_names' => $_POST['category_names'] ?? [],
                 'time_limit' => $_POST['time_limit'] ?? '',
                 'cover_image'  => $_POST['cover_image'] ?? null,
                 'questions'    => $_POST['questions'] ?? [],
@@ -834,7 +661,8 @@ function my_tests_update(int $testId): void
         $coverImage = trim($_POST['cover_image'] ?? '');
         $coverImage = ($coverImage !== '' && str_starts_with($coverImage, '/uploads/')) ? $coverImage : null;
 
-        tests_update_by_id_and_user_id($testId, $userId, $title, $description, $accessLevel, $coverImage, $timeLimitSec);
+        tests_update_by_id_and_user_id($testId, $userId, $title, $description, $accessLevel, $categoryNames, $coverImage, $timeLimitSec);
+        test_categories_replace_by_test_id($testId, $categoryNames);
 
         questions_delete_by_test_id($testId);
 
@@ -954,7 +782,6 @@ function my_tests_delete(int $testId): void
     redirect('/my/tests');
 }
 
-
 function test_show(int $testId): void
 {
     $test = tests_find_by_id($testId);
@@ -1007,829 +834,6 @@ function test_show(int $testId): void
 		'scripts' => ['/assets/js/copy-link.js', '/assets/js/test-rating.js'],
     ]);
 }
-
-function test_pass(int $testId): void
-{
-    $test = tests_find_by_id($testId);
-
-    if ($test === null) {
-        http_response_code(404);
-        view_render('404', [
-            'title' => '404',
-        ]);
-        return;
-    }
-
-    if (($test['access_level'] ?? '') === 'registered' && !auth_is_logged_in()) {
-        $_SESSION['redirect_to'] = '/tests/' . $testId . '/pass';
-        redirect('/login');
-    }
-
-    $payload = tests_payload_for_pass_cached($testId);
-    $questions = is_array($payload['questions'] ?? null) ? $payload['questions'] : [];
-    $optionsByQuestionId = is_array($payload['options_by_question_id'] ?? null)
-        ? $payload['options_by_question_id']
-        : [];
-
-	$userId = null;
-	if (auth_is_logged_in()) {
-		$u = auth_user();
-		$userId = isset($u['id']) ? (int)$u['id'] : null;
-	}
-
-	$attemptId = 0;
-
-	// Переиспользуем “активную” попытку в рамках сессии, чтобы F5 не плодил attempts
-	if (isset($_SESSION['active_attempt_id_by_test'][$testId])) {
-		$candidateId = (int)$_SESSION['active_attempt_id_by_test'][$testId];
-		$candidate = attempt_find_by_id($candidateId);
-
-		$candidateOk = ($candidate !== null)
-			&& (int)($candidate['test_id'] ?? 0) === $testId
-			&& (($candidate['finished_at'] ?? null) === null);
-
-		if ($candidateOk) {
-            if (attempt_is_expired($candidate)) {
-                $pdo = db();
-                $pdo->beginTransaction();
-                try {
-                    $lockedAttempt = attempt_find_by_id_for_update($candidateId);
-                    if ($lockedAttempt !== null && (int)($lockedAttempt['test_id'] ?? 0) === $testId && ($lockedAttempt['finished_at'] ?? null) === null && attempt_is_expired($lockedAttempt)) {
-                        expire_attempt_by_timeout($candidateId, $testId);
-                    }
-                    $pdo->commit();
-                } catch (Throwable $e) {
-                    if ($pdo->inTransaction()) {
-                        $pdo->rollBack();
-                    }
-                    throw $e;
-                }
-
-                unset($_SESSION['active_attempt_id_by_test'][$testId]);
-                if ($userId === null) {
-                    if (!isset($_SESSION['guest_attempt_ids']) || !is_array($_SESSION['guest_attempt_ids'])) {
-                        $_SESSION['guest_attempt_ids'] = [];
-                    }
-                    $_SESSION['guest_attempt_ids'][] = $candidateId;
-                    $_SESSION['guest_attempt_ids'] = array_values(array_unique(array_map('intval', $_SESSION['guest_attempt_ids'])));
-                    if (count($_SESSION['guest_attempt_ids']) > 200) {
-                        $_SESSION['guest_attempt_ids'] = array_slice($_SESSION['guest_attempt_ids'], -200);
-                    }
-                }
-                flash_set('toast', ['type' => 'danger', 'text' => 'Время на прохождение истекло. Попытка завершена автоматически.']);
-                redirect('/attempts/' . $candidateId);
-                return;
-            }
-
-			$candidateUserId = $candidate['user_id'] ?? null;
-
-			if ($userId === null) {
-				if ($candidateUserId === null) {
-					$attemptId = $candidateId;
-				}
-			} else {
-				if ((int)$candidateUserId === $userId) {
-					$attemptId = $candidateId;
-				}
-			}
-		}
-	}
-
-	if ($attemptId === 0) {
-		$attemptId = attempt_create($testId, $userId);
-		$_SESSION['active_attempt_id_by_test'][$testId] = $attemptId;
-	}
-
-    $attempt = attempt_find_by_id($attemptId);
-    $timeLimitSec = $attempt !== null ? (int)($attempt['time_limit_sec_snapshot'] ?? 0) : 0;
-    $expiresAt = ($attempt !== null) ? trim((string)($attempt['expires_at'] ?? '')) : '';
-    $remainingSec = null;
-    if ($timeLimitSec > 0 && $expiresAt !== '') {
-        $remainingSec = max(0, (int)floor((strtotime($expiresAt) ?: 0) - time()));
-    }
-
-    view_render('test_pass', [
-        'title' => (string)($test['title'] ?? 'Прохождение теста'),
-        'test' => $test,
-        'questions' => $questions,
-        'optionsByQuestionId' => $optionsByQuestionId,
-		'attempt' => $attempt,
-		'attemptId' => $attemptId,
-        'timeLimitSec' => $timeLimitSec,
-        'remainingSec' => $remainingSec,
-        'styles' => ['/assets/css/test-pass.css'],
-		'scripts' => [
-			'/assets/js/test-pass.js',
-			'/assets/js/test-pass-guard.js',
-			'/assets/js/copy-link.js',
-],
-
-    ]);
-}
-
-function test_finish(int $testId): void
-{
-    $test = tests_find_by_id($testId);
-
-    if ($test === null) {
-        http_response_code(404);
-        view_render('404', [
-            'title' => '404',
-        ]);
-        return;
-    }
-
-    if (($test['access_level'] ?? '') === 'registered' && !auth_is_logged_in()) {
-        $_SESSION['redirect_to'] = '/tests/' . $testId;
-        redirect('/login');
-    }
-
-    $userId = null;
-    if (auth_is_logged_in()) {
-        $u = auth_user();
-        $userId = isset($u['id']) ? (int)$u['id'] : null;
-    }
-
-    $MAX_INPUT_ANSWER_LEN = 1000;
-    $pdo = db();
-
-    try {
-        $pdo->beginTransaction();
-
-        $attemptId = isset($_POST['attempt_id']) ? (int)$_POST['attempt_id'] : 0;
-
-        if ($attemptId > 0) {
-			$attempt = attempt_find_by_id_for_update($attemptId);
-
-			if ($attempt === null || (int)($attempt['test_id'] ?? 0) !== $testId) {
-				throw new RuntimeException('Invalid attempt_id');
-			}
-
-			// привязка к юзеру (чтобы нельзя было подсунуть чужую попытку)
-			$attemptUserId = $attempt['user_id'] ?? null;
-			if ($userId === null) {
-                $sessionAttemptId = (int)($_SESSION['active_attempt_id_by_test'][$testId] ?? 0);
-                if ($sessionAttemptId !== $attemptId) {
-                    throw new RuntimeException('Invalid guest attempt session binding');
-                }
-				if ($attemptUserId !== null) {
-					throw new RuntimeException('Invalid attempt owner');
-				}
-			} else {
-				if ((int)$attemptUserId !== $userId) {
-					throw new RuntimeException('Invalid attempt owner');
-				}
-			}
-
-            // Idempotency: repeated finish must not create duplicate answers/stats.
-            if (($attempt['finished_at'] ?? null) !== null) {
-                $pdo->commit();
-                redirect('/attempts/' . $attemptId);
-                return;
-            }
-		} else {
-			$attemptId = attempt_create($testId, $userId);
-            $attempt = attempt_find_by_id_for_update($attemptId);
-            if ($attempt === null) {
-                throw new RuntimeException('Failed to lock new attempt');
-            }
-		}
-
-        if (attempt_is_expired($attempt)) {
-            expire_attempt_by_timeout($attemptId, $testId);
-            unset($_SESSION['active_attempt_id_by_test'][$testId]);
-            if ($userId === null) {
-                if (!isset($_SESSION['guest_attempt_ids']) || !is_array($_SESSION['guest_attempt_ids'])) {
-                    $_SESSION['guest_attempt_ids'] = [];
-                }
-                $_SESSION['guest_attempt_ids'][] = $attemptId;
-                $_SESSION['guest_attempt_ids'] = array_values(array_unique(array_map('intval', $_SESSION['guest_attempt_ids'])));
-                if (count($_SESSION['guest_attempt_ids']) > 200) {
-                    $_SESSION['guest_attempt_ids'] = array_slice($_SESSION['guest_attempt_ids'], -200);
-                }
-            }
-
-            $pdo->commit();
-            flash_set('toast', ['type' => 'danger', 'text' => 'Время на прохождение истекло. Новые ответы не были приняты.']);
-            redirect('/attempts/' . $attemptId);
-            return;
-        }
-
-
-        $questions = questions_list_by_test_id($testId);
-        $questionIds = [];
-        foreach ($questions as $q) {
-            $questionIds[] = (int)($q['id'] ?? 0);
-        }
-
-        $optionsByQ = options_list_by_question_ids($questionIds);
-        $optionTextById = [];
-        foreach ($optionsByQ as $opts) {
-            foreach ($opts as $opt) {
-                $oid = (int)($opt['id'] ?? 0);
-                if ($oid <= 0) {
-                    continue;
-                }
-                $optionTextById[$oid] = (string)($opt['option_text'] ?? '');
-            }
-        }
-        $allOptionTextsByQ = [];
-        foreach ($optionsByQ as $qidTmp => $opts) {
-            $list = [];
-            foreach ($opts as $opt) {
-                $list[] = (string)($opt['option_text'] ?? '');
-            }
-            $allOptionTextsByQ[(int)$qidTmp] = $list;
-        }
-
-        $correctOptionIdsByQ = options_correct_ids_by_question_ids($questionIds);
-        $correctTextAnswersByQ = text_answers_by_question_ids($questionIds);
-
-        $posted = $_POST['answers'] ?? [];
-        if (!is_array($posted)) {
-            $posted = [];
-        }
-        if (count($posted) > max(1, count($questions) * 3)) {
-            throw new InvalidArgumentException('Invalid submitted answers payload');
-        }
-
-        $total = count($questions);
-        $correctCount = 0;
-        $wrongCount = 0;
-        $earnedPoints = 0.0;
-
-        $answerRows = [];
-        $allowedOptionIdsByQ = [];
-        foreach ($optionsByQ as $qidTmp => $optsTmp) {
-            foreach ($optsTmp as $optTmp) {
-                $oidTmp = (int)($optTmp['id'] ?? 0);
-                if ($oidTmp <= 0) {
-                    continue;
-                }
-                $allowedOptionIdsByQ[(int)$qidTmp][$oidTmp] = true;
-            }
-        }
-
-        foreach ($questions as $q) {
-            $qid = (int)($q['id'] ?? 0);
-            $type = (string)($q['type'] ?? 'radio');
-
-            $isCorrect = false;
-            $questionScore = 0.0;
-            $correctPayloadSnapshot = null;
-
-            if ($type === 'input') {
-                $userTextRaw = '';
-                if (isset($posted[$qid]) && !is_array($posted[$qid])) {
-                    $userTextRaw = (string)$posted[$qid];
-                }
-                if (mb_strlen($userTextRaw) > $MAX_INPUT_ANSWER_LEN) {
-                    throw new InvalidArgumentException('Input answer is too long');
-                }
-
-                $userNorm = normalize_input_answer($userTextRaw);
-
-                $variants = $correctTextAnswersByQ[$qid] ?? [];
-                $variantsNorm = [];
-                foreach ($variants as $v) {
-                    $variantsNorm[] = normalize_input_answer((string)$v);
-                }
-
-                $isCorrect = ($userNorm !== '') && in_array($userNorm, $variantsNorm, true);
-                $questionScore = $isCorrect ? 1.0 : 0.0;
-                $correctPayloadSnapshot = json_encode([
-                    'type' => 'input',
-                    'correct_text_answers' => array_values(array_map('strval', $variants)),
-                ], JSON_UNESCAPED_UNICODE);
-
-                // сохраняем текстовый ответ одной строкой
-                $answerRows[] = [
-					'question_id' => $qid,
-					'option_id' => null,
-					'text_answer' => $userTextRaw,
-
-					'question_type_snapshot' => $type,
-					'question_text_snapshot' => (string)($q['question_text'] ?? ''),
-					'option_text_snapshot' => null,
-					'is_correct_snapshot' => $isCorrect ? 1 : 0,
-					'correct_payload_snapshot' => $correctPayloadSnapshot,
-				];
-
-            } elseif ($type === 'checkbox') {
-                $userOptIds = [];
-                if (isset($posted[$qid])) {
-                    if (is_array($posted[$qid])) {
-                        $userOptIds = array_values(array_filter(array_map('intval', $posted[$qid]), fn($v) => $v > 0));
-                    } else {
-                        $one = (int)$posted[$qid];
-                        if ($one > 0) $userOptIds = [$one];
-                    }
-                }
-                $allowedIds = $allowedOptionIdsByQ[$qid] ?? [];
-                $userOptIds = array_values(array_filter($userOptIds, fn($oid) => isset($allowedIds[(int)$oid])));
-                $userOptIds = array_values(array_unique(array_map('intval', $userOptIds)));
-
-                $correctIds = $correctOptionIdsByQ[$qid] ?? [];
-
-                sort($userOptIds);
-                $correctSorted = array_values(array_map('intval', $correctIds));
-                sort($correctSorted);
-
-                $isCorrect = (!empty($correctSorted) || !empty($userOptIds)) && ($userOptIds === $correctSorted);
-                $correctCountTotal = count($correctSorted);
-                $correctSelectedCount = 0;
-                if ($correctCountTotal > 0) {
-                    foreach ($userOptIds as $selectedOid) {
-                        if (in_array((int)$selectedOid, $correctSorted, true)) {
-                            $correctSelectedCount++;
-                        }
-                    }
-                    $questionScore = $correctSelectedCount / $correctCountTotal;
-                }
-                $correctOptionTexts = [];
-                foreach ($correctSorted as $correctOid) {
-                    $correctOptionTexts[] = (string)($optionTextById[$correctOid] ?? ('Вариант #' . $correctOid));
-                }
-                $selectedOptionTexts = [];
-                foreach ($userOptIds as $selectedOid) {
-                    $selectedOptionTexts[] = (string)($optionTextById[(int)$selectedOid] ?? ('Вариант #' . (int)$selectedOid));
-                }
-                $correctPayloadSnapshot = json_encode([
-                    'type' => 'checkbox',
-                    'all_option_texts' => array_values(array_map('strval', $allOptionTextsByQ[$qid] ?? [])),
-                    'correct_option_texts' => $correctOptionTexts,
-                    'selected_option_texts' => $selectedOptionTexts,
-                ], JSON_UNESCAPED_UNICODE);
-
-                // сохраняем каждую галочку отдельной строкой
-                foreach ($userOptIds as $oid) {
-                    $answerRows[] = [
-						'question_id' => $qid,
-						'option_id' => $oid,
-						'text_answer' => null,
-
-						'question_type_snapshot' => $type,
-						'question_text_snapshot' => (string)($q['question_text'] ?? ''),
-						'option_text_snapshot' => (string)($optionTextById[$oid] ?? ''),
-						'is_correct_snapshot' => $isCorrect ? 1 : 0,
-						'correct_payload_snapshot' => $correctPayloadSnapshot,
-					];
-
-                }
-            } else { // radio по умолчанию
-                $userOptId = 0;
-                if (isset($posted[$qid]) && !is_array($posted[$qid])) {
-                    $userOptId = (int)$posted[$qid];
-                }
-                $allowedIds = $allowedOptionIdsByQ[$qid] ?? [];
-                if ($userOptId > 0 && !isset($allowedIds[$userOptId])) {
-                    $userOptId = 0;
-                }
-
-                $correctIds = $correctOptionIdsByQ[$qid] ?? [];
-                $isCorrect = ($userOptId > 0) && in_array($userOptId, array_map('intval', $correctIds), true);
-                $questionScore = $isCorrect ? 1.0 : 0.0;
-                $correctOptionTexts = [];
-                foreach (array_map('intval', $correctIds) as $correctOid) {
-                    $correctOptionTexts[] = (string)($optionTextById[$correctOid] ?? ('Вариант #' . $correctOid));
-                }
-                $selectedOptionTexts = [];
-                if ($userOptId > 0) {
-                    $selectedOptionTexts[] = (string)($optionTextById[$userOptId] ?? ('Вариант #' . $userOptId));
-                }
-                $correctPayloadSnapshot = json_encode([
-                    'type' => 'radio',
-                    'all_option_texts' => array_values(array_map('strval', $allOptionTextsByQ[$qid] ?? [])),
-                    'correct_option_texts' => $correctOptionTexts,
-                    'selected_option_texts' => $selectedOptionTexts,
-                ], JSON_UNESCAPED_UNICODE);
-
-                // сохраняем выбранный option_id одной строкой (или 0 не пишем)
-                if ($userOptId > 0) {
-                    $answerRows[] = [
-						'question_id' => $qid,
-						'option_id' => $userOptId,
-						'text_answer' => null,
-
-						'question_type_snapshot' => $type,
-						'question_text_snapshot' => (string)($q['question_text'] ?? ''),
-						'option_text_snapshot' => (string)($optionTextById[$userOptId] ?? ''),
-						'is_correct_snapshot' => $isCorrect ? 1 : 0,
-						'correct_payload_snapshot' => $correctPayloadSnapshot,
-					];
-
-                }
-            }
-
-            if ($isCorrect) {
-                $correctCount++;
-            } else {
-                $wrongCount++;
-            }
-
-            $earnedPoints += $questionScore;
-        }
-
-        $percent = ($total > 0) ? round(($earnedPoints / $total) * 100, 2) : 0.0;
-
-		answers_insert_batch($attemptId, $answerRows);
-
-		$totalQuestions = $total;
-		$testSnapshotHash = test_snapshot_hash_by_test_id($testId);
-		$finished = attempt_finish_update($attemptId, $correctCount, $wrongCount, $percent, $totalQuestions, $testSnapshotHash);
-        if (!$finished) {
-            $freshAttempt = attempt_find_by_id($attemptId);
-            if ($freshAttempt !== null && ($freshAttempt['finished_at'] ?? null) !== null) {
-                $pdo->commit();
-                unset($_SESSION['active_attempt_id_by_test'][$testId]);
-                redirect('/attempts/' . $attemptId);
-                return;
-            }
-            throw new RuntimeException('Attempt finalize race detected');
-        }
-
-		unset($_SESSION['active_attempt_id_by_test'][$testId]);
-        if ($userId === null) {
-            if (!isset($_SESSION['guest_attempt_ids']) || !is_array($_SESSION['guest_attempt_ids'])) {
-                $_SESSION['guest_attempt_ids'] = [];
-            }
-            $_SESSION['guest_attempt_ids'][] = $attemptId;
-            $_SESSION['guest_attempt_ids'] = array_values(array_unique(array_map('intval', $_SESSION['guest_attempt_ids'])));
-            // Keep session payload bounded.
-            if (count($_SESSION['guest_attempt_ids']) > 200) {
-                $_SESSION['guest_attempt_ids'] = array_slice($_SESSION['guest_attempt_ids'], -200);
-            }
-        }
-
-
-        $pdo->commit();
-        if ($userId !== null && $userId > 0) {
-            $existingRating = test_rating_find_by_test_id_and_user_id($testId, $userId);
-            if ($existingRating === null) {
-            flash_set('rate_prompt', [
-                'attempt_id' => $attemptId,
-                'test_id' => $testId,
-            ]);
-            }
-        }
-
-        redirect('/attempts/' . $attemptId);
-    } catch (Throwable $e) {
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-
-        if ($e instanceof InvalidArgumentException) {
-            http_response_code(422);
-            view_render('error', [
-                'title' => 'Ошибка',
-                'message' => 'Некорректные данные формы. Обновите страницу и попробуйте ещё раз.',
-            ]);
-            return;
-        }
-
-        http_response_code(500);
-        view_render('error', [
-            'title' => 'Ошибка',
-            'message' => 'Не удалось сохранить результат прохождения теста.',
-        ]);
-        return;
-    }
-}
-
-function attempt_show(int $attemptId): void
-{
-    $attempt = attempt_find_by_id($attemptId);
-
-    if ($attempt === null) {
-        http_response_code(404);
-        view_render('404', [
-            'title' => '404',
-        ]);
-        return;
-    }
-
-    $attemptUserId = $attempt['user_id'] ?? null;
-    if ($attemptUserId !== null && $attemptUserId !== '') {
-        if (!auth_is_logged_in()) {
-            $_SESSION['redirect_to'] = '/attempts/' . $attemptId;
-            redirect('/login');
-        }
-
-        $viewer = auth_user();
-        $viewerId = (int)($viewer['id'] ?? 0);
-        if ($viewerId <= 0 || $viewerId !== (int)$attemptUserId) {
-            http_response_code(403);
-            view_render('error', [
-                'title' => 'Ошибка 403',
-                'message' => 'Нет доступа к этому результату.',
-            ]);
-            return;
-        }
-    } else {
-        $guestAttemptIds = $_SESSION['guest_attempt_ids'] ?? [];
-        if (!is_array($guestAttemptIds) || !in_array($attemptId, array_map('intval', $guestAttemptIds), true)) {
-            http_response_code(403);
-            view_render('error', [
-                'title' => 'Ошибка 403',
-                'message' => 'Нет доступа к этому результату.',
-            ]);
-            return;
-        }
-    }
-
-    $testId = (int)($attempt['test_id'] ?? 0);
-    $ratePrompt = flash_get('rate_prompt', null);
-    $showRatePrompt = false;
-    if (auth_is_logged_in() && is_array($ratePrompt)) {
-        $promptAttemptId = (int)($ratePrompt['attempt_id'] ?? 0);
-        $promptTestId = (int)($ratePrompt['test_id'] ?? 0);
-        $showRatePrompt = ($promptAttemptId === $attemptId && $promptTestId === $testId);
-    }
-
-    $test = tests_find_by_id($testId);
-    $testMissing = false;
-    $sourceState = 'ok';
-    if ($test === null) {
-        $testMissing = true;
-        $sourceState = 'deleted';
-        $snapshotTitle = trim((string)($attempt['test_title_snapshot'] ?? ''));
-        $snapshotAccess = trim((string)($attempt['test_access_snapshot'] ?? ''));
-
-        $test = [
-            'id' => $testId,
-            'title' => $snapshotTitle !== '' ? $snapshotTitle : 'Тест',
-            'access_level' => $snapshotAccess !== '' ? $snapshotAccess : 'public',
-        ];
-    }
-
-    if (!$testMissing) {
-        $attemptHash = trim((string)($attempt['test_snapshot_hash'] ?? ''));
-        if ($attemptHash !== '') {
-            $currentHash = test_snapshot_hash_by_test_id((int)($test['id'] ?? 0));
-            if ($currentHash !== '' && !hash_equals($attemptHash, $currentHash)) {
-                $sourceState = 'changed';
-            }
-        }
-    }
-
-    // Доступ: если тест "только для зарегистрированных", то и результат смотреть только после входа
-    if (($test['access_level'] ?? '') === 'registered' && !auth_is_logged_in()) {
-        $_SESSION['redirect_to'] = '/attempts/' . $attemptId;
-        redirect('/login');
-    }
-
-    $questions = questions_list_by_test_id($testId);
-    $questionIds = [];
-    foreach ($questions as $q) {
-        $questionIds[] = (int)($q['id'] ?? 0);
-    }
-
-    $optionsByQuestionId = options_list_by_question_ids($questionIds); // без is_correct — нам тексты нужны
-    $correctOptionIdsByQ = options_correct_ids_by_question_ids($questionIds);
-    $correctTextAnswersByQ = text_answers_by_question_ids($questionIds);
-
-	// карта option_id => option_text + image_path
-	$optionTextById = [];
-	foreach ($optionsByQuestionId as $qidTmp => $opts) {
-		foreach ($opts as $opt) {
-			$oidTmp = (int)($opt['id'] ?? 0);
-			if ($oidTmp <= 0) continue;
-			$optionTextById[$oidTmp] = (string)($opt['option_text'] ?? '');
-		}
-	}
-
-    // карта qid => image_path для восстановления в snapshot-режиме
-    $questionImageByQid = [];
-    foreach ($questions as $q) {
-        $qidTmp = (int)($q['id'] ?? 0);
-        $img = trim((string)($q['image_path'] ?? ''));
-        if ($qidTmp > 0 && $img !== '') {
-            $questionImageByQid[$qidTmp] = $img;
-        }
-    }
-
-
-    $userAnswers = answers_list_by_attempt_id($attemptId);
-
-	// snapshot-mode: если в answers есть снапшоты, результат не зависит от текущего теста
-	$snapshotMode = false;
-	foreach ($userAnswers as $a) {
-		if (!empty($a['question_type_snapshot'])) {
-			$snapshotMode = true;
-			break;
-		}
-	}
-
-
-    // сгруппуем ответы пользователя по вопросу
-    $userByQ = [];
-    foreach ($userAnswers as $a) {
-        $qid = (int)($a['question_id'] ?? 0);
-        if ($qid <= 0) continue;
-        $userByQ[$qid][] = $a;
-    }
-
-	if ($snapshotMode) {
-		// В snapshot-mode игнорируем "живые" вопросы/варианты и строим данные из answers снапшотов
-
-		// 1) Заголовок результата — из attempts снапшота (если вдруг тест переименован)
-		$snapshotTitle = (string)($attempt['test_title_snapshot'] ?? '');
-		if ($snapshotTitle !== '') {
-			$test['title'] = $snapshotTitle;
-		}
-
-		// 2) Доступ результата — из attempts снапшота (на будущее, пока оставим как есть)
-		$snapshotAccess = (string)($attempt['test_access_snapshot'] ?? '');
-		if ($snapshotAccess !== '') {
-			$test['access_level'] = $snapshotAccess;
-		}
-
-		// 3) Собираем "questions" из снапшотов
-		$questions = [];
-		$optionsByQuestionId = [];
-		$correctOptionIdsByQ = [];      // в snapshot-mode это не нужно
-		$correctTextAnswersByQ = [];     // в snapshot-mode это не нужно
-
-		// Для отображения вариантов в UI (чтобы не было пустых плашек) — берём тексты вариантов из "живого" контента
-		$questionIds = [];
-		foreach ($userAnswers as $a) {
-			$qid = (int)($a['question_id'] ?? 0);
-			if ($qid > 0) {
-				$questionIds[$qid] = true;
-			}
-		}
-		$questionIds = array_keys($questionIds);
-
-		if (!empty($questionIds)) {
-			$optionsByQuestionId = options_list_by_question_ids($questionIds);
-			$correctOptionIdsByQ = options_correct_ids_by_question_ids($questionIds);
-			$correctTextAnswersByQ = text_answers_by_question_ids($questionIds);
-		}
-
-
-		// сгруппуем ответы пользователя по вопросу (по question_id как ключ)
-		$userByQ = [];
-		$groupIdByKey = [];
-		$nextSyntheticQid = -1;
-
-		foreach ($userAnswers as $a) {
-			$rawQid = $a['question_id'] ?? null;
-			$realQid = ($rawQid === null || $rawQid === '') ? 0 : (int)$rawQid;
-			$qText = (string)($a['question_text_snapshot'] ?? '');
-			$qType = (string)($a['question_type_snapshot'] ?? '');
-
-			// Если question_id уже NULL (после удаления вопроса), группируем по snapshot type+text.
-			$groupKey = $realQid > 0
-				? 'q:' . $realQid
-				: 's:' . hash('sha1', $qType . "\n" . $qText);
-
-			if (!isset($groupIdByKey[$groupKey])) {
-				$groupIdByKey[$groupKey] = ($realQid > 0) ? $realQid : $nextSyntheticQid--;
-			}
-
-			$groupQid = $groupIdByKey[$groupKey];
-			$userByQ[$groupQid][] = $a;
-
-			// создаём "вопрос" один раз
-			if (!isset($questions[$groupQid])) {
-				$questions[$groupQid] = [
-					'id' => $groupQid,
-					'question_text' => $qText,
-					'type' => $qType,
-					'question_type' => $qType,
-				];
-			}
-
-			// optionsByQuestionId используем только для вывода текстов выбранных опций
-			// $type = (string)($a['question_type_snapshot'] ?? '');
-			// if ($type === 'radio' || $type === 'checkbox') {
-			// 	$oid = (int)($a['option_id'] ?? 0);
-			// 	if ($oid > 0) {
-			// 		$optionsByQuestionId[$qid][] = [
-			// 			'id' => $oid,
-			// 			'option_text' => (string)($a['option_text_snapshot'] ?? ''),
-			// 		];
-			// 	}
-			// }
-		}
-
-		// привести $questions к обычному списку (а не map)
-		$questions = array_values($questions);
-
-        // Дополнить snapshot-вопросы image_path из живой БД (если вопрос ещё существует)
-        foreach ($questions as &$qSnap) {
-            $qSnapId = (int)($qSnap['id'] ?? 0);
-            if ($qSnapId > 0 && isset($questionImageByQid[$qSnapId])) {
-                $qSnap['image_path'] = $questionImageByQid[$qSnapId];
-            }
-        }
-        unset($qSnap);
-	}
-
-
-    view_render('attempt_show', [
-        'title' => 'Результат: ' . (string)($test['title'] ?? 'Тест'),
-        'attempt' => $attempt,
-        'test' => $test,
-        'questions' => $questions,
-        'optionsByQuestionId' => $optionsByQuestionId,
-        'correctOptionIdsByQ' => $correctOptionIdsByQ,
-        'correctTextAnswersByQ' => $correctTextAnswersByQ,
-        'userByQ' => $userByQ,
-        'snapshotMode' => $snapshotMode,
-        'testMissing' => $testMissing,
-        'sourceState' => $sourceState,
-        'styles' => ['/assets/css/attempt-show.css'],
-        'scripts' => ['/assets/js/attempt-show.js', '/assets/js/attempt-rate-modal.js'],
-        'show_rate_prompt' => $showRatePrompt,
-    ]);
-}
-
-function test_rate(int $testId): void
-{
-    auth_required();
-    $user = auth_user();
-    $userId = (int)($user['id'] ?? 0);
-    $rating = (int)($_POST['rating'] ?? 0);
-    $isAjax = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest'
-        || str_contains(strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json');
-
-    if (!attempts_has_finished_by_test_id_and_user_id($testId, $userId)) {
-        $msg = 'Оценить тест можно только после прохождения';
-        if ($isAjax) {
-            http_response_code(403);
-            header('Content-Type: application/json; charset=utf-8');
-            echo json_encode([
-                'ok' => false,
-                'message' => $msg,
-            ], JSON_UNESCAPED_UNICODE);
-            return;
-        }
-        flash_set('toast', ['type' => 'danger', 'text' => $msg]);
-        $back = (string)($_SERVER['HTTP_REFERER'] ?? '');
-        if ($back !== '') {
-            redirect($back);
-            return;
-        }
-        redirect('/tests/' . $testId);
-    }
-
-    try {
-        $ok = test_rating_upsert_by_user_id($testId, $userId, $rating);
-        if ($ok && $isAjax) {
-            $test = tests_find_by_id($testId);
-            $ratingCount = (int)($test['rating_count'] ?? 0);
-            $ratingSum = (int)($test['rating_sum'] ?? 0);
-            $ratingAvg = $ratingCount > 0 ? ($ratingSum / $ratingCount) : 0.0;
-
-            header('Content-Type: application/json; charset=utf-8');
-            echo json_encode([
-                'ok' => true,
-                'rating_count' => $ratingCount,
-                'rating_avg' => $ratingAvg,
-                'user_rating' => $rating,
-                'message' => 'Оценка сохранена',
-            ], JSON_UNESCAPED_UNICODE);
-            return;
-        }
-
-        if ($ok) {
-            flash_set('toast', ['type' => 'success', 'text' => 'Оценка сохранена']);
-        } else {
-            if ($isAjax) {
-                http_response_code(422);
-                header('Content-Type: application/json; charset=utf-8');
-                echo json_encode([
-                    'ok' => false,
-                    'message' => 'Не удалось сохранить оценку',
-                ], JSON_UNESCAPED_UNICODE);
-                return;
-            }
-            flash_set('toast', ['type' => 'danger', 'text' => 'Не удалось сохранить оценку']);
-        }
-    } catch (Throwable $e) {
-        if ($isAjax) {
-            http_response_code(500);
-            header('Content-Type: application/json; charset=utf-8');
-            echo json_encode([
-                'ok' => false,
-                'message' => 'Ошибка сохранения оценки',
-            ], JSON_UNESCAPED_UNICODE);
-            return;
-        }
-        flash_set('toast', ['type' => 'danger', 'text' => 'Ошибка сохранения оценки']);
-    }
-
-    $back = (string)($_SERVER['HTTP_REFERER'] ?? '');
-    if ($back !== '') {
-        redirect($back);
-        return;
-    }
-
-    redirect('/tests/' . $testId);
-}
-
 
 function my_tests_trash_index(): void
 {

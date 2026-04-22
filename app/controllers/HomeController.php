@@ -21,10 +21,12 @@ function home_index(): void
     view_render('home', [
         'title' => 'Главная',
         'tests' => $tests,
+        'page_heading' => 'Главная',
         'pagination' => [
             'page' => $page,
             'pages' => $pages,
             'total' => $total,
+            'path' => '/',
         ],
         'scripts' => ['/assets/js/my-tests-share.js'],
         'styles' => ['/assets/css/my-tests.css'],

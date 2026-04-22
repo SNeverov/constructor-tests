@@ -20,6 +20,107 @@
     color: #64748b;
 }
 
+.results-status {
+    position: relative;
+}
+
+.results-status__trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    user-select: none;
+}
+
+.results-status__value {
+    min-width: 0;
+    color: #0f172a;
+    font-weight: 600;
+}
+
+.results-status__icon {
+    flex-shrink: 0;
+    color: #94a3b8;
+    transition: transform 0.15s ease;
+}
+
+.results-status.is-open .results-status__icon {
+    transform: rotate(180deg);
+}
+
+.results-status__panel {
+    position: absolute;
+    top: calc(100% + 12px);
+    left: 0;
+    z-index: 30;
+    width: 100%;
+    min-width: 220px;
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    background: #ffffff;
+    box-shadow:
+        0 16px 36px rgba(15, 23, 42, 0.14),
+        0 4px 14px rgba(15, 23, 42, 0.08);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(8px);
+    transition:
+        opacity 0.15s ease,
+        transform 0.15s ease,
+        visibility 0.15s ease;
+}
+
+.results-status__panel[hidden] {
+    display: block;
+}
+
+.results-status.is-open .results-status__panel {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .results-status__panel {
+        transition: none;
+        transform: none;
+    }
+}
+
+.results-status__list {
+    display: grid;
+    gap: 4px;
+}
+
+.results-status__option {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: transparent;
+    color: #0f172a;
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.results-status__option:hover {
+    background: #f8fafc;
+}
+
+.results-status__option.is-selected {
+    border-color: rgba(37, 99, 235, 0.18);
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+
 .date-field {
     position: relative;
 }
