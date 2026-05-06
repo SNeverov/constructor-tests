@@ -12,6 +12,7 @@ declare(strict_types=1);
 /** @var bool $testMissing */
 /** @var string $sourceState */
 /** @var bool $show_rate_prompt */
+/** @var bool $revealCorrectAnswers */
 
 function _h(string $s): string {
     return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
@@ -26,6 +27,7 @@ function _norm_opt(string $s): string {
 $summaryCorrect = 0;
 $summaryPartial = 0;
 $summaryWrong = 0;
+$revealCorrectAnswers = (bool)($revealCorrectAnswers ?? true);
 
 foreach ($questions as $q) {
     $qid = (int)($q['id'] ?? 0);
@@ -118,6 +120,10 @@ foreach ($questions as $q) {
                 }
             }
             $questionScore = count($c) > 0 ? ($tp / count($c)) : 0.0;
+        } elseif ($type === 'order') {
+            // order type always stores a snapshot; without one, treat as wrong
+            $isCorrect = false;
+            $questionScore = 0.0;
         } else {
             $correctOptIds = array_map('intval', $correctOptionIdsByQ[$qid] ?? []);
             $isCorrect = (!empty($userOptIds)) && in_array((int)$userOptIds[0], $correctOptIds, true);
@@ -270,16 +276,22 @@ if ($attemptStatus === 'expired') {
                 </div>
             </div>
 
-            <div class="scorecard__legend" aria-label="Легенда цветов результата">
-                <span class="legend-dot legend-dot--ok" aria-hidden="true"></span>
-                <span>Правильный вариант</span>
-                <span class="legend-sep" aria-hidden="true">·</span>
-                <span class="legend-dot legend-dot--bad" aria-hidden="true"></span>
-                <span>Выбранный неверный</span>
-                <span class="legend-sep" aria-hidden="true">·</span>
-                <span class="legend-dot legend-dot--partial" aria-hidden="true"></span>
-                <span>Частично верно</span>
-            </div>
+            <?php if ($revealCorrectAnswers): ?>
+                <div class="scorecard__legend" aria-label="Легенда цветов результата">
+                    <span class="legend-dot legend-dot--ok" aria-hidden="true"></span>
+                    <span>Правильный вариант</span>
+                    <span class="legend-sep" aria-hidden="true">·</span>
+                    <span class="legend-dot legend-dot--bad" aria-hidden="true"></span>
+                    <span>Выбранный неверный</span>
+                    <span class="legend-sep" aria-hidden="true">·</span>
+                    <span class="legend-dot legend-dot--partial" aria-hidden="true"></span>
+                    <span>Частично верно</span>
+                </div>
+            <?php else: ?>
+                <div class="scorecard__legend" aria-label="Ответы скрыты">
+                    Правильные ответы скрыты настройками теста.
+                </div>
+            <?php endif; ?>
         </div>
 
         <div class="attempt__actions-wrap">
@@ -451,7 +463,50 @@ if ($attemptStatus === 'expired') {
             <?php endif; ?>
 
             <div class="qres__answers">
-                <?php if ($type === 'input'): ?>
+                <?php if ($type === 'order'): ?>
+                    <?php
+                    $orderCorrectTexts = [];
+                    $orderSubmittedTexts = [];
+                    if (is_array($correctPayload) && ($correctPayload['type'] ?? '') === 'order') {
+                        $orderCorrectTexts = array_values(array_map('strval', (array)($correctPayload['correct_order_texts'] ?? [])));
+                        $orderSubmittedTexts = array_values(array_map('strval', (array)($correctPayload['submitted_order_texts'] ?? [])));
+                    }
+                    ?>
+                    <div class="order-res">
+                        <div class="order-res__col">
+                            <div class="order-res__label"><?= ($revealCorrectAnswers && $isCorrect) ? 'Правильно расставлено' : 'Твой порядок' ?></div>
+                            <div class="order-res__list">
+                                <?php if (empty($orderSubmittedTexts)): ?>
+                                    <div class="muted">Не расставлено.</div>
+                                <?php else: ?>
+                                    <?php foreach ($orderSubmittedTexts as $pos => $itemText): ?>
+                                        <?php
+                                        $correctText = $orderCorrectTexts[$pos] ?? null;
+                                        $posCorrect = $revealCorrectAnswers && ($correctText !== null && _norm_opt($itemText) === _norm_opt($correctText));
+                                        ?>
+                                        <div class="order-res__item <?= $revealCorrectAnswers ? ($posCorrect ? 'order-res__item--ok' : 'order-res__item--bad') : '' ?>">
+                                            <span class="order-res__num"><?= (int)$pos + 1 ?></span>
+                                            <span class="order-res__text"><?= _h($itemText) ?></span>
+                                        </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <?php if ($revealCorrectAnswers && !$isCorrect && !empty($orderCorrectTexts)): ?>
+                        <div class="order-res__col">
+                            <div class="order-res__label order-res__label--correct">Правильный порядок</div>
+                            <div class="order-res__list">
+                                <?php foreach ($orderCorrectTexts as $pos => $itemText): ?>
+                                    <div class="order-res__item order-res__item--ok">
+                                        <span class="order-res__num"><?= (int)$pos + 1 ?></span>
+                                        <span class="order-res__text"><?= _h($itemText) ?></span>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                <?php elseif ($type === 'input'): ?>
                     <div class="input-res">
                         <div class="input-res__row">
                             <div class="input-res__label">Твой ответ</div>
@@ -459,7 +514,7 @@ if ($attemptStatus === 'expired') {
                                 <?= _h($userTextRaw !== '' ? $userTextRaw : '—') ?>
                             </div>
                         </div>
-                        <?php if (!$isCorrect): ?>
+                        <?php if ($revealCorrectAnswers && !$isCorrect): ?>
                             <div class="input-res__row">
                                 <div class="input-res__label">Правильные варианты</div>
                                 <?php if (!empty($snapshotMode)): ?>
@@ -555,7 +610,7 @@ if ($attemptStatus === 'expired') {
                                 $optImg = $optImgByNorm[$norm] ?? '';
 
                                 $optCls = 'opt';
-                                if ($isCorrectOpt) $optCls .= ' opt--correct';
+                                if ($revealCorrectAnswers && $isCorrectOpt) $optCls .= ' opt--correct';
                                 if ($isUserOpt && !$isCorrectOpt) $optCls .= ' opt--wrong';
                                 if ($optImg !== '') $optCls .= ' opt--has-image';
                                 ?>
@@ -570,7 +625,7 @@ if ($attemptStatus === 'expired') {
                                 </div>
                             <?php endforeach; ?>
                         <?php endif; ?>
-                        <?php if (!$isCorrect && !empty($snapshotCorrectOptionTexts)): ?>
+                        <?php if ($revealCorrectAnswers && !$isCorrect && !empty($snapshotCorrectOptionTexts)): ?>
                             <div class="input-res">
                                 <div class="input-res__row">
                                     <div class="input-res__label">Правильные варианты</div>
@@ -594,7 +649,7 @@ if ($attemptStatus === 'expired') {
                                 $isUserOpt = in_array($oid, $userOptIds, true);
 
                                 $cls = 'opt';
-                                if ($isCorrectOpt) $cls .= ' opt--correct';
+                                if ($revealCorrectAnswers && $isCorrectOpt) $cls .= ' opt--correct';
                                 if ($isUserOpt && !$isCorrectOpt) $cls .= ' opt--wrong';
                                 if ($oimg !== '') $cls .= ' opt--has-image';
                                 ?>

@@ -1,14 +1,54 @@
 <?php
 /** @var array $tests */
 /** @var array $pagination */
+/** @var int $home_total */
+/** @var array $category_options */
+/** @var array $category_counts */
+/** @var string $selected_category_slug */
+/** @var array $sort_options */
+/** @var string $selected_sort */
 
 $page = (int)($pagination['page'] ?? 1);
 $pages = (int)($pagination['pages'] ?? 1);
 $total = (int)($pagination['total'] ?? 0);
+$pagerPath = (string)($pagination['path'] ?? '/my/bookmarks');
+$pagerQuery = is_array($pagination['query'] ?? null) ? $pagination['query'] : [];
 $defaultCover = '/assets/img/cover/default_test_cover.webp';
 $currentUser = auth_user();
 $currentUserId = (int)($currentUser['id'] ?? 0);
 $currentUserLogin = trim((string)($currentUser['login'] ?? ''));
+$homeTotal = (int)($home_total ?? $total);
+$categoryOptions = is_array($category_options ?? null) ? $category_options : test_categories_catalog();
+$categoryCounts = is_array($category_counts ?? null) ? $category_counts : [];
+$selectedCategorySlug = trim((string)($selected_category_slug ?? ''));
+$selectedCategoryName = $selectedCategorySlug !== '' && isset($categoryOptions[$selectedCategorySlug])
+    ? (string)$categoryOptions[$selectedCategorySlug]
+    : '';
+$sortOptions = is_array($sort_options ?? null) ? $sort_options : [
+    'new' => 'Новые',
+    'questions' => 'По вопросам',
+    'time' => 'По времени',
+    'views' => 'По просмотрам',
+    'attempts' => 'По прохождениям',
+];
+$selectedSort = (string)($selected_sort ?? 'new');
+if (!isset($sortOptions[$selectedSort])) {
+    $selectedSort = 'new';
+}
+$emptyTitle = $selectedCategorySlug !== '' ? 'В этой категории нет закладок' : 'Пока нет закладок';
+$emptyText = $selectedCategorySlug !== ''
+    ? 'Попробуйте выбрать другую категорию или сбросить фильтр.'
+    : 'Добавляй интересные тесты в закладки, чтобы быстро возвращаться к ним позже.';
+$pageUrl = static function (string $path, array $query, int $targetPage): string {
+    if ($targetPage > 1) {
+        $query['page'] = $targetPage;
+    } else {
+        unset($query['page']);
+    }
+
+    $queryString = http_build_query($query);
+    return $path . ($queryString !== '' ? '?' . $queryString : '');
+};
 $formatNumber = static function (int $value): string {
     return number_format($value, 0, '', ' ');
 };
@@ -26,6 +66,8 @@ $pluralRu = static function (int $n, string $one, string $few, string $many): st
     <h1>Мои закладки</h1>
 </div>
 
+<?php require __DIR__ . '/partials/home-filter-panel.php'; ?>
+
 <div class="results-meta muted<?= $total > 0 ? '' : ' is-hidden' ?>" data-bookmarks-page-meta>
     В закладках: <span data-bookmarks-page-count><?= $total ?></span>
 </div>
@@ -34,20 +76,21 @@ $pluralRu = static function (int $n, string $one, string $few, string $many): st
     <div class="empty-state__card">
         <div class="empty-state__icon"></div>
 
-        <h3 class="empty-state__title">Пока нет закладок</h3>
+        <h3 class="empty-state__title"><?= htmlspecialchars($emptyTitle, ENT_QUOTES, 'UTF-8') ?></h3>
 
-        <p class="empty-state__text">
-            Добавляй интересные тесты в закладки, чтобы быстро возвращаться к ним позже.
-        </p>
+        <p class="empty-state__text"><?= htmlspecialchars($emptyText, ENT_QUOTES, 'UTF-8') ?></p>
 
-        <a href="/" class="btn btn--primary">
-            Перейти к тестам
-        </a>
+        <?php if ($selectedCategorySlug === ''): ?>
+            <a href="/" class="btn btn--primary">
+                <img src="/assets/img/arrow-right.svg" class="btn-icon" width="16" height="16" style="filter: invert(1)" aria-hidden="true">
+                Перейти к тестам
+            </a>
+        <?php endif; ?>
     </div>
 </div>
 
 <div data-bookmarks-list-wrap<?= empty($tests) ? ' class="is-hidden"' : '' ?>>
-    <div data-bookmarks-list>
+    <div class="test-card-grid" data-bookmarks-list>
         <?php foreach ($tests as $test): ?>
             <?php $cardContext = 'my_bookmarks'; ?>
             <?php require __DIR__ . '/partials/test-card.php'; ?>
@@ -60,7 +103,7 @@ $pluralRu = static function (int $n, string $one, string $few, string $many): st
             <?php $nextPage = min($pages, $page + 1); ?>
 
             <?php if ($page > 1): ?>
-                <a class="pager__btn" href="/my/bookmarks?page=<?= $prevPage ?>" aria-label="Предыдущая страница">
+                <a class="pager__btn" href="<?= htmlspecialchars($pageUrl($pagerPath, $pagerQuery, $prevPage), ENT_QUOTES, 'UTF-8') ?>" aria-label="Предыдущая страница">
                     <img src="/assets/img/next-page.svg" class="pager__arrow pager__arrow--prev" alt="" aria-hidden="true">
                 </a>
             <?php else: ?>
@@ -74,7 +117,7 @@ $pluralRu = static function (int $n, string $one, string $few, string $many): st
             </span>
 
             <?php if ($page < $pages): ?>
-                <a class="pager__btn" href="/my/bookmarks?page=<?= $nextPage ?>" aria-label="Следующая страница">
+                <a class="pager__btn" href="<?= htmlspecialchars($pageUrl($pagerPath, $pagerQuery, $nextPage), ENT_QUOTES, 'UTF-8') ?>" aria-label="Следующая страница">
                     <img src="/assets/img/next-page.svg" class="pager__arrow" alt="" aria-hidden="true">
                 </a>
             <?php else: ?>

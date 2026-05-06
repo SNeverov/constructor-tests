@@ -11,6 +11,10 @@
         $testStatus = (string)($oldData['status'] ?? ($isEdit ? 'published' : 'draft'));
         $isDraft = $testStatus === 'draft';
         $lastSavedAt = trim((string)($oldData['last_saved_at'] ?? ''));
+        $answersMode = test_answers_mode_from_value($oldData['show_answers'] ?? test_answers_mode_after_finish());
+        $shuffleQuestions = (int)($oldData['shuffle_questions'] ?? 0) === 1;
+        $shuffleAnswers = (int)($oldData['shuffle_answers'] ?? 0) === 1;
+        $attemptLimit = test_attempt_limit_from_row($oldData);
         $categoryOptions = test_categories_catalog();
         $selectedCategories = [];
         if (array_key_exists('category_names', $oldData)) {
@@ -57,13 +61,21 @@
         <div class="form-section">
             <div class="section-title">Параметры теста</div>
             <div class="form-row">
-                <label>
-					<label class="sr-only" for="test_title">Название теста</label>
-                    <input placeholder="Название теста" type="text" name="title" required class="input"
+				<label class="sr-only" for="test_title">Название теста</label>
+                <div class="test-title-wrap">
+                    <input
+                        id="test_title"
+                        placeholder="Название теста"
+                        type="text"
+                        name="title"
+                        required
+                        maxlength="200"
+                        class="input"
+                        data-test-title
                         value="<?= htmlspecialchars((string)($oldData['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                     >
-
-                </label>
+                    <div class="test-title-limit" data-test-title-limit>0/200</div>
+                </div>
             </div>
 
             <div class="form-row">
@@ -80,33 +92,32 @@
                 </div>
             </div>
 
-            <div class="form-row">
-                <label>
-					<?php $access = (string)($oldData['access_level'] ?? 'public'); ?>
-
-					<div class="segmented" role="radiogroup" aria-label="Доступ к тесту">
-						<label class="segmented__item">
-							<input type="radio" name="access_level" value="public" <?= $access === 'public' ? 'checked' : '' ?>>
-							<span>Доступен всем</span>
-						</label>
-
-						<label class="segmented__item">
-							<input type="radio" name="access_level" value="registered" <?= $access === 'registered' ? 'checked' : '' ?>>
-							<span>Только для зарегистрированных</span>
-						</label>
-					</div>
-				</label>
-
-            </div>
-
             <div class="tc-settings-row">
+                <?php $access = (string)($oldData['access_level'] ?? 'public'); ?>
+
+                <div class="tc-setting tc-setting--access">
+                    <span class="tc-setting__icon" aria-hidden="true">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 11V7a4 4 0 0 0-8 0v4"/><rect x="5" y="11" width="14" height="10" rx="2"/></svg>
+                    </span>
+                    <span class="tc-setting__label">Доступ</span>
+                    <div class="access-mode-control" role="radiogroup" aria-label="Доступ к тесту">
+                        <label class="access-mode-control__item">
+                            <input type="radio" name="access_level" value="public" <?= $access === 'public' ? 'checked' : '' ?>>
+                            <span>Для всех</span>
+                        </label>
+                        <label class="access-mode-control__item">
+                            <input type="radio" name="access_level" value="registered" <?= $access === 'registered' ? 'checked' : '' ?>>
+                            <span>Для зарегистрированных</span>
+                        </label>
+                    </div>
+                </div>
 
                 <!-- Time limit -->
                 <label class="tc-setting tc-setting--time ui-tooltip ui-tooltip--bottom" data-tooltip="Оставьте пустым или 00:00:00 для прохождения без лимита">
                     <span class="tc-setting__icon" aria-hidden="true">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                     </span>
-                    <span class="tc-setting__label">Лимит</span>
+                    <span class="tc-setting__label">Время</span>
                     <input
                         type="time"
                         name="time_limit"
@@ -144,6 +155,71 @@
                     <div class="img-upload-error" data-img-error></div>
                 </div>
 
+                <div class="tc-setting tc-setting--answers-mode" data-tooltip="Когда показывать правильные ответы">
+                    <span class="tc-setting__icon" aria-hidden="true">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </span>
+                    <span class="tc-setting__label">Показывать ответы</span>
+                    <div class="answers-mode-control" role="radiogroup" aria-label="Показывать ответы">
+                        <label class="answers-mode-control__item">
+                            <input type="radio" name="show_answers" value="<?= test_answers_mode_never() ?>" <?= $answersMode === test_answers_mode_never() ? 'checked' : '' ?>>
+                            <span>Никогда</span>
+                        </label>
+                        <label class="answers-mode-control__item">
+                            <input type="radio" name="show_answers" value="<?= test_answers_mode_immediate() ?>" <?= $answersMode === test_answers_mode_immediate() ? 'checked' : '' ?>>
+                            <span>Сразу</span>
+                        </label>
+                        <label class="answers-mode-control__item">
+                            <input type="radio" name="show_answers" value="<?= test_answers_mode_after_finish() ?>" <?= $answersMode === test_answers_mode_after_finish() ? 'checked' : '' ?>>
+                            <span>По завершению</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="tc-setting tc-setting--shuffle">
+                    <span class="tc-setting__icon" aria-hidden="true">
+                        <img src="/assets/img/test_create_svg/shuffle.svg" alt="" width="13" height="13">
+                    </span>
+                    <span class="tc-setting__label">Перемешивание</span>
+                    <div class="setting-toggle-list">
+                        <label class="setting-toggle">
+                            <input type="checkbox" name="shuffle_questions" value="1" <?= $shuffleQuestions ? 'checked' : '' ?>>
+                            <span class="setting-toggle__ui" aria-hidden="true"></span>
+                            <span class="setting-toggle__body">
+                                <span class="setting-toggle__title">Вопросы</span>
+                                <span class="setting-toggle__hint">Вопросы будут показываться в случайном порядке.</span>
+                            </span>
+                        </label>
+                        <label class="setting-toggle">
+                            <input type="checkbox" name="shuffle_answers" value="1" <?= $shuffleAnswers ? 'checked' : '' ?>>
+                            <span class="setting-toggle__ui" aria-hidden="true"></span>
+                            <span class="setting-toggle__body">
+                                <span class="setting-toggle__title">Ответы</span>
+                                <span class="setting-toggle__hint">Варианты ответа будут перемешаны внутри каждого вопроса.</span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <label class="tc-setting tc-setting--attempt-limit">
+                    <span class="tc-setting__icon" aria-hidden="true">
+                        <img src="/assets/img/test_card_svg/refresh.svg" alt="" width="13" height="13">
+                    </span>
+                    <span class="tc-setting__label">Количество попыток</span>
+                    <input
+                        type="number"
+                        name="attempt_limit"
+                        class="tc-setting__attempt-input"
+                        min="0"
+                        max="1000"
+                        step="1"
+                        inputmode="numeric"
+                        placeholder="0"
+                        value="<?= $attemptLimit !== null ? (int)$attemptLimit : '' ?>"
+                    >
+                    <span class="tc-setting__hint">0 или пусто — бесконечно</span>
+                </label>
+
                 <div class="tc-setting tc-setting--category" data-category-picker>
                     <div data-category-hidden-inputs>
                         <?php foreach ($selectedCategories as $selectedCategory): ?>
@@ -153,7 +229,7 @@
                     <span class="tc-setting__icon" aria-hidden="true">
                         <img src="/assets/img/test_card_svg/pinpaper-filled.svg" alt="" width="13" height="13">
                     </span>
-                    <span class="tc-setting__label">Категории</span>
+                    <!-- <span class="tc-setting__label">Категории</span> -->
                     <button type="button" class="tc-category__trigger" data-category-trigger aria-haspopup="listbox" aria-expanded="false">
                         <span class="tc-category__trigger-text<?= $selectedCategories === [] ? ' is-placeholder' : '' ?>" data-category-current><?= htmlspecialchars($selectedCategoryText, ENT_QUOTES, 'UTF-8') ?></span>
                         <svg class="tc-category__trigger-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -220,7 +296,7 @@
                                             rows="1"
                                             placeholder="Например: Сколько будет 2+2?"
                                         ></textarea>
-                                        <div class="question-text-limit" data-question-text-limit>0/1000</div>
+                                        <div class="field-char-limit" data-question-text-limit>0/1000</div>
                                     </div>
                                 </div>
 
@@ -245,27 +321,51 @@
 
                                 <div class="question-answers-wrap">
                                     <div class="form-row question-type-row">
-                                        <label class="form-label">Формат ответов</label>
+                                        <label class="form-label question-type-label">Тип ответа</label>
 
                                         <select name="questions[0][type]" class="input u-hidden" data-question-type aria-hidden="true" tabindex="-1">
                                             <option value="radio">Один вариант (radio)</option>
                                             <option value="checkbox">Несколько вариантов (checkbox)</option>
                                             <option value="input">Ввод текста (input)</option>
+                                            <option value="order">Порядок</option>
                                         </select>
 
-                                        <div class="segmented" data-question-type-ui role="radiogroup" aria-label="Тип вопроса">
+                                        <div class="segmented segmented--answer-type" data-question-type-ui role="radiogroup" aria-label="Тип ответа">
                                             <label class="segmented__item">
                                                 <input type="radio" value="radio" data-question-type-radio checked>
-                                                <span>Один</span>
+                                                <span class="answer-type-btn">
+                                                    <i class="answer-type-mark answer-type-mark--radio" aria-hidden="true"></i>
+                                                    <b>Один</b>
+                                                </span>
                                             </label>
                                             <label class="segmented__item">
                                                 <input type="radio" value="checkbox" data-question-type-radio>
-                                                <span>Несколько</span>
+                                                <span class="answer-type-btn">
+                                                    <i class="answer-type-mark answer-type-mark--checkbox" aria-hidden="true"></i>
+                                                    <b>Несколько</b>
+                                                </span>
                                             </label>
                                             <label class="segmented__item">
                                                 <input type="radio" value="input" data-question-type-radio>
-                                                <span>Текст</span>
+                                                <span class="answer-type-btn">
+                                                    <img class="answer-type-icon" src="/assets/img/test_create_svg/text.svg" alt="" aria-hidden="true">
+                                                    <b>Текст</b>
+                                                </span>
                                             </label>
+                                            <label class="segmented__item">
+                                                <input type="radio" value="order" data-question-type-radio>
+                                                <span class="answer-type-btn">
+                                                    <img class="answer-type-icon answer-type-icon--order" src="/assets/img/test_create_svg/sort-list.svg" alt="" aria-hidden="true">
+                                                    <b>Порядок</b>
+                                                </span>
+                                            </label>
+                                        </div>
+
+                                        <div class="answer-type-hints" aria-live="polite">
+                                            <p class="answer-type-hint answer-type-hint--radio">Один верный вариант ответа.</p>
+                                            <p class="answer-type-hint answer-type-hint--checkbox">Один или несколько верных вариантов ответа.</p>
+                                            <p class="answer-type-hint answer-type-hint--input">Ответ необходимо написать текстом.</p>
+                                            <p class="answer-type-hint answer-type-hint--order">Добавьте варианты в правильном порядке. В тесте они будут перемешаны.</p>
                                         </div>
                                     </div>
 
@@ -277,13 +377,17 @@
                                                 <input type="checkbox" name="questions[0][options][0][is_correct]" value="1" class="option-correct" aria-label="Правильный ответ">
                                             </label>
 
-                                            <input
-                                                type="text"
-                                                name="questions[0][options][0][text]"
-                                                class="input"
-                                                placeholder="Вариант ответа"
-                                                maxlength="1000"
-                                            >
+                                            <div class="option-text-wrap">
+                                                <textarea
+                                                    name="questions[0][options][0][text]"
+                                                    class="input option-textarea"
+                                                    data-option-text
+                                                    placeholder="Вариант ответа"
+                                                    maxlength="1000"
+                                                    rows="1"
+                                                ></textarea>
+                                                <div class="field-char-limit" data-option-text-limit>0/1000</div>
+                                            </div>
 
                                             <div class="img-upload-wrap img-upload-wrap--inline" data-img-upload="option">
                                                 <input type="hidden" name="questions[0][options][0][image_path]" value="">
@@ -308,13 +412,17 @@
                                                 <input type="checkbox" name="questions[0][options][1][is_correct]" value="1" class="option-correct" aria-label="Правильный ответ">
                                             </label>
 
-                                            <input
-                                                type="text"
-                                                name="questions[0][options][1][text]"
-                                                class="input"
-                                                placeholder="Вариант ответа"
-                                                maxlength="1000"
-                                            >
+                                            <div class="option-text-wrap">
+                                                <textarea
+                                                    name="questions[0][options][1][text]"
+                                                    class="input option-textarea"
+                                                    data-option-text
+                                                    placeholder="Вариант ответа"
+                                                    maxlength="1000"
+                                                    rows="1"
+                                                ></textarea>
+                                                <div class="field-char-limit" data-option-text-limit>0/1000</div>
+                                            </div>
 
                                             <div class="img-upload-wrap img-upload-wrap--inline" data-img-upload="option">
                                                 <input type="hidden" name="questions[0][options][1][image_path]" value="">
@@ -338,26 +446,34 @@
                                     <div class="text-answers-block" data-block="text">
                                         <div class="answers">
                                         <div class="text-answer-row" data-answer>
-                                            <input
-                                                type="text"
-                                                name="questions[0][answers][0]"
-                                                class="input"
-                                                placeholder="Например: молоко"
-                                                maxlength="1000"
-                                            >
+                                            <div class="answer-text-wrap">
+                                                <textarea
+                                                    name="questions[0][answers][0]"
+                                                    class="input answer-textarea"
+                                                    data-answer-text
+                                                    placeholder="Например: молоко"
+                                                    maxlength="1000"
+                                                    rows="1"
+                                                ></textarea>
+                                                <div class="field-char-limit" data-answer-text-limit>0/1000</div>
+                                            </div>
                                             <button type="button" class="btn btn--danger btn--sm btn-del-variant ui-tooltip ui-tooltip--bottom" data-tooltip="Удалить ответ" data-remove-answer aria-label="Удалить ответ">
                                                 <img src="/assets/img/trash-red.svg?v=2" alt="" aria-hidden="true">
                                             </button>
                                         </div>
 
                                         <div class="text-answer-row" data-answer>
-                                            <input
-                                                type="text"
-                                                name="questions[0][answers][1]"
-                                                class="input"
-                                                placeholder="Альтернативный вариант (если нужен)"
-                                                maxlength="1000"
-                                            >
+                                            <div class="answer-text-wrap">
+                                                <textarea
+                                                    name="questions[0][answers][1]"
+                                                    class="input answer-textarea"
+                                                    data-answer-text
+                                                    placeholder="Альтернативный вариант (если нужен)"
+                                                    maxlength="1000"
+                                                    rows="1"
+                                                ></textarea>
+                                                <div class="field-char-limit" data-answer-text-limit>0/1000</div>
+                                            </div>
                                             <button type="button" class="btn btn--danger btn--sm btn-del-variant ui-tooltip ui-tooltip--bottom" data-tooltip="Удалить ответ" data-remove-answer aria-label="Удалить ответ">
                                                 <img src="/assets/img/trash-red.svg?v=2" alt="" aria-hidden="true">
                                             </button>
@@ -392,8 +508,8 @@
 
         <div class="test-create-submit">
             <?php if ($isDraft || !$isEdit): ?>
-                <button type="button" class="btn btn--ghost" data-save-draft>
-                    <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                <button type="button" class="btn btn--ghost btn--draft" data-save-draft>
+                    <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 9V17.8C19 18.9201 19 19.4802 18.782 19.908C18.5903 20.2843 18.2843 20.5903 17.908 20.782C17.4802 21 16.9201 21 15.8 21H8.2C7.07989 21 6.51984 21 6.09202 20.782C5.71569 20.5903 5.40973 20.2843 5.21799 19.908C5 19.4802 5 18.9201 5 17.8V6.2C5 5.07989 5 4.51984 5.21799 4.09202C5.40973 3.71569 5.71569 3.40973 6.09202 3.21799C6.51984 3 7.0799 3 8.2 3H13M19 9L13 3M19 9H14C13.4477 9 13 8.55228 13 8V3"/></svg>
                     Сохранить черновик
                 </button>
             <?php endif; ?>
@@ -402,7 +518,12 @@
                 <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
                 <?= htmlspecialchars($submitLabel, ENT_QUOTES, 'UTF-8') ?>
             </button>
-            <div class="test-create-save-status" data-save-status>
+            <?php
+                $initialSaveState = $isDraft
+                    ? ($lastSavedAt !== '' ? 'saved' : 'idle')
+                    : 'idle';
+            ?>
+            <div class="test-create-save-status" data-save-status data-save-state="<?= htmlspecialchars($initialSaveState, ENT_QUOTES, 'UTF-8') ?>">
                 <?php if ($isDraft && $lastSavedAt !== ''): ?>
                     Черновик сохранён
                 <?php elseif ($isDraft): ?>
@@ -421,7 +542,7 @@
     <div id="imgLightbox" class="img-lightbox" aria-hidden="true" role="dialog" aria-label="Просмотр изображения">
         <div class="img-lightbox__backdrop" data-lightbox-close></div>
         <div class="img-lightbox__content">
-            <button class="img-lightbox__close" data-lightbox-close aria-label="Закрыть">
+            <button type="button" class="img-lightbox__close" data-lightbox-close aria-label="Закрыть">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
             <img src="" alt="" class="img-lightbox__img" id="imgLightboxImg">

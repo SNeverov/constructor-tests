@@ -7,6 +7,22 @@ function my_bookmarks_index(): void
 
     $user = auth_user();
     $userId = (int)($user['id'] ?? 0);
+    $categorySlug = test_category_canonical_slug((string)($_GET['category'] ?? ''));
+    $categoryName = $categorySlug !== '' ? test_category_slug_to_name($categorySlug) : null;
+    if ($categoryName === null) {
+        $categorySlug = '';
+    }
+    $sort = (string)($_GET['sort'] ?? 'new');
+    $sortOptions = [
+        'new' => 'Новые',
+        'questions' => 'По вопросам',
+        'time' => 'По времени',
+        'views' => 'По просмотрам',
+        'attempts' => 'По прохождениям',
+    ];
+    if (!isset($sortOptions[$sort])) {
+        $sort = 'new';
+    }
 
     $page = (int)($_GET['page'] ?? 1);
     if ($page < 1) {
@@ -14,24 +30,42 @@ function my_bookmarks_index(): void
     }
 
     $perPage = 10;
-    $total = tests_count_bookmarked_by_user_id($userId);
+    $allTotal = tests_count_bookmarked_by_user_id($userId);
+    $total = $categoryName !== null ? tests_count_bookmarked_by_user_id($userId, $categoryName) : $allTotal;
     $pages = max(1, (int)ceil($total / $perPage));
     if ($page > $pages) {
         $page = $pages;
     }
     $offset = ($page - 1) * $perPage;
 
-    $tests = tests_list_bookmarked_by_user_id_paginated($userId, $perPage, $offset);
+    $tests = tests_list_bookmarked_by_user_id_paginated($userId, $perPage, $offset, $categoryName, $sort);
+    $pagerQuery = [];
+    if ($categorySlug !== '') {
+        $pagerQuery['category'] = $categorySlug;
+    }
+    if ($sort !== 'new') {
+        $pagerQuery['sort'] = $sort;
+    }
 
     view_render('my_bookmarks', [
         'title' => 'Мои закладки',
         'tests' => $tests,
+        'filter_action' => '/my/bookmarks',
+        'filter_id' => 'my_bookmarks',
+        'home_total' => $allTotal,
+        'category_options' => test_categories_catalog(),
+        'category_counts' => tests_category_counts_bookmarked_by_user_id($userId),
+        'selected_category_slug' => $categorySlug,
+        'sort_options' => $sortOptions,
+        'selected_sort' => $sort,
         'pagination' => [
             'page' => $page,
             'pages' => $pages,
             'total' => $total,
+            'path' => '/my/bookmarks',
+            'query' => $pagerQuery,
         ],
-        'scripts' => ['/assets/js/list-loading.js', '/assets/js/my-tests-share.js'],
+        'scripts' => ['/assets/js/list-loading.js', '/assets/js/my-tests-share.js', '/assets/js/home-category-filter.js'],
         'styles' => ['/assets/css/my-tests.css'],
     ]);
 }

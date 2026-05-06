@@ -47,6 +47,8 @@
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <link rel="stylesheet" href="<?= htmlspecialchars($asset('/assets/css/base.css'), ENT_QUOTES, 'UTF-8') ?>">
+		<link rel="stylesheet" href="<?= htmlspecialchars($asset('/assets/css/page-shell.css'), ENT_QUOTES, 'UTF-8') ?>">
+		<link rel="stylesheet" href="<?= htmlspecialchars($asset('/assets/css/dashboard-shell.css'), ENT_QUOTES, 'UTF-8') ?>">
 		<link rel="stylesheet" href="<?= htmlspecialchars($asset('/assets/css/ui.css'), ENT_QUOTES, 'UTF-8') ?>">
         <?php if (!empty($styles) && is_array($styles)): ?>
             <?php foreach ($styles as $href): ?>
@@ -90,16 +92,23 @@
                     <div class="site-header__left">
                         <a class="brand-wrap" href="/" aria-label="Q-Platform">
                             <img src="<?= htmlspecialchars($asset('/assets/img/hdr-logo-q.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" class="brand-wrap__logo" aria-hidden="true">
-                            <span class="brand-wrap__text">Platform</span>
+                            <span class="brand-wrap__text">U A Z A R</span>
                         </a>
+                    </div>
+
+                    <div class="site-header__search" role="search" aria-label="Поиск тестов">
+                        <span class="site-header__search-icon" aria-hidden="true"></span>
+                        <input class="site-header__search-input" type="search" placeholder="Поиск тестов..." aria-label="Поиск тестов">
+                        <span class="site-header__search-kbd" aria-hidden="true">Ctrl K</span>
                     </div>
 
                     <div class="site-header__right">
                         <?php if (auth_is_logged_in()): ?>
                             <div class="header-controls">
                                 <nav class="header-actions" aria-label="Главная навигация">
-                                    <a class="icon-btn ui-tooltip ui-tooltip--bottom" href="/my/tests/create" data-tooltip="Создать тест" aria-label="Создать тест">
+                                    <a class="icon-btn icon-btn--create ui-tooltip ui-tooltip--bottom" href="/my/tests/create" data-tooltip="Создать тест" aria-label="Создать тест">
                                         <img src="<?= htmlspecialchars($asset('/assets/img/hdr-icon-create.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
+                                        <span class="icon-btn__text">Создать тест</span>
                                     </a>
                                     <a class="icon-btn ui-tooltip ui-tooltip--bottom" href="/my/tests" data-tooltip="Мои тесты" aria-label="Мои тесты">
                                         <img src="<?= htmlspecialchars($asset('/assets/img/hdr-icon-tests-new.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
@@ -153,12 +162,12 @@
                                 </button>
                                 <div class="auth-menu__dropdown" id="authMenuDropdown" aria-hidden="true" role="menu" aria-labelledby="authMenuTrigger">
                                     <a href="/login" class="auth-menu__item" role="menuitem">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
                                         Войти
                                     </a>
                                     <div class="auth-menu__sep" aria-hidden="true"></div>
                                     <a href="/register" class="auth-menu__item auth-menu__item--register" role="menuitem">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM20 8v6M23 11h-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                        <img src="/assets/img/user-plus.svg" width="16" height="16" style="filter: invert(1)" aria-hidden="true">
                                         Создать аккаунт
                                     </a>
                                 </div>
@@ -180,9 +189,37 @@
                 </div>
             </main>
 
-            <button type="button" class="scroll-top" id="scrollTopBtn" aria-label="Наверх" title="Наверх">
+            <button type="button" class="scroll-top ui-tooltip ui-tooltip--force-top" id="scrollTopBtn" aria-label="Наверх" data-tooltip="Наверх">
                 <span class="scroll-top__icon" aria-hidden="true"></span>
             </button>
+
+            <?php
+                $hidePendingBanner = (bool)($hidePendingBanner ?? false);
+                $pendingAttempt = (!$hidePendingBanner) ? pending_attempt_for_user() : null;
+            ?>
+            <?php if ($pendingAttempt !== null): ?>
+                <div
+                    class="pending-banner"
+                    id="pendingBanner"
+                    data-pending-attempt-id="<?= (int)$pendingAttempt['attempt_id'] ?>"
+                    role="alert"
+                    aria-live="polite"
+                >
+                    <span class="pending-banner__icon" aria-hidden="true">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    </span>
+                    <span class="pending-banner__text">
+                        Незавершённый тест:
+                        <strong class="pending-banner__title"><?= htmlspecialchars($pendingAttempt['test_title'], ENT_QUOTES, 'UTF-8') ?></strong>
+                    </span>
+                    <a class="pending-banner__btn" href="<?= htmlspecialchars($pendingAttempt['pass_url'], ENT_QUOTES, 'UTF-8') ?>">
+                        Продолжить
+                    </a>
+                    <button type="button" class="pending-banner__close" id="pendingBannerClose" aria-label="Закрыть уведомление">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+            <?php endif; ?>
 
 			<script src="<?= htmlspecialchars($asset('/assets/js/ui.js'), ENT_QUOTES, 'UTF-8') ?>"></script>
             <script src="<?= htmlspecialchars($asset('/assets/js/bookmarks.js'), ENT_QUOTES, 'UTF-8') ?>"></script>

@@ -156,15 +156,18 @@ function auth_register_submit(): void
         redirect('/');
     }
 
-    $login = trim((string) ($_POST['login'] ?? ''));
+    $loginRaw = (string) ($_POST['login'] ?? '');
+    $login = trim($loginRaw);
     $email = trim((string) ($_POST['email'] ?? ''));
     $pass = (string) ($_POST['password'] ?? '');
 
     $old = ['login' => $login, 'email' => $email];
     $errors = [];
 
-    if ($login === '' || mb_strlen($login) < 3 || mb_strlen($login) > 32) {
-        $errors[] = 'Логин: от 3 до 32 символов.';
+    if ($login === '' || mb_strlen($login) < 3 || mb_strlen($login) > 24) {
+        $errors[] = 'Логин: от 3 до 24 символов.';
+    } elseif (preg_match('/\s/u', $loginRaw) === 1) {
+        $errors[] = 'Логин не должен содержать пробелы.';
     }
     if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $errors[] = 'Email указан некорректно.';

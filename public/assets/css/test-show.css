@@ -34,6 +34,13 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+    margin-bottom: 8px;
+}
+
+.test-show__categories {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
     margin-bottom: 14px;
 }
 
@@ -60,9 +67,18 @@ button.badge {
     color: #166534;
 }
 
+.badge--answers {
+    background: rgba(14, 165, 233, 0.10);
+    color: #075985;
+}
+
 .badge--warn {
     background: #fef3c7;
     color: #92400e;
+}
+
+.test-chip--more {
+    cursor: help;
 }
 
 .test-show__title {
@@ -248,4 +264,45 @@ button.badge {
     .test-stat-item--rating {
         flex-basis: 100%;
     }
+}
+
+/* ─── Resume (unfinished attempt) block ──────────────────────────────────────── */
+
+.test-show__resume {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin: 18px 0;
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.28);
+}
+
+.test-show__resume-icon {
+    display: flex;
+    align-items: center;
+    color: #d97706;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.test-show__resume-body {
+    min-width: 0;
+}
+
+.test-show__resume-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #92400e;
+    margin-bottom: 2px;
+}
+
+.test-show__resume-hint {
+    font-size: 13px;
+    color: #a16207;
+}
+
+.test-show__restart-btn {
+    font-size: 13px;
 }

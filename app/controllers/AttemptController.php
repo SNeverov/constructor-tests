@@ -41,6 +41,40 @@ function test_pass(int $testId): void
         ? $payload['options_by_question_id']
         : [];
 
+    if (test_shuffle_questions_enabled($test)) {
+        shuffle($questions);
+    }
+
+    if (test_shuffle_answers_enabled($test)) {
+        foreach ($questions as $question) {
+            $qid = (int)($question['id'] ?? 0);
+            $type = (string)($question['type'] ?? 'radio');
+            if ($qid > 0 && in_array($type, ['radio', 'checkbox'], true) && isset($optionsByQuestionId[$qid]) && is_array($optionsByQuestionId[$qid])) {
+                shuffle($optionsByQuestionId[$qid]);
+            }
+        }
+    }
+
+    $showAnswers = test_answers_show_immediately($test);
+    $correctOptionIdsByQ = [];
+    $correctTextAnswersByQ = [];
+    if ($showAnswers && !empty($questions)) {
+        $questionIds = [];
+        foreach ($questions as $q) {
+            $qid = (int)($q['id'] ?? 0);
+            if ($qid > 0) {
+                $questionIds[] = $qid;
+            }
+        }
+        $correctOptionIdsByQ = options_correct_ids_by_question_ids($questionIds);
+        $correctTextAnswersByQ = text_answers_by_question_ids($questionIds);
+    }
+
+    // ?restart=1 — сбрасываем текущую попытку и начинаем новую
+    if ((string)($_GET['restart'] ?? '') === '1') {
+        unset($_SESSION['active_attempt_id_by_test'][$testId]);
+    }
+
 	$userId = null;
 	if (auth_is_logged_in()) {
 		$u = auth_user();
@@ -106,6 +140,28 @@ function test_pass(int $testId): void
 	}
 
 	if ($attemptId === 0) {
+        $attemptLimit = test_attempt_limit_from_row($test);
+        if ($attemptLimit !== null) {
+            $finishedCount = 0;
+            if ($userId !== null && $userId > 0) {
+                $finishedCount = attempts_count_finished_by_test_id_and_user_id($testId, $userId);
+            } else {
+                $guestAttemptIds = $_SESSION['guest_attempt_ids'] ?? [];
+                $finishedCount = is_array($guestAttemptIds)
+                    ? attempts_count_finished_guest_by_test_id($testId, $guestAttemptIds)
+                    : 0;
+            }
+
+            if ($finishedCount >= $attemptLimit) {
+                http_response_code(403);
+                view_render('error', [
+                    'title' => 'Лимит попыток',
+                    'message' => 'Вы уже использовали доступное количество попыток для этого теста.',
+                ]);
+                return;
+            }
+        }
+
 		$attemptId = attempt_create($testId, $userId);
 		$_SESSION['active_attempt_id_by_test'][$testId] = $attemptId;
 	}
@@ -123,6 +179,10 @@ function test_pass(int $testId): void
         'test' => $test,
         'questions' => $questions,
         'optionsByQuestionId' => $optionsByQuestionId,
+        'hidePendingBanner' => true,
+        'showAnswers' => $showAnswers,
+        'correctOptionIdsByQ' => $correctOptionIdsByQ,
+        'correctTextAnswersByQ' => $correctTextAnswersByQ,
 		'attempt' => $attempt,
 		'attemptId' => $attemptId,
         'timeLimitSec' => $timeLimitSec,
@@ -380,6 +440,56 @@ function test_finish(int $testId): void
                         'correct_payload_snapshot' => $correctPayloadSnapshot,
                     ];
                 }
+            } elseif ($type === 'order') {
+                $allOpts = $optionsByQ[$qid] ?? []; // already sorted by position ASC
+                $correctOrder = array_values(array_filter(
+                    array_map(static fn($o) => (int)($o['id'] ?? 0), $allOpts),
+                    static fn($v) => $v > 0
+                ));
+
+                $userOrder = [];
+                if (isset($posted[$qid]) && is_array($posted[$qid])) {
+                    $userOrder = array_values(array_filter(
+                        array_map('intval', $posted[$qid]),
+                        static fn($v) => $v > 0
+                    ));
+                }
+                $allowedIds = $allowedOptionIdsByQ[$qid] ?? [];
+                $userOrder = array_values(array_filter($userOrder, static fn($oid) => isset($allowedIds[$oid])));
+                $userOrder = array_values(array_unique($userOrder));
+
+                $isCorrect = !empty($correctOrder)
+                    && count($userOrder) === count($correctOrder)
+                    && $userOrder === $correctOrder;
+                $questionScore = $isCorrect ? 1.0 : 0.0;
+
+                $correctOrderTexts = array_map(
+                    static fn($oid) => (string)($optionTextById[$oid] ?? ('Элемент #' . $oid)),
+                    $correctOrder
+                );
+                $submittedOrderTexts = array_map(
+                    static fn($oid) => (string)($optionTextById[$oid] ?? ('Элемент #' . $oid)),
+                    $userOrder
+                );
+
+                $correctPayloadSnapshot = json_encode([
+                    'type' => 'order',
+                    'correct_order_texts' => $correctOrderTexts,
+                    'submitted_order_texts' => $submittedOrderTexts,
+                ], JSON_UNESCAPED_UNICODE);
+
+                $answerRows[] = [
+                    'question_id' => $qid,
+                    'option_id' => null,
+                    'text_answer' => json_encode($userOrder, JSON_UNESCAPED_UNICODE),
+                    'question_type_snapshot' => $type,
+                    'question_text_snapshot' => (string)($q['question_text'] ?? ''),
+                    'question_image_snapshot' => trim((string)($q['image_path'] ?? '')) !== '' ? (string)$q['image_path'] : null,
+                    'option_text_snapshot' => null,
+                    'is_correct_snapshot' => $isCorrect ? 1 : 0,
+                    'correct_payload_snapshot' => $correctPayloadSnapshot,
+                ];
+
             } else { // radio по умолчанию
                 $userOptId = 0;
                 if (isset($posted[$qid]) && !is_array($posted[$qid])) {
@@ -517,7 +627,7 @@ function attempt_show(int $attemptId): void
 
         $viewer = auth_user();
         $viewerId = (int)($viewer['id'] ?? 0);
-        if ($viewerId <= 0 || $viewerId !== (int)$attemptUserId) {
+        if (!auth_is_admin($viewer) && ($viewerId <= 0 || $viewerId !== (int)$attemptUserId)) {
             http_response_code(403);
             view_render('error', [
                 'title' => 'Ошибка 403',
@@ -527,7 +637,7 @@ function attempt_show(int $attemptId): void
         }
     } else {
         $guestAttemptIds = $_SESSION['guest_attempt_ids'] ?? [];
-        if (!is_array($guestAttemptIds) || !in_array($attemptId, array_map('intval', $guestAttemptIds), true)) {
+        if (!auth_is_admin() && (!is_array($guestAttemptIds) || !in_array($attemptId, array_map('intval', $guestAttemptIds), true))) {
             http_response_code(403);
             view_render('error', [
                 'title' => 'Ошибка 403',
@@ -576,6 +686,8 @@ function attempt_show(int $attemptId): void
         $_SESSION['redirect_to'] = '/attempts/' . $attemptId;
         redirect('/login');
     }
+
+    $revealCorrectAnswers = test_answers_reveal_after_finish($test);
 
     $questions = questions_list_by_test_id($testId);
     $questionIds = [];
@@ -722,6 +834,7 @@ function attempt_show(int $attemptId): void
         'correctTextAnswersByQ' => $correctTextAnswersByQ,
         'userByQ' => $userByQ,
         'snapshotMode' => $snapshotMode,
+        'revealCorrectAnswers' => $revealCorrectAnswers,
         'testMissing' => $testMissing,
         'sourceState' => $sourceState,
         'styles' => ['/assets/css/attempt-show.css'],

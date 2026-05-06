@@ -49,6 +49,59 @@ function normalize_test_time_limit_sec(?string $raw): ?int
     return $total;
 }
 
+function normalize_test_attempt_limit(mixed $raw, bool $strictValidation = true): ?int
+{
+    $value = trim((string)$raw);
+    if ($value === '' || $value === '0') {
+        return null;
+    }
+
+    if (!preg_match('/^\d+$/', $value)) {
+        if ($strictValidation) {
+            throw new InvalidArgumentException('Количество попыток должно быть целым числом');
+        }
+        return null;
+    }
+
+    $limit = (int)$value;
+    if ($limit <= 0) {
+        return null;
+    }
+    if ($limit > 1000) {
+        if ($strictValidation) {
+            throw new InvalidArgumentException('Количество попыток не должно быть больше 1000');
+        }
+        return 1000;
+    }
+
+    return $limit;
+}
+
+function test_bool_setting(mixed $raw): int
+{
+    return (int)$raw === 1 ? 1 : 0;
+}
+
+function test_shuffle_questions_enabled(array $test): bool
+{
+    return (int)($test['shuffle_questions'] ?? 0) === 1;
+}
+
+function test_shuffle_answers_enabled(array $test): bool
+{
+    return (int)($test['shuffle_answers'] ?? 0) === 1;
+}
+
+function test_attempt_limit_from_row(array $test): ?int
+{
+    $limit = $test['attempt_limit'] ?? null;
+    if ($limit === null || $limit === '') {
+        return null;
+    }
+    $limit = (int)$limit;
+    return $limit > 0 ? $limit : null;
+}
+
 function format_time_limit_hms(?int $seconds): string
 {
     $seconds = ($seconds !== null) ? max(0, (int)$seconds) : 0;
@@ -88,11 +141,57 @@ function tests_is_published_row(array $test): bool
     return (string)($test['status'] ?? test_status_published()) === test_status_published();
 }
 
+function test_answers_mode_never(): int
+{
+    return 2;
+}
+
+function test_answers_mode_immediate(): int
+{
+    return 1;
+}
+
+function test_answers_mode_after_finish(): int
+{
+    return 0;
+}
+
+function test_answers_mode_from_value(mixed $raw): int
+{
+    $mode = (int)$raw;
+    return in_array($mode, [
+        test_answers_mode_never(),
+        test_answers_mode_immediate(),
+        test_answers_mode_after_finish(),
+    ], true) ? $mode : test_answers_mode_after_finish();
+}
+
+function test_answers_show_immediately(array $test): bool
+{
+    return test_answers_mode_from_value($test['show_answers'] ?? test_answers_mode_after_finish()) === test_answers_mode_immediate();
+}
+
+function test_answers_reveal_after_finish(array $test): bool
+{
+    return test_answers_mode_from_value($test['show_answers'] ?? test_answers_mode_after_finish()) !== test_answers_mode_never();
+}
+
+function test_answers_mode_label(int $mode): string
+{
+    return match (test_answers_mode_from_value($mode)) {
+        test_answers_mode_never() => 'Без ответов',
+        test_answers_mode_immediate() => 'Ответы сразу',
+        default => 'Ответы после завершения',
+    };
+}
+
 // --- Tests ---
 
 function tests_list_by_user_id(int $userId): array
 {
     $pdo = db();
+    $isAdmin = auth_is_admin();
+    $ownerWhere = $isAdmin ? '' : 'user_id = :user_id AND ';
 
 	$stmt = $pdo->prepare("
 		SELECT
@@ -109,13 +208,15 @@ function tests_list_by_user_id(int $userId): array
             created_at,
             updated_at
 		FROM tests
-		WHERE user_id = :user_id AND deleted_at IS NULL
+		WHERE {$ownerWhere}deleted_at IS NULL
 		ORDER BY created_at DESC
 	");
 
-    $stmt->execute([
-        ':user_id' => $userId,
-    ]);
+    $params = [];
+    if (!$isAdmin) {
+        $params[':user_id'] = $userId;
+    }
+    $stmt->execute($params);
 
     return $stmt->fetchAll();
 }
@@ -231,7 +332,11 @@ function tests_create(
     ?int $timeLimitSec = null,
     string $status = 'published',
     ?string $publishedAt = null,
-    ?string $lastSavedAt = null
+    ?string $lastSavedAt = null,
+    int $showAnswers = 0,
+    int $shuffleQuestions = 0,
+    int $shuffleAnswers = 0,
+    ?int $attemptLimit = null
 ): int
 {
     $pdo = db();
@@ -249,6 +354,10 @@ function tests_create(
             category_name,
             cover_image,
             time_limit_sec,
+            show_answers,
+            shuffle_questions,
+            shuffle_answers,
+            attempt_limit,
             status,
             published_at,
             last_saved_at
@@ -261,6 +370,10 @@ function tests_create(
             :category_name,
             :cover_image,
             :time_limit_sec,
+            :show_answers,
+            :shuffle_questions,
+            :shuffle_answers,
+            :attempt_limit,
             :status,
             :published_at,
             :last_saved_at
@@ -275,6 +388,10 @@ function tests_create(
         ':category_name' => $primaryCategoryName,
         ':cover_image' => $coverImage,
         ':time_limit_sec' => ($timeLimitSec !== null && $timeLimitSec > 0) ? $timeLimitSec : null,
+        ':show_answers' => test_answers_mode_from_value($showAnswers),
+        ':shuffle_questions' => test_bool_setting($shuffleQuestions),
+        ':shuffle_answers' => test_bool_setting($shuffleAnswers),
+        ':attempt_limit' => ($attemptLimit !== null && $attemptLimit > 0) ? $attemptLimit : null,
         ':status' => $status,
         ':published_at' => $publishedAt,
         ':last_saved_at' => $lastSavedAt,
@@ -370,6 +487,7 @@ function questions_count_by_test_id(int $testId): int
 function tests_find_by_id(int $testId): ?array
 {
     $pdo = db();
+    $statusWhere = auth_is_admin() ? '' : "AND t.status = 'published'";
 
     $stmt = $pdo->prepare("
 		SELECT
@@ -392,12 +510,16 @@ function tests_find_by_id(int $testId): ?array
             t.rating_sum,
             COALESCE(u.login, '') AS creator_login,
             t.cover_image,
+            t.show_answers,
+            t.shuffle_questions,
+            t.shuffle_answers,
+            t.attempt_limit,
             (SELECT COUNT(*) FROM attempts a WHERE a.test_id = t.id) AS attempts_count
 		FROM tests t
         LEFT JOIN users u ON u.id = t.user_id
 		WHERE t.id = :id
           AND t.deleted_at IS NULL
-          AND t.status = 'published'
+          {$statusWhere}
 		LIMIT 1
 	");
 
@@ -435,11 +557,24 @@ function test_rating_find_by_test_id_and_user_id(int $testId, int $userId): ?int
     return (int)$value;
 }
 
-function tests_list_by_user_id_paginated(int $userId, int $limit, int $offset): array
+function tests_list_by_user_id_paginated(int $userId, int $limit, int $offset, ?string $categoryName = null, string $sort = 'new'): array
 {
     $pdo = db();
     $limit = max(1, min(100, $limit));
     $offset = max(0, $offset);
+    $isAdmin = auth_is_admin();
+    $ownerWhere = $isAdmin ? '' : 't.user_id = :user_id AND ';
+    $params = [
+        ':viewer_id' => $userId,
+    ];
+    if (!$isAdmin) {
+        $params[':user_id'] = $userId;
+    }
+    $categoryWhere = '';
+    if ($categoryName !== null && trim($categoryName) !== '') {
+        $categoryWhere = ' AND ' . tests_category_filter_sql($categoryName, $params, 't', 'my_tests_category');
+    }
+    $orderBy = tests_user_order_by($sort);
 
     $stmt = $pdo->prepare("
 		SELECT
@@ -461,6 +596,10 @@ function tests_list_by_user_id_paginated(int $userId, int $limit, int $offset): 
             t.rating_count,
             t.rating_sum,
             t.cover_image,
+            t.show_answers,
+            t.shuffle_questions,
+            t.shuffle_answers,
+            t.attempt_limit,
             COALESCE(u.login, '') AS creator_login,
             CASE WHEN tb.user_id IS NULL THEN 0 ELSE 1 END AS is_bookmarked,
             (
@@ -473,18 +612,16 @@ function tests_list_by_user_id_paginated(int $userId, int $limit, int $offset): 
                 FROM attempts a
                 WHERE a.test_id = t.id
             ) AS attempts_count
-		FROM tests t
+        FROM tests t
         LEFT JOIN users u ON u.id = t.user_id
         LEFT JOIN test_bookmarks tb ON tb.test_id = t.id AND tb.user_id = :viewer_id
-		WHERE t.user_id = :user_id AND t.deleted_at IS NULL
-		ORDER BY COALESCE(t.last_saved_at, t.updated_at, t.created_at) DESC, t.id DESC
+		WHERE {$ownerWhere}t.deleted_at IS NULL
+          {$categoryWhere}
+		ORDER BY {$orderBy}
         LIMIT {$limit} OFFSET {$offset}
 	");
 
-    $stmt->execute([
-        ':user_id' => $userId,
-        ':viewer_id' => $userId,
-    ]);
+    $stmt->execute($params);
 
     return tests_attach_category_names($stmt->fetchAll());
 }
@@ -494,9 +631,6 @@ function tests_count_for_home(): int
     $pdo = db();
 
     $where = "t.deleted_at IS NULL AND t.status = 'published'";
-    if (!auth_is_logged_in()) {
-        $where .= " AND t.access_level = 'public'";
-    }
 
     $stmt = $pdo->prepare("
         SELECT COUNT(*)
@@ -511,18 +645,30 @@ function tests_count_for_home(): int
 function tests_count_for_category(string $categoryName): int
 {
     $pdo = db();
+    $categoryNames = test_category_match_names($categoryName);
+    $primaryPlaceholders = [];
+    $linkPlaceholders = [];
+    $params = [];
+    foreach ($categoryNames as $index => $name) {
+        $primaryParam = ':category_name_primary_' . $index;
+        $linkParam = ':category_name_link_' . $index;
+        $primaryPlaceholders[] = $primaryParam;
+        $linkPlaceholders[] = $linkParam;
+        $params[$primaryParam] = $name;
+        $params[$linkParam] = $name;
+    }
 
     $where = "t.deleted_at IS NULL
       AND t.status = 'published'
-      AND EXISTS (
-        SELECT 1
-        FROM test_category_links tcl
-        WHERE tcl.test_id = t.id
-          AND tcl.category_name = :category_name
+      AND (
+        t.category_name IN (" . implode(', ', $primaryPlaceholders) . ")
+        OR EXISTS (
+          SELECT 1
+          FROM test_category_links tcl
+          WHERE tcl.test_id = t.id
+            AND tcl.category_name IN (" . implode(', ', $linkPlaceholders) . ")
+        )
     )";
-    if (!auth_is_logged_in()) {
-        $where .= " AND t.access_level = 'public'";
-    }
 
     $stmt = $pdo->prepare("
         SELECT COUNT(*)
@@ -530,14 +676,113 @@ function tests_count_for_category(string $categoryName): int
         WHERE {$where}
     ");
 
-    $stmt->execute([
-        ':category_name' => $categoryName,
-    ]);
+    $stmt->execute($params);
 
     return (int)$stmt->fetchColumn();
 }
 
-function tests_list_for_home(int $limit = 20, int $offset = 0): array
+function tests_category_counts_for_home(): array
+{
+    $pdo = db();
+
+    $stmt = $pdo->prepare("
+        SELECT category_name, COUNT(DISTINCT test_id) AS tests_count
+        FROM (
+            SELECT t.id AS test_id, t.category_name AS category_name
+            FROM tests t
+            WHERE t.deleted_at IS NULL
+              AND t.status = 'published'
+              AND t.category_name IS NOT NULL
+              AND t.category_name <> ''
+
+            UNION
+
+            SELECT t.id AS test_id, tcl.category_name AS category_name
+            FROM tests t
+            INNER JOIN test_category_links tcl ON tcl.test_id = t.id
+            WHERE t.deleted_at IS NULL
+              AND t.status = 'published'
+              AND tcl.category_name IS NOT NULL
+              AND tcl.category_name <> ''
+        ) category_tests
+        GROUP BY category_name
+    ");
+    $stmt->execute();
+
+    $counts = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $categoryName = trim((string)($row['category_name'] ?? ''));
+        if ($categoryName === '') {
+            continue;
+        }
+
+        $canonicalName = test_category_display_name($categoryName);
+        $counts[$canonicalName] = (int)($counts[$canonicalName] ?? 0) + (int)($row['tests_count'] ?? 0);
+    }
+
+    return $counts;
+}
+
+function tests_home_order_by(string $sort): string
+{
+    return match ($sort) {
+        'questions' => 'questions_count DESC, t.created_at DESC, t.id DESC',
+        'time' => 'time_limit_sec DESC, t.created_at DESC, t.id DESC',
+        'views' => 't.views_count DESC, t.created_at DESC, t.id DESC',
+        'attempts' => 'attempts_count DESC, t.created_at DESC, t.id DESC',
+        default => 't.created_at DESC, t.id DESC',
+    };
+}
+
+function tests_user_order_by(string $sort): string
+{
+    return match ($sort) {
+        'questions' => 'questions_count DESC, COALESCE(t.last_saved_at, t.updated_at, t.created_at) DESC, t.id DESC',
+        'time' => 'time_limit_sec DESC, COALESCE(t.last_saved_at, t.updated_at, t.created_at) DESC, t.id DESC',
+        'views' => 't.views_count DESC, COALESCE(t.last_saved_at, t.updated_at, t.created_at) DESC, t.id DESC',
+        'attempts' => 'attempts_count DESC, COALESCE(t.last_saved_at, t.updated_at, t.created_at) DESC, t.id DESC',
+        default => 'COALESCE(t.last_saved_at, t.updated_at, t.created_at) DESC, t.id DESC',
+    };
+}
+
+function tests_bookmarks_order_by(string $sort): string
+{
+    return match ($sort) {
+        'questions' => 'questions_count DESC, tb.created_at DESC, t.id DESC',
+        'time' => 'time_limit_sec DESC, tb.created_at DESC, t.id DESC',
+        'views' => 't.views_count DESC, tb.created_at DESC, t.id DESC',
+        'attempts' => 'attempts_count DESC, tb.created_at DESC, t.id DESC',
+        default => 'tb.created_at DESC, t.id DESC',
+    };
+}
+
+function tests_category_filter_sql(string $categoryName, array &$params, string $alias = 't', string $prefix = 'category'): string
+{
+    $categoryNames = test_category_match_names($categoryName);
+    $primaryPlaceholders = [];
+    $linkPlaceholders = [];
+
+    foreach ($categoryNames as $index => $name) {
+        $primaryParam = ':' . $prefix . '_primary_' . $index;
+        $linkParam = ':' . $prefix . '_link_' . $index;
+        $primaryPlaceholders[] = $primaryParam;
+        $linkPlaceholders[] = $linkParam;
+        $params[$primaryParam] = $name;
+        $params[$linkParam] = $name;
+    }
+
+    return "(
+        {$alias}.category_name IN (" . implode(', ', $primaryPlaceholders) . ")
+        OR EXISTS (
+            SELECT 1
+            FROM test_category_links tcl
+            WHERE tcl.test_id = {$alias}.id
+              AND tcl.category_name IN (" . implode(', ', $linkPlaceholders) . ")
+        )
+    )";
+}
+
+function tests_list_for_home(int $limit = 20, int $offset = 0, string $sort = 'new'): array
 {
     $pdo = db();
     $limit = max(1, min(100, $limit));
@@ -545,14 +790,13 @@ function tests_list_for_home(int $limit = 20, int $offset = 0): array
     $viewerId = auth_is_logged_in() ? (int)(auth_user()['id'] ?? 0) : 0;
 
     $where = "t.deleted_at IS NULL AND t.status = 'published'";
-    if (!auth_is_logged_in()) {
-        $where .= " AND t.access_level = 'public'";
-    }
 
     $bookmarksJoin = '';
     if ($viewerId > 0) {
         $bookmarksJoin = 'LEFT JOIN test_bookmarks tb ON tb.test_id = t.id AND tb.user_id = :viewer_id';
     }
+
+    $orderBy = tests_home_order_by($sort);
 
     $stmt = $pdo->prepare("
         SELECT
@@ -575,6 +819,10 @@ function tests_list_for_home(int $limit = 20, int $offset = 0): array
             t.rating_sum,
             COALESCE(u.login, '') AS creator_login,
             t.cover_image,
+            t.show_answers,
+            t.shuffle_questions,
+            t.shuffle_answers,
+            t.attempt_limit,
             " . ($viewerId > 0 ? 'CASE WHEN tb.user_id IS NULL THEN 0 ELSE 1 END' : '0') . " AS is_bookmarked,
             (
                 SELECT COUNT(*)
@@ -590,7 +838,7 @@ function tests_list_for_home(int $limit = 20, int $offset = 0): array
         LEFT JOIN users u ON u.id = t.user_id
         {$bookmarksJoin}
         WHERE {$where}
-        ORDER BY t.created_at DESC
+        ORDER BY {$orderBy}
         LIMIT {$limit} OFFSET {$offset}
     ");
 
@@ -602,29 +850,43 @@ function tests_list_for_home(int $limit = 20, int $offset = 0): array
     return tests_attach_category_names($stmt->fetchAll());
 }
 
-function tests_list_for_category(string $categoryName, int $limit = 20, int $offset = 0): array
+function tests_list_for_category(string $categoryName, int $limit = 20, int $offset = 0, string $sort = 'new'): array
 {
     $pdo = db();
     $limit = max(1, min(100, $limit));
     $offset = max(0, $offset);
     $viewerId = auth_is_logged_in() ? (int)(auth_user()['id'] ?? 0) : 0;
+    $categoryNames = test_category_match_names($categoryName);
+    $primaryPlaceholders = [];
+    $linkPlaceholders = [];
+    $params = [];
+    foreach ($categoryNames as $index => $name) {
+        $primaryParam = ':category_name_primary_' . $index;
+        $linkParam = ':category_name_link_' . $index;
+        $primaryPlaceholders[] = $primaryParam;
+        $linkPlaceholders[] = $linkParam;
+        $params[$primaryParam] = $name;
+        $params[$linkParam] = $name;
+    }
 
     $where = "t.deleted_at IS NULL
       AND t.status = 'published'
-      AND EXISTS (
-        SELECT 1
-        FROM test_category_links tcl
-        WHERE tcl.test_id = t.id
-          AND tcl.category_name = :category_name
+      AND (
+        t.category_name IN (" . implode(', ', $primaryPlaceholders) . ")
+        OR EXISTS (
+          SELECT 1
+          FROM test_category_links tcl
+          WHERE tcl.test_id = t.id
+            AND tcl.category_name IN (" . implode(', ', $linkPlaceholders) . ")
+        )
     )";
-    if (!auth_is_logged_in()) {
-        $where .= " AND t.access_level = 'public'";
-    }
 
     $bookmarksJoin = '';
     if ($viewerId > 0) {
         $bookmarksJoin = 'LEFT JOIN test_bookmarks tb ON tb.test_id = t.id AND tb.user_id = :viewer_id';
     }
+
+    $orderBy = tests_home_order_by($sort);
 
     $stmt = $pdo->prepare("
         SELECT
@@ -644,6 +906,10 @@ function tests_list_for_category(string $categoryName, int $limit = 20, int $off
             t.rating_sum,
             COALESCE(u.login, '') AS creator_login,
             t.cover_image,
+            t.show_answers,
+            t.shuffle_questions,
+            t.shuffle_answers,
+            t.attempt_limit,
             " . ($viewerId > 0 ? 'CASE WHEN tb.user_id IS NULL THEN 0 ELSE 1 END' : '0') . " AS is_bookmarked,
             (
                 SELECT COUNT(*)
@@ -659,13 +925,10 @@ function tests_list_for_category(string $categoryName, int $limit = 20, int $off
         LEFT JOIN users u ON u.id = t.user_id
         {$bookmarksJoin}
         WHERE {$where}
-        ORDER BY t.created_at DESC
+        ORDER BY {$orderBy}
         LIMIT {$limit} OFFSET {$offset}
     ");
 
-    $params = [
-        ':category_name' => $categoryName,
-    ];
     if ($viewerId > 0) {
         $params[':viewer_id'] = $viewerId;
     }
@@ -674,23 +937,36 @@ function tests_list_for_category(string $categoryName, int $limit = 20, int $off
     return tests_attach_category_names($stmt->fetchAll());
 }
 
-function tests_count_bookmarked_by_user_id(int $userId): int
+function tests_count_bookmarked_by_user_id(int $userId, ?string $categoryName = null): int
 {
     $pdo = db();
+    $params = [':user_id' => $userId];
+    $categoryWhere = '';
+    if ($categoryName !== null && trim($categoryName) !== '') {
+        $categoryWhere = ' AND t.id IS NOT NULL AND ' . tests_category_filter_sql($categoryName, $params, 't', 'bookmarks_count_category');
+    }
     $stmt = $pdo->prepare("
         SELECT COUNT(*)
         FROM test_bookmarks tb
+        LEFT JOIN tests t ON t.id = tb.test_id
         WHERE tb.user_id = :user_id
+          {$categoryWhere}
     ");
-    $stmt->execute([':user_id' => $userId]);
+    $stmt->execute($params);
     return (int)$stmt->fetchColumn();
 }
 
-function tests_list_bookmarked_by_user_id_paginated(int $userId, int $limit, int $offset): array
+function tests_list_bookmarked_by_user_id_paginated(int $userId, int $limit, int $offset, ?string $categoryName = null, string $sort = 'new'): array
 {
     $pdo = db();
     $limit = max(1, min(100, $limit));
     $offset = max(0, $offset);
+    $params = [':user_id' => $userId];
+    $categoryWhere = '';
+    if ($categoryName !== null && trim($categoryName) !== '') {
+        $categoryWhere = ' AND t.id IS NOT NULL AND ' . tests_category_filter_sql($categoryName, $params, 't', 'bookmarks_list_category');
+    }
+    $orderBy = tests_bookmarks_order_by($sort);
 
     $stmt = $pdo->prepare("
         SELECT
@@ -710,6 +986,10 @@ function tests_list_bookmarked_by_user_id_paginated(int $userId, int $limit, int
             t.rating_sum,
             COALESCE(u.login, '') AS creator_login,
             t.cover_image,
+            t.show_answers,
+            t.shuffle_questions,
+            t.shuffle_answers,
+            t.attempt_limit,
             1 AS is_bookmarked,
             CASE
                 WHEN t.id IS NULL THEN 'deleted'
@@ -732,10 +1012,11 @@ function tests_list_bookmarked_by_user_id_paginated(int $userId, int $limit, int
         LEFT JOIN tests t ON t.id = tb.test_id
         LEFT JOIN users u ON u.id = t.user_id
         WHERE tb.user_id = :user_id
-        ORDER BY tb.created_at DESC, t.id DESC
+          {$categoryWhere}
+        ORDER BY {$orderBy}
         LIMIT {$limit} OFFSET {$offset}
     ");
-    $stmt->execute([':user_id' => $userId]);
+    $stmt->execute($params);
     return tests_attach_category_names($stmt->fetchAll());
 }
 
@@ -977,6 +1258,8 @@ function test_rating_upsert_by_user_id(int $testId, int $userId, int $rating): b
 function tests_find_active_by_id_and_user_id(int $testId, int $userId): ?array
 {
     $pdo = db();
+    $isAdmin = auth_is_admin();
+    $ownerWhere = $isAdmin ? '' : 'AND user_id = :user_id';
 
     $stmt = $pdo->prepare("
         SELECT
@@ -990,19 +1273,28 @@ function tests_find_active_by_id_and_user_id(int $testId, int $userId): ?array
             last_saved_at,
             category_name,
             cover_image,
+            show_answers,
+            shuffle_questions,
+            shuffle_answers,
+            attempt_limit,
             COALESCE(time_limit_sec, CASE WHEN time_limit_min IS NOT NULL THEN time_limit_min * 60 ELSE NULL END) AS time_limit_sec,
             time_limit_min,
             created_at,
             updated_at
         FROM tests
-        WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL
+        WHERE id = :id
+          {$ownerWhere}
+          AND deleted_at IS NULL
         LIMIT 1
     ");
 
-    $stmt->execute([
+    $params = [
         ':id' => $testId,
-        ':user_id' => $userId,
-    ]);
+    ];
+    if (!$isAdmin) {
+        $params[':user_id'] = $userId;
+    }
+    $stmt->execute($params);
 
     $row = $stmt->fetch();
     if ($row === false) {
@@ -1016,21 +1308,26 @@ function tests_find_active_by_id_and_user_id(int $testId, int $userId): ?array
 function tests_delete_by_id_and_user_id(int $testId, int $userId): bool
 {
     $pdo = db();
+    $isAdmin = auth_is_admin();
+    $ownerWhere = $isAdmin ? '' : 'AND user_id = :user_id';
 
 	$stmt = $pdo->prepare("
 		UPDATE tests
 		SET deleted_at = NOW()
 		WHERE id = :id
-          AND user_id = :user_id
+          {$ownerWhere}
           AND deleted_at IS NULL
           AND deleted_forever_at IS NULL
 		LIMIT 1
 	");
 
-    $stmt->execute([
+    $params = [
         ':id' => $testId,
-        ':user_id' => $userId,
-    ]);
+    ];
+    if (!$isAdmin) {
+        $params[':user_id'] = $userId;
+    }
+    $stmt->execute($params);
 
     return $stmt->rowCount() === 1;
 }
@@ -1038,19 +1335,22 @@ function tests_delete_by_id_and_user_id(int $testId, int $userId): bool
 function tests_trash_list_by_user_id(int $userId): array
 {
     $pdo = db();
+    $isAdmin = auth_is_admin();
+    $ownerWhere = $isAdmin ? '' : 'user_id = :user_id AND ';
 
     $stmt = $pdo->prepare("
         SELECT id, user_id, title, description, access_level, created_at, updated_at, deleted_at
         FROM tests
-        WHERE user_id = :user_id
-          AND deleted_at IS NOT NULL
+        WHERE {$ownerWhere}deleted_at IS NOT NULL
           AND deleted_forever_at IS NULL
         ORDER BY deleted_at DESC
     ");
 
-    $stmt->execute([
-        ':user_id' => $userId,
-    ]);
+    $params = [];
+    if (!$isAdmin) {
+        $params[':user_id'] = $userId;
+    }
+    $stmt->execute($params);
 
     return $stmt->fetchAll();
 }
@@ -1058,21 +1358,26 @@ function tests_trash_list_by_user_id(int $userId): array
 function tests_restore_by_id_and_user_id(int $testId, int $userId): bool
 {
     $pdo = db();
+    $isAdmin = auth_is_admin();
+    $ownerWhere = $isAdmin ? '' : 'AND user_id = :user_id';
 
     $stmt = $pdo->prepare("
         UPDATE tests
         SET deleted_at = NULL
         WHERE id = :id
-          AND user_id = :user_id
+          {$ownerWhere}
           AND deleted_at IS NOT NULL
           AND deleted_forever_at IS NULL
         LIMIT 1
     ");
 
-    $stmt->execute([
+    $params = [
         ':id' => $testId,
-        ':user_id' => $userId,
-    ]);
+    ];
+    if (!$isAdmin) {
+        $params[':user_id'] = $userId;
+    }
+    $stmt->execute($params);
 
     return $stmt->rowCount() === 1;
 }
@@ -1081,6 +1386,8 @@ function tests_destroy_by_id_and_user_id(int $testId, int $userId): bool
 {
     $pdo = db();
     $uploadPaths = [];
+    $isAdmin = auth_is_admin();
+    $ownerWhere = $isAdmin ? '' : 'AND user_id = :user_id';
 
     $pdo->beginTransaction();
     try {
@@ -1089,16 +1396,19 @@ function tests_destroy_by_id_and_user_id(int $testId, int $userId): bool
         $stmt = $pdo->prepare("
             DELETE FROM tests
             WHERE id = :id
-              AND user_id = :user_id
+              {$ownerWhere}
               AND deleted_at IS NOT NULL
               AND deleted_forever_at IS NULL
             LIMIT 1
         ");
 
-        $stmt->execute([
+        $params = [
             ':id' => $testId,
-            ':user_id' => $userId,
-        ]);
+        ];
+        if (!$isAdmin) {
+            $params[':user_id'] = $userId;
+        }
+        $stmt->execute($params);
 
         $deleted = $stmt->rowCount() === 1;
         if (!$deleted) {
@@ -1121,18 +1431,21 @@ function tests_destroy_by_id_and_user_id(int $testId, int $userId): bool
 function tests_trash_restore_all_by_user_id(int $userId): int
 {
     $pdo = db();
+    $isAdmin = auth_is_admin();
+    $ownerWhere = $isAdmin ? '' : 'user_id = :user_id AND ';
 
     $stmt = $pdo->prepare("
         UPDATE tests
         SET deleted_at = NULL
-        WHERE user_id = :user_id
-          AND deleted_at IS NOT NULL
+        WHERE {$ownerWhere}deleted_at IS NOT NULL
           AND deleted_forever_at IS NULL
     ");
 
-    $stmt->execute([
-        ':user_id' => $userId,
-    ]);
+    $params = [];
+    if (!$isAdmin) {
+        $params[':user_id'] = $userId;
+    }
+    $stmt->execute($params);
 
     return (int)$stmt->rowCount();
 }
@@ -1141,19 +1454,22 @@ function tests_trash_empty_by_user_id(int $userId): int
 {
     $pdo = db();
     $uploadPaths = [];
+    $isAdmin = auth_is_admin();
+    $ownerWhere = $isAdmin ? '' : 'user_id = :user_id AND ';
 
     $pdo->beginTransaction();
     try {
         $idStmt = $pdo->prepare("
             SELECT id
             FROM tests
-            WHERE user_id = :user_id
-              AND deleted_at IS NOT NULL
+            WHERE {$ownerWhere}deleted_at IS NOT NULL
               AND deleted_forever_at IS NULL
         ");
-        $idStmt->execute([
-            ':user_id' => $userId,
-        ]);
+        $params = [];
+        if (!$isAdmin) {
+            $params[':user_id'] = $userId;
+        }
+        $idStmt->execute($params);
         $testIds = array_map('intval', $idStmt->fetchAll(PDO::FETCH_COLUMN));
         if ($testIds === []) {
             $pdo->rollBack();
@@ -1164,14 +1480,11 @@ function tests_trash_empty_by_user_id(int $userId): int
 
         $stmt = $pdo->prepare("
             DELETE FROM tests
-            WHERE user_id = :user_id
-              AND deleted_at IS NOT NULL
+            WHERE {$ownerWhere}deleted_at IS NOT NULL
               AND deleted_forever_at IS NULL
         ");
 
-        $stmt->execute([
-            ':user_id' => $userId,
-        ]);
+        $stmt->execute($params);
 
         $deletedCount = (int)$stmt->rowCount();
         $pdo->commit();
@@ -1189,18 +1502,21 @@ function tests_trash_empty_by_user_id(int $userId): int
 function tests_trash_count_by_user_id(int $userId): int
 {
     $pdo = db();
+    $isAdmin = auth_is_admin();
+    $ownerWhere = $isAdmin ? '' : 'user_id = :user_id AND ';
 
     $stmt = $pdo->prepare("
         SELECT COUNT(*)
         FROM tests
-        WHERE user_id = :user_id
-          AND deleted_at IS NOT NULL
+        WHERE {$ownerWhere}deleted_at IS NOT NULL
           AND deleted_forever_at IS NULL
     ");
 
-    $stmt->execute([
-        ':user_id' => $userId,
-    ]);
+    $params = [];
+    if (!$isAdmin) {
+        $params[':user_id'] = $userId;
+    }
+    $stmt->execute($params);
 
     return (int)$stmt->fetchColumn();
 }
@@ -1412,10 +1728,16 @@ function tests_update_by_id_and_user_id(
     ?int $timeLimitSec = null,
     ?string $status = null,
     ?string $publishedAt = null,
-    bool $touchLastSavedAt = true
+    bool $touchLastSavedAt = true,
+    int $showAnswers = 0,
+    int $shuffleQuestions = 0,
+    int $shuffleAnswers = 0,
+    ?int $attemptLimit = null
 ): bool
 {
     $pdo = db();
+    $isAdmin = auth_is_admin();
+    $ownerWhere = $isAdmin ? '' : 'AND user_id = :user_id';
     $primaryCategoryName = $categoryNames[0] ?? test_category_default_name();
     if ($status !== null && !test_status_is_valid($status)) {
         $status = null;
@@ -1428,6 +1750,10 @@ function tests_update_by_id_and_user_id(
             category_name = :category_name,
             cover_image = :cover_image,
             time_limit_sec = :time_limit_sec,
+            show_answers = :show_answers,
+            shuffle_questions = :shuffle_questions,
+            shuffle_answers = :shuffle_answers,
+            attempt_limit = :attempt_limit,
             status = COALESCE(:status, status),
             published_at = CASE
                 WHEN :published_at_check IS NULL THEN published_at
@@ -1439,25 +1765,32 @@ function tests_update_by_id_and_user_id(
             END,
             updated_at = NOW()
         WHERE id = :id
-          AND user_id = :user_id
+          {$ownerWhere}
           AND deleted_at IS NULL
         LIMIT 1
     ");
 
-    $stmt->execute([
+    $params = [
         ':title' => $title,
         ':description' => $description,
         ':access_level' => $accessLevel,
         ':category_name' => $primaryCategoryName,
         ':cover_image' => $coverImage,
         ':time_limit_sec' => ($timeLimitSec !== null && $timeLimitSec > 0) ? $timeLimitSec : null,
+        ':show_answers' => test_answers_mode_from_value($showAnswers),
+        ':shuffle_questions' => test_bool_setting($shuffleQuestions),
+        ':shuffle_answers' => test_bool_setting($shuffleAnswers),
+        ':attempt_limit' => ($attemptLimit !== null && $attemptLimit > 0) ? $attemptLimit : null,
         ':status' => $status,
         ':published_at_check' => $publishedAt,
         ':published_at_value' => $publishedAt,
         ':touch_last_saved_at' => $touchLastSavedAt ? 1 : 0,
         ':id' => $testId,
-        ':user_id' => $userId,
-    ]);
+    ];
+    if (!$isAdmin) {
+        $params[':user_id'] = $userId;
+    }
+    $stmt->execute($params);
 
     return $stmt->rowCount() === 1;
 }
@@ -1481,53 +1814,162 @@ function tests_trash_list_by_user_id_paginated(int $userId, int $limit, int $off
     $pdo = db();
     $limit = max(1, min(100, $limit));
     $offset = max(0, $offset);
+    $isAdmin = auth_is_admin();
+    $ownerWhere = $isAdmin ? '' : 'user_id = :user_id AND ';
 
     $stmt = $pdo->prepare("
         SELECT id, user_id, title, description, access_level, created_at, updated_at, deleted_at
         FROM tests
-        WHERE user_id = :user_id
-          AND deleted_at IS NOT NULL
+        WHERE {$ownerWhere}deleted_at IS NOT NULL
           AND deleted_forever_at IS NULL
         ORDER BY deleted_at DESC, id DESC
         LIMIT {$limit} OFFSET {$offset}
     ");
 
-    $stmt->execute([
-        ':user_id' => $userId,
-    ]);
+    $params = [];
+    if (!$isAdmin) {
+        $params[':user_id'] = $userId;
+    }
+    $stmt->execute($params);
 
     return $stmt->fetchAll();
 }
 
-function tests_count_active_by_user_id(int $userId): int
+function tests_count_active_by_user_id(int $userId, ?string $categoryName = null): int
 {
     $pdo = db();
+    $isAdmin = auth_is_admin();
+    $ownerWhere = $isAdmin ? '' : 't.user_id = :user_id AND ';
+    $params = [];
+    if (!$isAdmin) {
+        $params[':user_id'] = $userId;
+    }
+    $categoryWhere = '';
+    if ($categoryName !== null && trim($categoryName) !== '') {
+        $categoryWhere = ' AND ' . tests_category_filter_sql($categoryName, $params, 't', 'active_count_category');
+    }
     $stmt = $pdo->prepare("
         SELECT COUNT(*)
-        FROM tests
-        WHERE user_id = :user_id
-          AND deleted_at IS NULL
+        FROM tests t
+        WHERE {$ownerWhere}t.deleted_at IS NULL
+          {$categoryWhere}
     ");
-    $stmt->execute([
-        ':user_id' => $userId,
-    ]);
+    $stmt->execute($params);
 
     return (int)$stmt->fetchColumn();
+}
+
+function tests_category_counts_by_user_id(int $userId): array
+{
+    $pdo = db();
+    $isAdmin = auth_is_admin();
+    $ownerWherePrimary = $isAdmin ? '' : 'AND t.user_id = :user_id_primary';
+    $ownerWhereLinked = $isAdmin ? '' : 'AND t.user_id = :user_id_linked';
+
+    $stmt = $pdo->prepare("
+        SELECT category_name, COUNT(DISTINCT test_id) AS tests_count
+        FROM (
+            SELECT t.id AS test_id, t.category_name AS category_name
+            FROM tests t
+            WHERE t.deleted_at IS NULL
+              {$ownerWherePrimary}
+              AND t.category_name IS NOT NULL
+              AND t.category_name <> ''
+
+            UNION
+
+            SELECT t.id AS test_id, tcl.category_name AS category_name
+            FROM tests t
+            INNER JOIN test_category_links tcl ON tcl.test_id = t.id
+            WHERE t.deleted_at IS NULL
+              {$ownerWhereLinked}
+              AND tcl.category_name IS NOT NULL
+              AND tcl.category_name <> ''
+        ) category_tests
+        GROUP BY category_name
+    ");
+    $params = [];
+    if (!$isAdmin) {
+        $params[':user_id_primary'] = $userId;
+        $params[':user_id_linked'] = $userId;
+    }
+    $stmt->execute($params);
+
+    $counts = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $categoryName = trim((string)($row['category_name'] ?? ''));
+        if ($categoryName === '') {
+            continue;
+        }
+
+        $canonicalName = test_category_display_name($categoryName);
+        $counts[$canonicalName] = (int)($counts[$canonicalName] ?? 0) + (int)($row['tests_count'] ?? 0);
+    }
+
+    return $counts;
+}
+
+function tests_category_counts_bookmarked_by_user_id(int $userId): array
+{
+    $pdo = db();
+
+    $stmt = $pdo->prepare("
+        SELECT category_name, COUNT(DISTINCT test_id) AS tests_count
+        FROM (
+            SELECT t.id AS test_id, t.category_name AS category_name
+            FROM test_bookmarks tb
+            INNER JOIN tests t ON t.id = tb.test_id
+            WHERE tb.user_id = :user_id_primary
+              AND t.category_name IS NOT NULL
+              AND t.category_name <> ''
+
+            UNION
+
+            SELECT t.id AS test_id, tcl.category_name AS category_name
+            FROM test_bookmarks tb
+            INNER JOIN tests t ON t.id = tb.test_id
+            INNER JOIN test_category_links tcl ON tcl.test_id = t.id
+            WHERE tb.user_id = :user_id_linked
+              AND tcl.category_name IS NOT NULL
+              AND tcl.category_name <> ''
+        ) category_tests
+        GROUP BY category_name
+    ");
+    $stmt->execute([
+        ':user_id_primary' => $userId,
+        ':user_id_linked' => $userId,
+    ]);
+
+    $counts = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $categoryName = trim((string)($row['category_name'] ?? ''));
+        if ($categoryName === '') {
+            continue;
+        }
+
+        $canonicalName = test_category_display_name($categoryName);
+        $counts[$canonicalName] = (int)($counts[$canonicalName] ?? 0) + (int)($row['tests_count'] ?? 0);
+    }
+
+    return $counts;
 }
 
 function tests_count_deleted_by_user_id(int $userId): int
 {
     $pdo = db();
+    $isAdmin = auth_is_admin();
+    $ownerWhere = $isAdmin ? '' : 'user_id = :user_id AND ';
     $stmt = $pdo->prepare("
         SELECT COUNT(*)
         FROM tests
-        WHERE user_id = :user_id
-          AND deleted_at IS NOT NULL
+        WHERE {$ownerWhere}deleted_at IS NOT NULL
           AND deleted_forever_at IS NULL
     ");
-    $stmt->execute([
-        ':user_id' => $userId,
-    ]);
+    $params = [];
+    if (!$isAdmin) {
+        $params[':user_id'] = $userId;
+    }
+    $stmt->execute($params);
 
     return (int)$stmt->fetchColumn();
 }

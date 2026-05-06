@@ -27,8 +27,9 @@ $ratingSum = (int)($test['rating_sum'] ?? 0);
 $ratingRaw = $ratingCount > 0 ? ($ratingSum / $ratingCount) : 0.0;
 $ratingValue = max(0.0, min(5.0, (float)$ratingRaw));
 $isBookmarked = (int)($test['is_bookmarked'] ?? 0) === 1;
+$answersMode = test_answers_mode_from_value($test['show_answers'] ?? test_answers_mode_after_finish());
+$answersModeLabel = test_answers_mode_label($answersMode);
 $timeLimitSec = isset($test['time_limit_sec']) && (int)$test['time_limit_sec'] > 0 ? (int)$test['time_limit_sec'] : null;
-$categoryNames = test_category_display_names($test['category_names'] ?? ($test['category_name'] ?? null));
 $creatorName = trim((string)($test['creator_login'] ?? ''));
 if ($creatorName === '') {
     $creatorName = $currentUserLogin !== '' ? $currentUserLogin : '—';
@@ -39,7 +40,8 @@ if ($createdAt !== '') {
     $dateObj = DateTime::createFromFormat('Y-m-d', $datePart);
     $createdDate = $dateObj ? $dateObj->format('d-m-Y') : $datePart;
 }
-$isOwner = $currentUserId > 0 && (int)($test['user_id'] ?? 0) === $currentUserId;
+$isAdmin = auth_is_admin();
+$isOwner = $isAdmin || ($currentUserId > 0 && (int)($test['user_id'] ?? 0) === $currentUserId);
 $testStatus = (string)($test['status'] ?? 'published');
 $isDraft = $testStatus === 'draft';
 
@@ -61,11 +63,15 @@ if ($availability === 'trashed') {
     $statusText = 'Тест сохранён как черновик и виден только вам';
 }
 
-$showPass = !$isDraft && !$isUnavailable && !$isTrashContext && $canPass;
-$showBookmark = !$isDraft && !$isTrashContext && auth_is_logged_in();
+$showPass = !$isDraft && !$isUnavailable && !$isTrashContext;
+$showBookmark = !$isDraft
+    && !$isTrashContext
+    && auth_is_logged_in()
+    && ($cardContext === 'my_bookmarks' || ($cardContext !== 'my_tests' && !$isOwner));
 $showShare = !$isDraft && !$isUnavailable && !$isTrashContext;
-$showEdit = !$isUnavailable && !$isTrashContext && $isOwner;
-$showDeleteToTrash = !$isUnavailable && $cardContext === 'my_tests' && $isOwner;
+$showFooterManage = !$isUnavailable && !$isTrashContext && $cardContext === 'my_tests' && $isOwner;
+$showEdit = !$showFooterManage && !$isUnavailable && !$isTrashContext && $cardContext === 'my_tests' && $isOwner;
+$showDeleteToTrash = !$showFooterManage && !$isUnavailable && $cardContext === 'my_tests' && $isOwner;
 $showRestoreDestroy = $isTrashContext;
 $showStats = !$isDraft && !$isUnavailable && !$isTrashContext;
 
@@ -74,19 +80,19 @@ $formatTimeLimitShort = static function (?int $seconds): string {
         return 'Без времени';
     }
 
-    if ($seconds % 3600 === 0) {
-        return (int)($seconds / 3600) . ' ч';
+    return (int)floor($seconds / 60) . ' мин';
+};
+
+$formatTimeStat = static function (?int $seconds): array {
+    if ($seconds === null || $seconds <= 0) {
+        return ['0', 'без времени'];
     }
 
-    if ($seconds % 60 === 0) {
-        return (int)($seconds / 60) . ' мин';
-    }
-
-    return gmdate('H:i:s', $seconds);
+    return [(string)(int)floor($seconds / 60), 'мин'];
 };
 ?>
 
-<article class="card test-card test-card--premium<?= $isUnavailable ? ' test-card--unavailable' : '' ?><?= $stateClass ?><?= $contextClass ?>" data-test-card-id="<?= $testId ?>">
+<article class="card test-card test-card--premium<?= $isUnavailable ? ' test-card--unavailable' : '' ?><?= $stateClass ?><?= $contextClass ?><?= !$showBookmark ? ' test-card--no-bookmark' : '' ?>" data-test-card-id="<?= $testId ?>">
     <?php $coverSrc = trim((string)($test['cover_image'] ?? '')) !== '' ? (string)$test['cover_image'] : $defaultCover; ?>
     <div class="test-card__cover">
         <img
@@ -97,9 +103,23 @@ $formatTimeLimitShort = static function (?int $seconds): string {
             decoding="async"
         >
         <div class="test-card__cover-info">
-            <div class="test-card__cover-title">
-                <?= htmlspecialchars($cardTitle, ENT_QUOTES, 'UTF-8') ?>
-            </div>
+            <?php if ($isDraft && $isOwner && !$isTrashContext): ?>
+                <a class="test-card__cover-title" href="/my/tests/<?= $testId ?>/edit">
+                    <?= htmlspecialchars($cardTitle, ENT_QUOTES, 'UTF-8') ?>
+                </a>
+            <?php elseif (!$isUnavailable && !$isTrashContext): ?>
+                <a class="test-card__cover-title" href="/tests/<?= $testId ?>">
+                    <?= htmlspecialchars($cardTitle, ENT_QUOTES, 'UTF-8') ?>
+                </a>
+            <?php else: ?>
+                <div class="test-card__cover-title">
+                    <?= htmlspecialchars($cardTitle, ENT_QUOTES, 'UTF-8') ?>
+                </div>
+            <?php endif; ?>
+        </div>
+        <div class="test-card__time-badge">
+            <img src="/assets/img/test_card_svg/clock.svg" alt="" aria-hidden="true">
+            <span><?= htmlspecialchars($formatTimeLimitShort($timeLimitSec), ENT_QUOTES, 'UTF-8') ?></span>
         </div>
     </div>
 
@@ -119,26 +139,20 @@ $formatTimeLimitShort = static function (?int $seconds): string {
         <?php endif; ?>
 
         <div class="test-card__footer-tags">
-            <?php if (!$isUnavailable && !$isTrashContext): ?>
-                <?php foreach ($categoryNames as $categoryName): ?>
-                    <a class="test-chip test-chip--category" href="<?= htmlspecialchars(test_category_url_by_name($categoryName), ENT_QUOTES, 'UTF-8') ?>">
-                        <img src="/assets/img/test_card_svg/pinpaper-filled.svg" alt="" aria-hidden="true">
-                        <span><?= htmlspecialchars($categoryName, ENT_QUOTES, 'UTF-8') ?></span>
-                    </a>
-                <?php endforeach; ?>
-            <?php endif; ?>
-
             <?php if ($isUnavailable || $isTrashContext || $isDraft): ?>
                 <span class="badge <?= $isDraft ? 'badge--warn' : ($availability === 'deleted' ? 'badge--deleted' : 'badge--trashed') ?>">
                     <?= htmlspecialchars($statusLabel !== '' ? $statusLabel : ($isDraft ? 'Черновик' : 'В корзине'), ENT_QUOTES, 'UTF-8') ?>
                 </span>
             <?php else: ?>
-                <span class="badge <?= $isPublic ? 'badge--ok' : 'badge--warn' ?>">
-                    <?= $isPublic ? 'Доступен всем' : 'Только для зарегистрированных' ?>
+                <span class="badge <?= $isPublic ? 'badge--ok' : 'badge--registered' ?>">
+                    <?= $isPublic ? 'Для всех' : 'Для зарегистрированных' ?>
+                </span>
+                <span class="badge badge--answers">
+                    <?= htmlspecialchars($answersModeLabel, ENT_QUOTES, 'UTF-8') ?>
                 </span>
             <?php endif; ?>
 
-            <span class="test-chip test-chip--soft">
+            <span class="test-chip test-chip--soft test-chip--creator">
                 <img src="/assets/img/test_card_svg/user.svg" alt="" aria-hidden="true">
                 <span><?= htmlspecialchars($creatorName, ENT_QUOTES, 'UTF-8') ?></span>
             </span>
@@ -149,12 +163,12 @@ $formatTimeLimitShort = static function (?int $seconds): string {
                     $deletedDateObj = DateTime::createFromFormat('Y-m-d', $deletedDatePart);
                     $deletedDateFmt = $deletedDateObj ? $deletedDateObj->format('d-m-Y') : $deletedDatePart;
                 ?>
-                <span class="test-chip test-chip--soft">
+                <span class="test-chip test-chip--soft test-chip--date">
                     <img src="/assets/img/test_card_svg/calendar.svg" alt="" aria-hidden="true">
                     <span><?= htmlspecialchars($deletedDateFmt, ENT_QUOTES, 'UTF-8') ?></span>
                 </span>
             <?php else: ?>
-                <span class="test-chip test-chip--soft">
+                <span class="test-chip test-chip--soft test-chip--date">
                     <img src="/assets/img/test_card_svg/calendar.svg" alt="" aria-hidden="true">
                     <span><?= htmlspecialchars($createdDate, ENT_QUOTES, 'UTF-8') ?></span>
                 </span>
@@ -165,21 +179,25 @@ $formatTimeLimitShort = static function (?int $seconds): string {
             <?= htmlspecialchars((($isUnavailable || $isTrashContext || $isDraft) && $statusText !== '') ? $statusText : $descriptionText, ENT_QUOTES, 'UTF-8') ?>
         </p>
 
+    </div>
+
+    <div class="test-card__side">
         <div class="test-card__icon-actions">
             <?php if ($showPass): ?>
                 <a
                     href="/tests/<?= $testId ?>"
-                    class="test-card__icon-btn test-card__icon-btn--primary ui-tooltip ui-tooltip--bottom"
-                    data-tooltip="Пройти тест"
-                    aria-label="Пройти тест"
+                    class="test-card__icon-btn test-card__icon-btn--primary<?= !$canPass ? ' test-card__icon-btn--primary-auth' : '' ?> ui-tooltip ui-tooltip--bottom"
+                    data-tooltip="<?= $canPass ? 'Пройти тест' : 'Войти для прохождения' ?>"
+                    aria-label="<?= $canPass ? 'Пройти тест' : 'Войти для прохождения теста' ?>"
                 >
                     <img src="/assets/img/test_card_svg/play.svg" alt="" aria-hidden="true">
+                    <span class="test-card__icon-btn-text">Перейти к тесту</span>
                 </a>
             <?php endif; ?>
 
             <?php if ($showBookmark): ?>
                 <?= form_open('/my/bookmarks/' . $testId . '/toggle', 'post', [
-                    'class' => 'inline',
+                    'class' => 'inline test-card__bookmark-action',
                     'data-bookmark-toggle' => '1',
                     'data-test-id' => (string)$testId,
                 ]) ?>
@@ -200,7 +218,7 @@ $formatTimeLimitShort = static function (?int $seconds): string {
             <?php if ($showShare): ?>
                 <button
                     type="button"
-                    class="test-card__icon-btn ui-tooltip ui-tooltip--bottom"
+                    class="test-card__icon-btn test-card__icon-btn--share ui-tooltip ui-tooltip--bottom"
                     data-share-copy="/tests/<?= $testId ?>"
                     data-tooltip="Поделиться"
                     aria-label="Поделиться ссылкой на тест"
@@ -242,7 +260,10 @@ $formatTimeLimitShort = static function (?int $seconds): string {
 
             <?php if ($showRestoreDestroy): ?>
                 <?= form_open('/my/tests/' . $testId . '/restore', 'post', ['class' => 'inline']) ?>
-                    <button type="submit" class="btn">Восстановить</button>
+                    <button type="submit" class="btn">
+                        <img src="/assets/img/undo.svg" class="btn-icon" width="16" height="16" aria-hidden="true">
+                        Восстановить
+                    </button>
                 </form>
 
                 <?= form_open('/my/tests/' . $testId . '/destroy', 'post', [
@@ -252,7 +273,10 @@ $formatTimeLimitShort = static function (?int $seconds): string {
                     'data-confirm-text' => 'Удалить этот тест навсегда? Это действие нельзя отменить.',
                     'data-confirm-ok' => 'Удалить навсегда',
                 ]) ?>
-                    <button type="submit" class="btn btn--danger">Удалить навсегда</button>
+                    <button type="submit" class="btn btn--danger" style="padding-left: 14px; padding-right: 14px;">
+                        <img src="/assets/img/delete-test.svg" class="btn-icon" width="22" height="22" style="filter: brightness(0) saturate(100%) invert(19%) sepia(96%) saturate(7484%) hue-rotate(359deg)" aria-hidden="true">
+                        Удалить навсегда
+                    </button>
                 </form>
             <?php endif; ?>
         </div>
@@ -261,25 +285,33 @@ $formatTimeLimitShort = static function (?int $seconds): string {
     <?php if ($showStats): ?>
         <div class="test-card__stats">
             <div class="test-stat">
-                <img src="/assets/img/test_card_svg/question.svg" alt="" aria-hidden="true">
-                <span><?= $formatNumber($questionsCount) ?> <?= $pluralRu($questionsCount, 'вопрос', 'вопроса', 'вопросов') ?></span>
+                <span class="test-stat__main">
+                    <img src="/assets/img/test_card_svg/question.svg" alt="" aria-hidden="true">
+                    <span class="test-stat__value"><?= $formatNumber($questionsCount) ?></span>
+                </span>
+                <span class="test-stat__label"><?= $pluralRu($questionsCount, 'вопрос', 'вопроса', 'вопросов') ?></span>
             </div>
             <div class="test-stat">
-                <?php if ($timeLimitSec !== null && $timeLimitSec > 0): ?>
+                <?php [$timeStatValue, $timeStatLabel] = $formatTimeStat($timeLimitSec); ?>
+                <span class="test-stat__main">
                     <img src="/assets/img/test_card_svg/clock.svg" alt="" aria-hidden="true">
-                    <span><?= htmlspecialchars($formatTimeLimitShort($timeLimitSec), ENT_QUOTES, 'UTF-8') ?></span>
-                <?php else: ?>
-                    <img src="/assets/img/test_card_svg/infinity.svg" alt="" aria-hidden="true">
-                    <span>Без времени</span>
-                <?php endif; ?>
+                    <span class="test-stat__value"><?= htmlspecialchars($timeStatValue, ENT_QUOTES, 'UTF-8') ?></span>
+                </span>
+                <span class="test-stat__label"><?= htmlspecialchars($timeStatLabel, ENT_QUOTES, 'UTF-8') ?></span>
             </div>
             <div class="test-stat">
-                <img src="/assets/img/test_card_svg/eye-open.svg" alt="" aria-hidden="true">
-                <span><?= $formatNumber($viewsCount) ?></span>
+                <span class="test-stat__main">
+                    <img src="/assets/img/test_card_svg/eye-open.svg" alt="" aria-hidden="true">
+                    <span class="test-stat__value"><?= $formatNumber($viewsCount) ?></span>
+                </span>
+                <span class="test-stat__label"><?= $pluralRu($viewsCount, 'просмотр', 'просмотра', 'просмотров') ?></span>
             </div>
             <div class="test-stat">
-                <img src="/assets/img/test_card_svg/refresh.svg" alt="" aria-hidden="true">
-                <span><?= $formatNumber($attemptsCount) ?></span>
+                <span class="test-stat__main">
+                    <img src="/assets/img/test_card_svg/refresh.svg" alt="" aria-hidden="true">
+                    <span class="test-stat__value"><?= $formatNumber($attemptsCount) ?></span>
+                </span>
+                <span class="test-stat__label"><?= $pluralRu($attemptsCount, 'прохождение', 'прохождения', 'прохождений') ?></span>
             </div>
             <div class="test-card__rating test-card__rating--in-stats" aria-label="Рейтинг теста">
                 <div class="test-stars" aria-hidden="true">
@@ -293,4 +325,58 @@ $formatTimeLimitShort = static function (?int $seconds): string {
             </div>
         </div>
     <?php endif; ?>
+
+    <div class="test-card__home-footer">
+        <?php if ($showFooterManage): ?>
+            <span class="test-card__home-footer-item test-card__home-footer-item--actions">
+                <a
+                    href="/my/tests/<?= $testId ?>/edit"
+                    class="test-card__footer-action ui-tooltip ui-tooltip--top"
+                    data-tooltip="Редактировать"
+                    aria-label="Редактировать тест"
+                >
+                    <img src="/assets/img/test_card_svg/edit-2-svgrepo-com.svg" alt="" aria-hidden="true">
+                </a>
+
+                <?= form_open('/my/tests/' . $testId . '/delete', 'post', [
+                    'class' => 'inline',
+                    'data-confirm' => '1',
+                    'data-confirm-title' => 'Отправить в корзину?',
+                    'data-confirm-text' => 'Убрать этот тест в корзину? Его можно будет восстановить.',
+                    'data-confirm-ok' => 'В корзину',
+                ]) ?>
+                    <button
+                        type="submit"
+                        class="test-card__footer-action test-card__footer-action--danger ui-tooltip ui-tooltip--top"
+                        data-tooltip="Удалить"
+                        aria-label="Удалить тест"
+                    >
+                        <img src="/assets/img/test_card_svg/trash-test-card.svg" alt="" aria-hidden="true">
+                    </button>
+                </form>
+            </span>
+        <?php else: ?>
+            <span class="test-card__home-footer-item test-card__home-footer-item--creator">
+                <img src="/assets/img/test_card_svg/autor_of_tests.svg" alt="" aria-hidden="true">
+                <span class="test-card__home-footer-text">
+                    <span class="test-card__home-footer-value"><?= htmlspecialchars($creatorName, ENT_QUOTES, 'UTF-8') ?></span>
+                    <span class="test-card__home-footer-label">Автор теста</span>
+                </span>
+            </span>
+        <?php endif; ?>
+        <span class="test-card__home-footer-item test-card__home-footer-item--date">
+            <img src="/assets/img/test_card_svg/calendar.svg" alt="" aria-hidden="true">
+            <span class="test-card__home-footer-text">
+                <span class="test-card__home-footer-value"><?= htmlspecialchars($createdDate, ENT_QUOTES, 'UTF-8') ?></span>
+                <span class="test-card__home-footer-label">Создан</span>
+            </span>
+        </span>
+        <span class="test-card__home-footer-item test-card__home-footer-item--rating">
+            <span class="test-card__home-footer-star" aria-hidden="true">★</span>
+            <span class="test-card__home-footer-text">
+                <span class="test-card__home-footer-value"><?= number_format($ratingValue, 1, '.', '') ?> (<?= $formatNumber($ratingCount) ?>)</span>
+                <span class="test-card__home-footer-label">Рейтинг</span>
+            </span>
+        </span>
+    </div>
 </article>

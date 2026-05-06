@@ -38,6 +38,48 @@ function attempts_has_finished_by_test_id_and_user_id(int $testId, int $userId):
     return $stmt->fetchColumn() !== false;
 }
 
+function attempts_count_finished_by_test_id_and_user_id(int $testId, int $userId): int
+{
+    $pdo = db();
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM attempts
+        WHERE test_id = :test_id
+          AND user_id = :user_id
+          AND finished_at IS NOT NULL
+    ");
+    $stmt->execute([
+        ':test_id' => $testId,
+        ':user_id' => $userId,
+    ]);
+
+    return (int)$stmt->fetchColumn();
+}
+
+function attempts_count_finished_guest_by_test_id(int $testId, array $attemptIds): int
+{
+    $attemptIds = array_values(array_unique(array_filter(array_map('intval', $attemptIds), static fn(int $id): bool => $id > 0)));
+    if ($attemptIds === []) {
+        return 0;
+    }
+
+    $pdo = db();
+    $placeholders = implode(',', array_fill(0, count($attemptIds), '?'));
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM attempts
+        WHERE id IN ($placeholders)
+          AND test_id = ?
+          AND user_id IS NULL
+          AND finished_at IS NOT NULL
+    ");
+    $params = $attemptIds;
+    $params[] = $testId;
+    $stmt->execute($params);
+
+    return (int)$stmt->fetchColumn();
+}
+
 function attempt_create(int $testId, ?int $userId): int
 {
     $pdo = db();
@@ -484,4 +526,53 @@ function attempts_list_by_user_id_filtered(int $userId, array $filters, int $lim
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     return $stmt->fetchAll();
+}
+
+function pending_attempt_for_user(): ?array
+{
+    $sessionMap = $_SESSION['active_attempt_id_by_test'] ?? null;
+    if (!is_array($sessionMap) || empty($sessionMap)) {
+        return null;
+    }
+
+    // Most recent attempt is the last entry — iterate in reverse
+    $entries = array_reverse($sessionMap, true);
+
+    $pdo = db();
+    foreach ($entries as $testId => $attemptId) {
+        $attemptId = (int)$attemptId;
+        if ($attemptId <= 0) {
+            continue;
+        }
+
+        $stmt = $pdo->prepare("
+            SELECT a.id, a.test_id, a.expires_at,
+                   COALESCE(t.title, a.test_title_snapshot, 'Тест') AS test_title
+            FROM attempts a
+            INNER JOIN tests t
+                ON t.id = a.test_id
+               AND t.deleted_at IS NULL
+               AND t.deleted_forever_at IS NULL
+            WHERE a.id = :id
+              AND a.finished_at IS NULL
+              AND (a.expires_at IS NULL OR a.expires_at > NOW())
+            LIMIT 1
+        ");
+        $stmt->execute([':id' => $attemptId]);
+        $row = $stmt->fetch();
+
+        if ($row !== false) {
+            return [
+                'attempt_id' => (int)$row['id'],
+                'test_id'    => (int)$row['test_id'],
+                'test_title' => (string)$row['test_title'],
+                'pass_url'   => '/tests/' . (int)$row['test_id'] . '/pass',
+            ];
+        }
+
+        // Stale entry — clean up session
+        unset($_SESSION['active_attempt_id_by_test'][(int)$testId]);
+    }
+
+    return null;
 }

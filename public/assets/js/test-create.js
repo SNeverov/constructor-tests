@@ -2,22 +2,77 @@ const MAX_OPTIONS = 10;
 const MAX_INPUT_ANSWERS = 10;
 const QUESTION_TEXT_MAX = 1000;
 const QUESTION_TEXT_MIN_HEIGHT = 36;
+const OPTION_TEXT_MAX = 1000;
+const OPTION_TEXT_MIN_HEIGHT = 34;
+const TEST_TITLE_MAX = 200;
 const TEST_DESCRIPTION_MAX = 500;
 const TEST_DESCRIPTION_MIN_HEIGHT = 76;
 const DRAFT_AUTOSAVE_DELAY = 3000;
 
+function syncAutosizeTextarea(textarea, config) {
+    const wrap = textarea.closest(config.wrap);
+    if (wrap) wrap.classList.remove('is-multiline');
+
+    textarea.style.height = 'auto';
+    const scrollH = textarea.scrollHeight;
+    textarea.style.paddingBottom = '';
+    const isMultiline = scrollH > config.minHeight + 2;
+
+    if (wrap) wrap.classList.toggle('is-multiline', isMultiline);
+
+    textarea.style.height = 'auto';
+    textarea.style.height = `${Math.max(textarea.scrollHeight, config.minHeight)}px`;
+
+    const el = textarea.closest(config.closest)?.querySelector(config.attr);
+    if (el) {
+        el.textContent = `${textarea.value.length}/${config.max}`;
+    }
+}
+
+function syncOptionTextUI(textarea) {
+    syncAutosizeTextarea(textarea, {
+        wrap: '.option-text-wrap',
+        closest: '[data-option]',
+        attr: '[data-option-text-limit]',
+        max: OPTION_TEXT_MAX,
+        minHeight: OPTION_TEXT_MIN_HEIGHT
+    });
+}
+
+function syncAnswerTextUI(textarea) {
+    syncAutosizeTextarea(textarea, {
+        wrap: '.answer-text-wrap',
+        closest: '[data-answer]',
+        attr: '[data-answer-text-limit]',
+        max: OPTION_TEXT_MAX,
+        minHeight: OPTION_TEXT_MIN_HEIGHT
+    });
+}
+
+document.addEventListener('input', (e) => {
+    if (e.target.closest('[data-option-text]')) syncOptionTextUI(e.target.closest('[data-option-text]'));
+    if (e.target.closest('[data-answer-text]')) syncAnswerTextUI(e.target.closest('[data-answer-text]'));
+});
+
 // ─── Lightbox ────────────────────────────────────────────────────────────────
+
+let lightboxScrollY = 0;
 
 function openLightbox(src, fullSize) {
     const lb = document.getElementById('imgLightbox');
     const img = document.getElementById('imgLightboxImg');
     if (!lb || !img) return;
 
+    lightboxScrollY = window.scrollY || document.documentElement.scrollTop || 0;
     img.style.width = '';
     img.style.height = '';
     img.src = '';
     lb.setAttribute('aria-hidden', 'false');
-    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${lightboxScrollY}px`;
+    document.body.style.left = '0';
+    document.body.style.right = '0';
+    document.body.style.width = '100%';
 
     const tmp = new Image();
     tmp.onload = () => {
@@ -44,12 +99,20 @@ function closeLightbox() {
     lb.addEventListener('transitionend', () => {
         lb.classList.remove('is-open', 'is-closing');
         lb.setAttribute('aria-hidden', 'true');
-        document.body.style.overflow = '';
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.left = '';
+        document.body.style.right = '';
+        document.body.style.width = '';
+        window.scrollTo(0, lightboxScrollY);
     }, { once: true });
 }
 
 document.addEventListener('click', (e) => {
-    if (e.target.closest('[data-lightbox-close]')) closeLightbox();
+    if (e.target.closest('[data-lightbox-close]')) {
+        e.preventDefault();
+        closeLightbox();
+    }
 });
 
 document.addEventListener('keydown', (e) => {
@@ -161,7 +224,10 @@ function initImgUpload(wrap) {
     wrap.addEventListener('click', (e) => {
         if (e.target.closest('[data-img-zoom]') || e.target.closest('.img-upload-thumb')) {
             const hidden = wrap.querySelector('input[type="hidden"]');
-            if (hidden && hidden.value) openLightbox(hidden.value);
+            if (hidden && hidden.value) {
+                e.preventDefault();
+                openLightbox(hidden.value);
+            }
         }
     });
 }
@@ -279,7 +345,7 @@ function initSegmentedSlider(segmented) {
     function update(animate) {
         const checked = segmented.querySelector('input:checked');
         if (!checked) return;
-        const label = checked.closest('.segmented__item');
+        const label = checked.closest('.segmented__item, .access-mode-control__item, .answers-mode-control__item');
         if (label) movePillTo(label, animate);
     }
 
@@ -321,15 +387,16 @@ function initQuestion(q) {
     if (!typeSelect) return;
 
     const questionText = q.querySelector('[data-question-text]');
-    const questionTextLimit = q.querySelector('[data-question-text-limit]');
 
     function syncQuestionTextUI() {
         if (!questionText) return;
-        questionText.style.height = 'auto';
-        questionText.style.height = `${Math.max(questionText.scrollHeight, QUESTION_TEXT_MIN_HEIGHT)}px`;
-        if (questionTextLimit) {
-            questionTextLimit.textContent = `${questionText.value.length}/${QUESTION_TEXT_MAX}`;
-        }
+        syncAutosizeTextarea(questionText, {
+            wrap: '.question-text-wrap',
+            closest: '[data-question]',
+            attr: '[data-question-text-limit]',
+            max: QUESTION_TEXT_MAX,
+            minHeight: QUESTION_TEXT_MIN_HEIGHT
+        });
     }
 
     if (questionText) {
@@ -356,6 +423,11 @@ function initQuestion(q) {
                 opt.querySelectorAll('input').forEach((input) => {
                     if (input.type === 'text') input.value = '';
                     if (input.type === 'checkbox' || input.type === 'radio') input.checked = false;
+                });
+                opt.querySelectorAll('textarea[data-option-text]').forEach((ta) => {
+                    ta.value = '';
+                    ta.style.height = '';
+                    syncOptionTextUI(ta);
                 });
                 const imgWrap = opt.querySelector('[data-img-upload]');
                 if (imgWrap) resetImgUploadWrap(imgWrap);
@@ -392,6 +464,11 @@ function initQuestion(q) {
                 row.querySelectorAll('input').forEach((input) => {
                     if (input.type === 'text') input.value = '';
                 });
+                row.querySelectorAll('textarea[data-answer-text]').forEach((ta) => {
+                    ta.value = '';
+                    ta.style.height = '';
+                    syncAnswerTextUI(ta);
+                });
                 markFormDirty();
                 return;
             }
@@ -407,20 +484,25 @@ function initQuestion(q) {
 
         const type = typeSelect.value;
         const isInput = type === 'input';
+        const isOrder = type === 'order';
         q.classList.toggle('is-type-input', isInput);
+        q.classList.toggle('is-type-order', isOrder);
 
         if (optionsBlock) optionsBlock.style.display = isInput ? 'none' : '';
         if (textBlock) textBlock.style.display = isInput ? '' : 'none';
         if (addOptionBtn) addOptionBtn.style.display = isInput ? 'none' : '';
 
-        // скрываем img-upload на вариантах если input-тип
+        // скрываем img-upload на вариантах если input-тип или order-тип
         q.querySelectorAll('[data-option] [data-img-upload="option"]').forEach((w) => {
-            w.style.display = isInput ? 'none' : '';
+            w.style.display = (isInput || isOrder) ? 'none' : '';
         });
 
         const correctInputs = q.querySelectorAll('.option-correct');
         correctInputs.forEach((el) => {
-            el.type = type === 'radio' ? 'radio' : 'checkbox';
+            // для order не меняем тип (is_correct не используется)
+            if (!isOrder) {
+                el.type = type === 'radio' ? 'radio' : 'checkbox';
+            }
         });
 
         if (type === 'radio') {
@@ -453,6 +535,12 @@ function initQuestion(q) {
                 if (input.type === 'text') input.value = '';
                 if (input.type === 'checkbox' || input.type === 'radio') input.checked = false;
             });
+            clone.querySelectorAll('textarea[data-option-text]').forEach((ta) => {
+                ta.value = '';
+                ta.style.height = '';
+            });
+            const cloneLimit = clone.querySelector('[data-option-text-limit]');
+            if (cloneLimit) cloneLimit.textContent = `0/${OPTION_TEXT_MAX}`;
 
             // сбрасываем img-upload в клоне
             const imgWrap = clone.querySelector('[data-img-upload]');
@@ -492,6 +580,12 @@ function initQuestion(q) {
             clone.querySelectorAll('input').forEach((input) => {
                 if (input.type === 'text') input.value = '';
             });
+            clone.querySelectorAll('textarea[data-answer-text]').forEach((ta) => {
+                ta.value = '';
+                ta.style.height = '';
+            });
+            const cloneAnswerLimit = clone.querySelector('[data-answer-text-limit]');
+            if (cloneAnswerLimit) cloneAnswerLimit.textContent = `0/${OPTION_TEXT_MAX}`;
 
             const answersList = textBlock.querySelector('.answers');
             if (answersList) answersList.appendChild(clone);
@@ -516,16 +610,30 @@ function initQuestion(q) {
 // ─── DOMContentLoaded ─────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
+    const testTitle = document.querySelector('[data-test-title]');
+    const testTitleLimit = document.querySelector('[data-test-title-limit]');
     const testDescription = document.querySelector('[data-test-description]');
-    const testDescriptionLimit = document.querySelector('[data-test-description-limit]');
+
+    function syncTestTitleUI() {
+        if (!testTitleLimit || !testTitle) return;
+        testTitleLimit.textContent = `${testTitle.value.length}/${TEST_TITLE_MAX}`;
+    }
+
+    if (testTitle) {
+        testTitle.maxLength = TEST_TITLE_MAX;
+        testTitle.addEventListener('input', syncTestTitleUI);
+        syncTestTitleUI();
+    }
 
     function syncTestDescriptionUI() {
         if (!testDescription) return;
-        testDescription.style.height = 'auto';
-        testDescription.style.height = `${Math.max(testDescription.scrollHeight, TEST_DESCRIPTION_MIN_HEIGHT)}px`;
-        if (testDescriptionLimit) {
-            testDescriptionLimit.textContent = `${testDescription.value.length}/${TEST_DESCRIPTION_MAX}`;
-        }
+        syncAutosizeTextarea(testDescription, {
+            wrap: '.test-description-wrap',
+            closest: '.test-description-wrap',
+            attr: '[data-test-description-limit]',
+            max: TEST_DESCRIPTION_MAX,
+            minHeight: TEST_DESCRIPTION_MIN_HEIGHT
+        });
     }
 
     if (testDescription) {
@@ -615,8 +723,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     optRows.forEach((row, i) => {
                         const opt = incomingOptions[i] || {};
 
-                        const textInput = row.querySelector(`input[name="questions[${idx}][options][${i}][text]"]`);
-                        if (textInput) textInput.value = opt.text ?? '';
+                        const textInput = row.querySelector(
+                            `textarea[name="questions[${idx}][options][${i}][text]"], input[name="questions[${idx}][options][${i}][text]"]`
+                        );
+                        if (textInput) {
+                            textInput.value = opt.text ?? '';
+                            if (textInput.tagName === 'TEXTAREA') syncOptionTextUI(textInput);
+                        }
 
                         const correctInput = row.querySelector(`input.option-correct[name="questions[${idx}][options][${i}][is_correct]"]`);
                         if (correctInput) correctInput.checked = String(opt.is_correct ?? '0') === '1';
@@ -656,8 +769,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     const answerRows = textBlock.querySelectorAll('[data-answer]');
                     answerRows.forEach((row, i) => {
                         const val = incomingAnswers[i] ?? '';
-                        const inp = row.querySelector(`input[name="questions[${idx}][answers][${i}]"]`);
-                        if (inp) inp.value = val ?? '';
+                        const inp = row.querySelector(
+                            `textarea[name="questions[${idx}][answers][${i}]"], input[name="questions[${idx}][answers][${i}]"]`
+                        );
+                        if (inp) {
+                            inp.value = val ?? '';
+                            if (inp.tagName === 'TEXTAREA') syncAnswerTextUI(inp);
+                        }
                     });
                 }
 
@@ -669,8 +787,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.querySelectorAll('[data-question]').forEach(initQuestion);
     reindexQuestions();
+    document.querySelectorAll('[data-option-text]').forEach(syncOptionTextUI);
+    document.querySelectorAll('[data-answer-text]').forEach(syncAnswerTextUI);
 
-    document.querySelectorAll('.form-section .segmented').forEach(initSegmentedSlider);
+    document
+        .querySelectorAll('.form-section .segmented, .access-mode-control, .answers-mode-control')
+        .forEach(initSegmentedSlider);
 
     document.addEventListener('click', (e) => {
         const addAfterBtn = e.target.closest('[data-action="add-question-after"]');
@@ -735,6 +857,7 @@ let isSubmitting = false;
 let autosaveTimer = 0;
 let autosaveInFlight = false;
 let draftChangeVersion = 0;
+let sessionHasDraft = false; // становится true после первого успешного автосохранения черновика
 
 function getTestCreateForm() {
     return document.querySelector('#testCreateForm');
@@ -744,9 +867,24 @@ function getSaveStatusEl() {
     return document.querySelector('[data-save-status]');
 }
 
-function setSaveStatus(text) {
+function saveStatusStateFromText(text) {
+    const normalized = String(text || '').toLowerCase();
+    if (normalized.includes('несохран')) return 'dirty';
+    if (normalized.includes('ошибка') || normalized.includes('не удалось') || normalized.includes('http')) return 'error';
+    if (normalized.includes('сохранение') || normalized.includes('автосохранение')) return 'saving';
+    if (normalized.includes('сохранён') || normalized.includes('сохранен')) return 'saved';
+    return 'idle';
+}
+
+function setSaveStatus(text, state = '') {
     const el = getSaveStatusEl();
-    if (el) el.textContent = text;
+    if (!el) return;
+
+    const normalized = String(text || '').replace(/\s+/g, ' ').trim();
+    el.textContent = normalized.length > 180
+        ? normalized.slice(0, 177) + '...'
+        : normalized;
+    el.dataset.saveState = state || saveStatusStateFromText(normalized);
 }
 
 function isDraftEnabled() {
@@ -766,7 +904,7 @@ function markFormDirty() {
     draftChangeVersion += 1;
     formDirty = true;
     if (isDraftEnabled()) {
-        setSaveStatus('Есть несохранённые изменения');
+        setSaveStatus('Есть несохранённые изменения', 'dirty');
         scheduleDraftAutosave();
     }
 }
@@ -789,6 +927,8 @@ function updateDraftRouting(payload) {
 
     const idInput = form.querySelector('[data-draft-test-id]');
     if (idInput) idInput.value = testId;
+
+    sessionHasDraft = true;
 }
 
 async function parseResponsePayload(response) {
@@ -800,9 +940,17 @@ async function parseResponsePayload(response) {
 
     const text = await response.text();
     const compactText = text.replace(/\s+/g, ' ').trim();
+    const looksLikeHtmlError =
+        /<\s*(?:!doctype|html|head|body|br|font|table|tr|td|th|span)\b/i.test(compactText)
+        || compactText.includes('xdebug-error')
+        || compactText.includes('Fatal error:')
+        || compactText.includes('Stack trace:');
+
     return {
         ok: false,
-        message: compactText !== '' ? compactText.slice(0, 300) : `HTTP ${response.status}`
+        message: looksLikeHtmlError
+            ? `Ошибка сервера при сохранении черновика (HTTP ${response.status})`
+            : (compactText !== '' ? compactText.slice(0, 180) : `HTTP ${response.status}`)
     };
 }
 
@@ -814,7 +962,7 @@ async function saveDraft(reason = 'manual') {
 
     autosaveInFlight = true;
     window.clearTimeout(autosaveTimer);
-    setSaveStatus(reason === 'auto' ? 'Автосохранение…' : 'Сохранение черновика…');
+    setSaveStatus(reason === 'auto' ? 'Автосохранение…' : 'Сохранение черновика…', 'saving');
 
     try {
         const response = await fetch(form.dataset.draftUrl || '/my/tests/draft', {
@@ -840,10 +988,10 @@ async function saveDraft(reason = 'manual') {
             formDirty = false;
         }
 
-        setSaveStatus(data.message || 'Черновик сохранён');
+        setSaveStatus(data.message || 'Черновик сохранён', data.saved === false ? 'idle' : 'saved');
         return true;
     } catch (error) {
-        setSaveStatus(error instanceof Error ? error.message : 'Ошибка сохранения черновика');
+        setSaveStatus(error instanceof Error ? error.message : 'Ошибка сохранения черновика', 'error');
         return false;
     } finally {
         autosaveInFlight = false;
@@ -873,7 +1021,7 @@ function hasPrefilledData() {
 document.addEventListener('DOMContentLoaded', () => {
     formDirty = hasPrefilledData();
     if (isDraftEnabled()) {
-        setSaveStatus(formDirty ? 'Есть несохранённые изменения' : 'Черновик ещё не сохранён');
+        setSaveStatus(formDirty ? 'Есть несохранённые изменения' : 'Черновик ещё не сохранён', formDirty ? 'dirty' : 'idle');
     }
 
     const saveDraftBtn = document.querySelector('[data-save-draft]');
@@ -897,6 +1045,7 @@ document.addEventListener('submit', (e) => {
         isSubmitting = true;
         window.clearTimeout(autosaveTimer);
         formDirty = false;
+        sessionHasDraft = false;
     }
 }, true);
 
@@ -904,13 +1053,13 @@ window.addEventListener('pageshow', () => {
     isSubmitting = false;
     formDirty = hasPrefilledData();
     if (isDraftEnabled()) {
-        setSaveStatus(formDirty ? 'Есть несохранённые изменения' : 'Черновик сохранён');
+        setSaveStatus(formDirty ? 'Есть несохранённые изменения' : 'Черновик сохранён', formDirty ? 'dirty' : 'saved');
     }
 });
 
 window.addEventListener('beforeunload', (e) => {
     if (isSubmitting) return;
-    if (!formDirty) return;
+    if (!formDirty && !sessionHasDraft) return;
     e.preventDefault();
     /** @type {any} */ (e).returnValue = '';
 });

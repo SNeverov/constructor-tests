@@ -426,4 +426,28 @@
     });
   })();
 
+  // ─── Pending attempt banner dismiss ────────────────────────────────────────
+  (function () {
+    var banner = document.getElementById('pendingBanner');
+    var closeBtn = document.getElementById('pendingBannerClose');
+    if (!banner || !closeBtn) return;
+
+    var attemptId = banner.dataset.pendingAttemptId || '';
+    var storageKey = 'pending-banner-dismissed:' + attemptId;
+
+    // Hide if already dismissed this session
+    if (attemptId && sessionStorage.getItem(storageKey)) {
+      banner.remove();
+      return;
+    }
+
+    closeBtn.addEventListener('click', function () {
+      banner.classList.add('is-hiding');
+      if (attemptId) sessionStorage.setItem(storageKey, '1');
+      banner.addEventListener('animationend', function () {
+        banner.remove();
+      }, { once: true });
+    });
+  })();
+
 })();

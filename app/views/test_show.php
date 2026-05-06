@@ -13,8 +13,13 @@ $viewsCount    = (int)($test['views_count'] ?? 0);
 $attemptsCount = (int)($test['attempts_count'] ?? 0);
 $creatorLogin  = trim((string)($test['creator_login'] ?? ''));
 $defaultCover  = '/assets/img/cover/default_test_cover.webp';
+$answersMode = test_answers_mode_from_value($test['show_answers'] ?? test_answers_mode_after_finish());
+$answersModeLabel = test_answers_mode_label($answersMode);
 
 $categoryNames = test_category_display_names($test['category_names'] ?? ($test['category_name'] ?? null));
+$visibleCategoryNames = array_slice($categoryNames, 0, 3);
+$hiddenCategoryNames = array_slice($categoryNames, 3);
+$hiddenCategoryTitle = implode(', ', $hiddenCategoryNames);
 $createdAt = trim((string)($test['created_at'] ?? ''));
 $createdDate = '';
 if ($createdAt !== '') {
@@ -83,15 +88,11 @@ $timeLimitView = $formatTimeLimit($timeLimitSec);
                 </button>
 
                 <span class="badge <?= (($test['access_level'] ?? '') === 'public') ? 'badge--ok' : 'badge--warn' ?>">
-                    <?= (($test['access_level'] ?? '') === 'public') ? 'Доступен всем' : 'Только для зарегистрированных' ?>
+                    <?= (($test['access_level'] ?? '') === 'public') ? 'Для всех' : 'Для зарегистрированных' ?>
                 </span>
-
-                <?php foreach ($categoryNames as $categoryName): ?>
-                    <a class="test-chip test-chip--category" href="<?= htmlspecialchars(test_category_url_by_name($categoryName), ENT_QUOTES, 'UTF-8') ?>">
-                        <img src="/assets/img/test_card_svg/pinpaper-filled.svg" alt="" aria-hidden="true">
-                        <span><?= htmlspecialchars($categoryName, ENT_QUOTES, 'UTF-8') ?></span>
-                    </a>
-                <?php endforeach; ?>
+                <span class="badge badge--answers">
+                    <?= htmlspecialchars($answersModeLabel, ENT_QUOTES, 'UTF-8') ?>
+                </span>
                 <?php if ($creatorLogin !== ''): ?>
                     <span class="test-chip test-chip--soft">
                         <img src="/assets/img/test_card_svg/user.svg" alt="" aria-hidden="true">
@@ -105,6 +106,22 @@ $timeLimitView = $formatTimeLimit($timeLimitSec);
                     </span>
                 <?php endif; ?>
             </div>
+
+            <?php if ($categoryNames !== []): ?>
+                <div class="test-show__categories" aria-label="Категории теста">
+                    <?php foreach ($visibleCategoryNames as $categoryName): ?>
+                        <a class="test-chip test-chip--category" href="<?= htmlspecialchars(test_category_url_by_name($categoryName), ENT_QUOTES, 'UTF-8') ?>">
+                            <img src="/assets/img/test_card_svg/pinpaper-filled.svg" alt="" aria-hidden="true">
+                            <span><?= htmlspecialchars($categoryName, ENT_QUOTES, 'UTF-8') ?></span>
+                        </a>
+                    <?php endforeach; ?>
+                    <?php if ($hiddenCategoryNames !== []): ?>
+                        <span class="test-chip test-chip--more ui-tooltip ui-tooltip--bottom" data-tooltip="<?= htmlspecialchars($hiddenCategoryTitle, ENT_QUOTES, 'UTF-8') ?>" tabindex="0">
+                            +<?= count($hiddenCategoryNames) ?>
+                        </span>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
 
             <h1 class="test-show__title"><?= htmlspecialchars((string)($test['title'] ?? 'Тест'), ENT_QUOTES, 'UTF-8') ?></h1>
 
@@ -204,9 +221,38 @@ $timeLimitView = $formatTimeLimit($timeLimitSec);
             </div>
         </div>
 
+        <?php if (!empty($has_active_attempt)): ?>
+        <div class="test-show__resume">
+            <div class="test-show__resume-icon" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+            <div class="test-show__resume-body">
+                <div class="test-show__resume-title">У вас есть незавершённая попытка</div>
+                <div class="test-show__resume-hint">Вы можете продолжить с того места, где остановились.</div>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <div class="test-show__actions">
-            <a class="btn btn--primary" href="/tests/<?= (int)($test['id'] ?? 0) ?>/pass">Начать тест</a>
-            <a class="btn btn--ghost" href="/">К списку тестов</a>
+            <?php if (!empty($has_active_attempt)): ?>
+                <a class="btn btn--primary" href="/tests/<?= (int)($test['id'] ?? 0) ?>/pass">
+                    <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    Продолжить тест
+                </a>
+                <a class="btn btn--ghost test-show__restart-btn" href="/tests/<?= (int)($test['id'] ?? 0) ?>/pass?restart=1">
+                    <img src="/assets/img/undo.svg" class="btn-icon" width="15" height="15" aria-hidden="true">
+                    Начать заново
+                </a>
+            <?php else: ?>
+                <a class="btn btn--primary" href="/tests/<?= (int)($test['id'] ?? 0) ?>/pass">
+                    <img src="/assets/img/test_card_svg/play.svg" class="btn-icon" width="20" height="20" style="filter: invert(1)" aria-hidden="true">
+                    Начать тест
+                </a>
+            <?php endif; ?>
+            <a class="btn btn--ghost" href="/">
+                <img src="/assets/img/arrow-left.svg" class="btn-icon" width="15" height="15" aria-hidden="true">
+                К списку тестов
+            </a>
         </div>
     </div>
 </div>

@@ -568,3 +568,291 @@ button.badge {
 .img-lightbox__close:hover {
   background: #f1f5f9;
 }
+
+/* ─── Show-answers mode ────────────────────────────────────────────────────── */
+
+.badge--answers-mode {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid rgba(37, 99, 235, 0.18);
+}
+
+/* qcard footer with per-card action buttons */
+.qcard__foot {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 10px 22px 14px;
+    margin-top: 10px;
+    border-top: 1px solid rgba(15, 23, 42, 0.07);
+}
+
+.qcard__reset-btn {
+    padding: 6px 16px;
+    min-height: 32px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 500;
+    background: transparent;
+    border: 1px solid rgba(15, 23, 42, 0.18);
+    color: #64748b;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    white-space: nowrap;
+}
+
+.qcard__reset-btn:hover {
+    background: #f1f5f9;
+    border-color: rgba(15, 23, 42, 0.28);
+    color: #0f172a;
+}
+
+.qcard__answer-btn {
+    padding: 6px 18px;
+    min-height: 32px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    background: #1e293b;
+    border: 1px solid #1e293b;
+    color: #fff;
+    cursor: pointer;
+    transition: background 0.15s;
+    white-space: nowrap;
+}
+
+.qcard__answer-btn:hover:not(:disabled) {
+    background: #334155;
+    border-color: #334155;
+}
+
+.qcard__answer-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+/* Lock inputs after answering */
+.qcard--answered .opt {
+    pointer-events: none;
+}
+
+.qcard--answered input[type="text"] {
+    pointer-events: none;
+    background: #f8fafc;
+}
+
+.qcard--answered .order-item {
+    pointer-events: none;
+}
+
+/* Order items: correct / wrong position */
+.order-item--correct {
+    border-color: rgba(34, 197, 94, 0.45) !important;
+    background: rgba(34, 197, 94, 0.08) !important;
+}
+
+.order-item--correct .order-item__num {
+    background: rgba(34, 197, 94, 0.18);
+    color: #15803d;
+}
+
+.order-item--correct .order-item__text {
+    color: #15803d;
+    font-weight: 600;
+}
+
+.order-item--wrong {
+    border-color: rgba(239, 68, 68, 0.38) !important;
+    background: rgba(239, 68, 68, 0.06) !important;
+}
+
+.order-item--wrong .order-item__num {
+    background: rgba(239, 68, 68, 0.12);
+    color: #b91c1c;
+}
+
+.order-item--wrong .order-item__text {
+    color: #b91c1c;
+}
+
+/* Correct option highlight */
+.opt--correct {
+    background: rgba(34, 197, 94, 0.09) !important;
+    border-color: rgba(34, 197, 94, 0.45) !important;
+    box-shadow: inset 0 0 0 1.5px rgba(34, 197, 94, 0.35) !important;
+}
+
+.opt--correct .opt__text {
+    color: #15803d;
+    font-weight: 600;
+}
+
+/* Wrong (incorrectly selected) option highlight */
+.opt--wrong {
+    background: rgba(239, 68, 68, 0.07) !important;
+    border-color: rgba(239, 68, 68, 0.38) !important;
+    box-shadow: inset 0 0 0 1.5px rgba(239, 68, 68, 0.28) !important;
+}
+
+.opt--wrong .opt__text {
+    color: #b91c1c;
+}
+
+/* Text input wrong state */
+.input--wrong {
+    border-color: rgba(239, 68, 68, 0.55) !important;
+    background: rgba(239, 68, 68, 0.04) !important;
+}
+
+/* Answer result banner — вставляется между .qcard__body и .qcard__foot */
+.qcard__answer-result {
+    margin: 0 22px 0;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.qcard__answer-result--correct {
+    background: rgba(34, 197, 94, 0.10);
+    border: 1px solid rgba(34, 197, 94, 0.30);
+    color: #15803d;
+}
+
+.qcard__answer-result--wrong {
+    background: rgba(239, 68, 68, 0.07);
+    border: 1px solid rgba(239, 68, 68, 0.28);
+    color: #b91c1c;
+}
+
+.qcard__answer-result--warn {
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.28);
+    color: #92400e;
+}
+
+/* ─── Order question ───────────────────────────────────────────────────────── */
+
+.order-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    user-select: none;
+}
+
+.order-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: #fff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 10px;
+    cursor: default;
+    transition: border-color 0.15s, box-shadow 0.15s, opacity 0.15s;
+    position: relative;
+}
+
+.order-item.is-dragging {
+    opacity: 0.45;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.order-item.drag-over {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.18);
+}
+
+.order-item__num {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #f1f5f9;
+    color: #475569;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.order-item__handle {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    border-radius: 6px;
+    cursor: grab;
+    color: #94a3b8;
+    padding: 0;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.order-item__handle:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+    color: #475569;
+}
+
+.order-item__handle:active {
+    cursor: grabbing;
+    background: #e2e8f0;
+}
+
+.order-item__text {
+    flex: 1;
+    font-size: 14px;
+    line-height: 1.4;
+    color: #0f172a;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.order-item__controls {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: row;
+    gap: 4px;
+}
+
+.order-item__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    border-radius: 6px;
+    cursor: pointer;
+    padding: 0;
+    color: #64748b;
+    transition: background 0.12s, border-color 0.12s;
+}
+
+.order-item__btn:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+.order-item__btn:active {
+    background: #e2e8f0;
+}
+
+@media (max-width: 480px) {
+    .order-item {
+        gap: 6px;
+        padding: 8px 10px;
+    }
+}

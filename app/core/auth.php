@@ -37,6 +37,14 @@ if (!function_exists('auth_user')) {
     }
 }
 
+if (!function_exists('auth_is_admin')) {
+    function auth_is_admin(?array $user = null): bool
+    {
+        $user ??= auth_user();
+        return trim((string)($user['login'] ?? '')) === 'Admin';
+    }
+}
+
 if (!function_exists('auth_login')) {
     function auth_login(array $user): void
     {

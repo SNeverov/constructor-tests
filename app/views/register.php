@@ -1,7 +1,7 @@
 <div class="auth">
     <div class="auth-card">
         <h1 class="auth-title">Регистрация</h1>
-        <p class="auth-subtitle">Создай аккаунт, чтобы создавать тесты и сохранять результаты.</p>
+        <p class="auth-subtitle">Создайте аккаунт, чтобы создавать тесты и сохранять результаты.</p>
 
         <?php if (!empty($errors)): ?>
 			<div class="form-errors">
@@ -25,6 +25,11 @@
                     type="text"
                     name="login"
                     value="<?= htmlspecialchars((string)($old['login'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                    minlength="3"
+                    maxlength="24"
+                    pattern="\S+"
+                    title="Логин не должен содержать пробелы."
+                    oninput="this.value = this.value.replace(/\s+/g, '')"
                     required
                 >
             </div>
@@ -53,7 +58,10 @@
             </div>
 
             <div class="auth-actions">
-                <button class="btn btn--primary" type="submit">Зарегистрироваться</button>
+                <button class="btn btn--primary" type="submit">
+                    <img src="/assets/img/user-plus.svg" class="btn-icon" width="16" height="16" style="filter: invert(1)" aria-hidden="true">
+                    Зарегистрироваться
+                </button>
 
                 <div class="auth-hint">
                     Уже есть аккаунт? <a href="/login">Войти</a>

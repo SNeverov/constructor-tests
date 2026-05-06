@@ -26,7 +26,10 @@ $pluralRu = static function (int $n, string $one, string $few, string $many): st
     <h1>Корзина</h1>
 
     <div class="page-head__actions">
-        <a href="/my/tests" class="btn btn--ghost">← Мои тесты</a>
+        <a href="/my/tests" class="btn btn--ghost" style="padding-left: 14px; padding-right: 14px;">
+            <img src="/assets/img/hdr-icon-tests-new.svg" class="btn-icon" width="20" height="20" style="filter: brightness(0)" aria-hidden="true">
+            Мои тесты
+        </a>
 
         <?php if (!empty($tests)): ?>
             <?= form_open('/my/tests/trash/restore-all', 'post', [
@@ -36,7 +39,10 @@ $pluralRu = static function (int $n, string $one, string $few, string $many): st
                 'data-confirm-text' => 'Восстановить все тесты из корзины?',
                 'data-confirm-ok' => 'Восстановить',
             ]) ?>
-                <button type="submit" class="btn">Восстановить все</button>
+                <button type="submit" class="btn">
+                    <img src="/assets/img/undo.svg" class="btn-icon" width="16" height="16" aria-hidden="true">
+                    Восстановить все
+                </button>
             </form>
 
             <?= form_open('/my/tests/trash/empty', 'post', [
@@ -46,7 +52,10 @@ $pluralRu = static function (int $n, string $one, string $few, string $many): st
                 'data-confirm-text' => 'Удалить все тесты из корзины навсегда? Это нельзя отменить.',
                 'data-confirm-ok' => 'Удалить навсегда',
             ]) ?>
-                <button type="submit" class="btn btn--danger">Очистить корзину</button>
+                <button type="submit" class="btn btn--danger" style="padding-left: 14px; padding-right: 14px;">
+                    <img src="/assets/img/broom.svg" class="btn-icon" width="22" height="22" style="filter: brightness(0) saturate(100%) invert(19%) sepia(96%) saturate(7484%) hue-rotate(359deg)" aria-hidden="true">
+                    Очистить корзину
+                </button>
             </form>
         <?php endif; ?>
     </div>
@@ -70,6 +79,7 @@ $pluralRu = static function (int $n, string $one, string $few, string $many): st
             </p>
 
             <a href="/my/tests" class="btn btn--primary">
+                <img src="/assets/img/arrow-left.svg" class="btn-icon" width="16" height="16" style="filter: invert(1)" aria-hidden="true">
                 Вернуться к моим тестам
             </a>
         </div>

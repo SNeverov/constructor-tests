@@ -1,5 +1,15 @@
 // ─── Lightbox ────────────────────────────────────────────────────────────────
 
+let _lbScrollY = 0;
+
+function lockScroll() {
+    _lbScrollY = window.scrollY;
+}
+
+function unlockScroll() {
+    window.scrollTo(0, _lbScrollY);
+}
+
 function openLightbox(src, fullSize) {
     const lb = document.getElementById('imgLightbox');
     const img = document.getElementById('imgLightboxImg');
@@ -9,7 +19,7 @@ function openLightbox(src, fullSize) {
     img.style.height = '';
     img.src = '';
     lb.setAttribute('aria-hidden', 'false');
-    document.body.style.overflow = 'hidden';
+    lockScroll();
 
     const tmp = new Image();
     tmp.onload = () => {
@@ -36,15 +46,23 @@ function closeLightbox() {
     lb.addEventListener('transitionend', () => {
         lb.classList.remove('is-open', 'is-closing');
         lb.setAttribute('aria-hidden', 'true');
-        document.body.style.overflow = '';
+        unlockScroll();
     }, { once: true });
 }
 
 document.addEventListener('click', (e) => {
-    if (e.target.closest('[data-lightbox-close]')) { closeLightbox(); return; }
+    if (e.target.closest('[data-lightbox-close]')) {
+        e.preventDefault();
+        closeLightbox();
+        return;
+    }
 
     const zoomImg = e.target.closest('.qcard__image-img, .opt__image');
-    if (zoomImg && zoomImg.src) openLightbox(zoomImg.src, true);
+    if (zoomImg && zoomImg.src) {
+        e.preventDefault();
+        e.stopPropagation();
+        openLightbox(zoomImg.src, true);
+    }
 });
 
 document.addEventListener('keydown', (e) => {
@@ -67,6 +85,13 @@ function getStorageKey() {
 	return `test-progress:${testId}`;
 }
 
+function updateOrderNums(list) {
+	list.querySelectorAll('[data-order-item]').forEach((item, idx) => {
+		const num = item.querySelector('[data-order-num]');
+		if (num) num.textContent = idx + 1;
+	});
+}
+
 function saveProgress() {
 	if (!testId) return;
 
@@ -74,6 +99,8 @@ function saveProgress() {
 
 	document.querySelectorAll('input, textarea').forEach((el) => {
 		if (!el.name) return;
+		// пропускаем скрытые инпуты внутри order-списков — они сохраняются отдельно
+		if (el.closest('[data-order-list]')) return;
 
 		if (el.type === 'radio') {
 			if (el.checked) {
@@ -85,6 +112,17 @@ function saveProgress() {
 		} else {
 			data[el.name] = el.value;
 		}
+	});
+
+	// сохраняем текущий порядок каждого order-списка
+	document.querySelectorAll('[data-order-list]').forEach((list) => {
+		const qid = list.dataset.qid;
+		if (!qid) return;
+		const ids = [];
+		list.querySelectorAll('[data-order-item]').forEach((item) => {
+			ids.push(String(item.dataset.optId));
+		});
+		data['__order__' + qid] = ids;
 	});
 
 	localStorage.setItem(getStorageKey(), JSON.stringify(data));
@@ -104,6 +142,27 @@ function restoreProgress() {
 	}
 
 	Object.entries(data).forEach(([name, value]) => {
+		// восстанавливаем порядок order-списка
+		if (name.startsWith('__order__')) {
+			const qid = name.replace('__order__', '');
+			const savedIds = Array.isArray(value) ? value.map(String) : [];
+			if (!savedIds.length) return;
+
+			const list = document.querySelector(`[data-order-list][data-qid="${CSS.escape(qid)}"]`);
+			if (!list) return;
+
+			const items = [...list.querySelectorAll('[data-order-item]')];
+			const idToItem = {};
+			items.forEach((item) => { idToItem[String(item.dataset.optId)] = item; });
+
+			savedIds.forEach((id) => {
+				const item = idToItem[id];
+				if (item) list.appendChild(item);
+			});
+			updateOrderNums(list);
+			return;
+		}
+
 		const inputs = document.querySelectorAll(`[name="${CSS.escape(name)}"]`);
 
 		inputs.forEach((el) => {
@@ -158,6 +217,29 @@ function restoreProgress() {
             }
 
             form.reset();
+
+            // Сбрасываем визуальные стили всех карточек
+            document.querySelectorAll('[data-question-card]').forEach((card) => {
+                card.querySelectorAll('.opt').forEach((opt) => {
+                    opt.classList.remove('opt--correct', 'opt--wrong');
+                });
+                card.querySelectorAll('.order-item').forEach((item) => {
+                    item.classList.remove('order-item--correct', 'order-item--wrong');
+                });
+                card.querySelectorAll('input[type="text"]').forEach((inp) => {
+                    inp.classList.remove('input--wrong');
+                });
+                const resultEl = card.querySelector('.qcard__answer-result');
+                if (resultEl) resultEl.remove();
+                card.dataset.answered = '';
+                card.classList.remove('qcard--answered');
+                const answerBtn = card.querySelector('[data-answer-btn]');
+                if (answerBtn) {
+                    answerBtn.disabled = false;
+                    answerBtn.textContent = 'Ответить';
+                }
+            });
+
             hideNote();
             formDirty = false;
         });
@@ -297,6 +379,103 @@ document.addEventListener('submit', (e) => {
     }, 1000);
 })();
 
+// ─── Order questions (drag-and-drop + move buttons) ──────────────────────────
+
+(function () {
+	let dragSrc = null;
+
+	function onDragStart(e) {
+		dragSrc = e.currentTarget;
+		dragSrc.classList.add('is-dragging');
+		e.dataTransfer.effectAllowed = 'move';
+		e.dataTransfer.setData('text/plain', '');
+	}
+
+	function onDragEnd() {
+		if (dragSrc) dragSrc.classList.remove('is-dragging');
+		dragSrc = null;
+		document.querySelectorAll('.order-item.drag-over').forEach((el) => el.classList.remove('drag-over'));
+	}
+
+	function onDragOver(e) {
+		e.preventDefault();
+		e.dataTransfer.dropEffect = 'move';
+		const target = e.currentTarget;
+		if (target !== dragSrc) {
+			document.querySelectorAll('.order-item.drag-over').forEach((el) => el.classList.remove('drag-over'));
+			target.classList.add('drag-over');
+		}
+	}
+
+	function onDragLeave(e) {
+		e.currentTarget.classList.remove('drag-over');
+	}
+
+	function onDrop(e) {
+		e.preventDefault();
+		const target = e.currentTarget;
+		target.classList.remove('drag-over');
+		if (!dragSrc || dragSrc === target) return;
+
+		const list = target.closest('[data-order-list]');
+		if (!list) return;
+
+		const items = [...list.querySelectorAll('[data-order-item]')];
+		const srcIdx = items.indexOf(dragSrc);
+		const tgtIdx = items.indexOf(target);
+
+		if (srcIdx < tgtIdx) {
+			target.after(dragSrc);
+		} else {
+			target.before(dragSrc);
+		}
+
+		updateOrderNums(list);
+		saveProgress();
+		list.dispatchEvent(new Event('change', { bubbles: true }));
+	}
+
+	function initOrderItem(item) {
+		if (item.dataset.orderInited === '1') return;
+		item.dataset.orderInited = '1';
+		item.setAttribute('draggable', 'true');
+		item.addEventListener('dragstart', onDragStart);
+		item.addEventListener('dragend', onDragEnd);
+		item.addEventListener('dragover', onDragOver);
+		item.addEventListener('dragleave', onDragLeave);
+		item.addEventListener('drop', onDrop);
+	}
+
+	document.querySelectorAll('[data-order-item]').forEach(initOrderItem);
+
+	// кнопки вверх / вниз
+	document.addEventListener('click', (e) => {
+		const upBtn = e.target.closest('[data-order-up]');
+		const downBtn = e.target.closest('[data-order-down]');
+		const btn = upBtn || downBtn;
+		if (!btn) return;
+
+		const item = btn.closest('[data-order-item]');
+		const list = btn.closest('[data-order-list]');
+		if (!item || !list) return;
+
+		const items = [...list.querySelectorAll('[data-order-item]')];
+		const idx = items.indexOf(item);
+
+		if (upBtn && idx > 0) {
+			items[idx - 1].before(item);
+		} else if (downBtn && idx < items.length - 1) {
+			items[idx + 1].after(item);
+		} else {
+			return;
+		}
+
+		updateOrderNums(list);
+		saveProgress();
+		list.dispatchEvent(new Event('change', { bubbles: true }));
+	});
+})();
+
 // ─── Floating timer pill ─────────────────────────────────────────────────────
 
 (function () {
@@ -332,5 +511,198 @@ document.addEventListener('submit', (e) => {
     new MutationObserver(syncPill).observe(headerTimer, {
         attributes: true,
         attributeFilter: ['class'],
+    });
+})();
+
+// ─── Show-answers mode: «Ответить» / «Сбросить» buttons ─────────────────────
+
+(function () {
+    const root = document.querySelector('.test-pass[data-show-answers="1"]');
+    if (!root) return;
+
+    function normalizeAnswer(s) {
+        return s.trim().replace(/\s+/g, ' ').toLowerCase().replace(/ё/g, 'е');
+    }
+
+    function lockCard(card) {
+        card.dataset.answered = '1';
+        card.classList.add('qcard--answered');
+        const btn = card.querySelector('[data-answer-btn]');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Отвечено';
+        }
+    }
+
+    function resetCard(card) {
+        // Сбрасываем значения
+        card.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach((inp) => {
+            inp.checked = false;
+        });
+        card.querySelectorAll('input[type="text"]').forEach((inp) => {
+            inp.value = '';
+            inp.classList.remove('input--wrong');
+        });
+
+        // Убираем визуальные классы вариантов
+        card.querySelectorAll('.opt').forEach((opt) => {
+            opt.classList.remove('opt--correct', 'opt--wrong');
+        });
+
+        // Убираем визуальные классы order-элементов
+        card.querySelectorAll('.order-item').forEach((item) => {
+            item.classList.remove('order-item--correct', 'order-item--wrong');
+        });
+
+        // Убираем баннер результата
+        const resultEl = card.querySelector('.qcard__answer-result');
+        if (resultEl) resultEl.remove();
+
+        // Разблокируем карточку
+        card.dataset.answered = '';
+        card.classList.remove('qcard--answered');
+
+        const answerBtn = card.querySelector('[data-answer-btn]');
+        if (answerBtn) {
+            answerBtn.disabled = false;
+            answerBtn.textContent = 'Ответить';
+        }
+
+        saveProgress();
+    }
+
+    function handleOrderAnswer(card) {
+        const list = card.querySelector('[data-order-list]');
+        if (!list) return;
+
+        let correctOrder = [];
+        try {
+            correctOrder = JSON.parse(list.dataset.correctOrder || '[]').map(String);
+        } catch { return; }
+
+        if (correctOrder.length === 0) return;
+
+        const items = [...list.querySelectorAll('[data-order-item]')];
+        let allCorrect = true;
+
+        items.forEach((item, idx) => {
+            const isCorrectPos = correctOrder[idx] === String(item.dataset.optId);
+            if (!isCorrectPos) allCorrect = false;
+            item.classList.toggle('order-item--correct', isCorrectPos);
+            item.classList.toggle('order-item--wrong', !isCorrectPos);
+        });
+
+        showResult(card, allCorrect ? 'correct' : 'wrong', allCorrect ? 'Правильно!' : 'Неправильно');
+        lockCard(card);
+    }
+
+    function showResult(card, type, text) {
+        let el = card.querySelector('.qcard__answer-result');
+        if (!el) {
+            el = document.createElement('div');
+            card.querySelector('.qcard__foot').before(el);
+        }
+        el.className = 'qcard__answer-result qcard__answer-result--' + type;
+        el.textContent = text;
+    }
+
+    function handleOptionAnswer(card) {
+        const qType = card.dataset.questionType;
+        const allOpts = [...card.querySelectorAll('.opt')];
+        const correctLabels = card.querySelectorAll('.opt[data-is-correct]');
+
+        const correctIds = new Set();
+        correctLabels.forEach((label) => {
+            const inp = label.querySelector('input');
+            if (inp) correctIds.add(inp.value);
+        });
+
+        const selectedIds = new Set();
+        allOpts.forEach((label) => {
+            const inp = label.querySelector('input[type="radio"], input[type="checkbox"]');
+            if (inp && inp.checked) selectedIds.add(inp.value);
+        });
+
+        if (selectedIds.size === 0) {
+            showResult(card, 'warn', 'Выберите вариант ответа');
+            return;
+        }
+
+        let isCorrect;
+        if (qType === 'radio') {
+            isCorrect = selectedIds.size === 1 && correctIds.has([...selectedIds][0]);
+        } else {
+            isCorrect =
+                selectedIds.size === correctIds.size &&
+                [...selectedIds].every((id) => correctIds.has(id));
+        }
+
+        allOpts.forEach((label) => {
+            const inp = label.querySelector('input[type="radio"], input[type="checkbox"]');
+            if (!inp) return;
+            const correct = correctIds.has(inp.value);
+            const selected = selectedIds.has(inp.value);
+            if (correct) {
+                label.classList.add('opt--correct');
+            } else if (selected) {
+                label.classList.add('opt--wrong');
+            }
+        });
+
+        showResult(card, isCorrect ? 'correct' : 'wrong', isCorrect ? 'Правильно!' : 'Неправильно');
+        lockCard(card);
+    }
+
+    function handleInputAnswer(card) {
+        const inp = card.querySelector('input[type="text"]');
+        if (!inp) return;
+
+        let correctAnswers = [];
+        try {
+            correctAnswers = JSON.parse(inp.dataset.correctTextAnswers || '[]');
+        } catch { return; }
+
+        const userNorm = normalizeAnswer(inp.value);
+        if (userNorm === '') {
+            showResult(card, 'warn', 'Введите ответ');
+            return;
+        }
+
+        const isCorrect = correctAnswers.includes(userNorm);
+        inp.classList.toggle('input--wrong', !isCorrect);
+
+        if (isCorrect) {
+            showResult(card, 'correct', 'Правильно!');
+        } else {
+            const display = correctAnswers.join(' / ');
+            showResult(card, 'wrong', 'Неправильно. Правильный ответ: ' + display);
+        }
+        lockCard(card);
+    }
+
+    document.addEventListener('click', (e) => {
+        // Кнопка «Сбросить» на карточке
+        const resetCardBtn = e.target.closest('[data-reset-btn]');
+        if (resetCardBtn) {
+            const card = resetCardBtn.closest('[data-question-card]');
+            if (card) resetCard(card);
+            return;
+        }
+
+        // Кнопка «Ответить»
+        const answerBtn = e.target.closest('[data-answer-btn]');
+        if (!answerBtn) return;
+
+        const card = answerBtn.closest('[data-question-card]');
+        if (!card || card.dataset.answered === '1') return;
+
+        const qType = card.dataset.questionType;
+        if (qType === 'input') {
+            handleInputAnswer(card);
+        } else if (qType === 'order') {
+            handleOrderAnswer(card);
+        } else {
+            handleOptionAnswer(card);
+        }
     });
 })();

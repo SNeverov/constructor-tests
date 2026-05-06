@@ -10,3 +10,9 @@
     gap:10px;
     flex-wrap:wrap;
 }
+.page-head__actions .inline{
+    display:inline-flex;
+}
+.page-head__actions .btn--ghost{
+    min-height:0;
+}

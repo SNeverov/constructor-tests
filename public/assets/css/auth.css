@@ -65,6 +65,18 @@
     flex: 0 0 auto;
 }
 
+.auth-actions .btn--primary {
+    border-color: rgba(20, 184, 166, 0.42);
+    background: linear-gradient(135deg, #10233f 0%, #0b1b33 48%, #0f766e 100%);
+    box-shadow: 0 10px 20px rgba(7, 20, 38, 0.18);
+}
+
+.auth-actions .btn--primary:hover {
+    border-color: rgba(34, 199, 184, 0.58);
+    background: linear-gradient(135deg, #142b4d 0%, #10233f 48%, #108a80 100%);
+    box-shadow: 0 12px 24px rgba(7, 20, 38, 0.22);
+}
+
 .auth-hint {
     margin-left: auto;
     font-size: 13px;

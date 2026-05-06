@@ -121,8 +121,14 @@
         </div>
 
         <div class="results-filters__actions">
-            <button type="submit" class="btn btn--primary">Применить</button>
-            <a href="/my/results" class="btn btn--ghost">Сбросить</a>
+            <button type="submit" class="btn btn--primary">
+                <img src="/assets/img/checkmark.svg" class="btn-icon" width="16" height="16" style="filter: brightness(0) invert(1)" aria-hidden="true">
+                Применить
+            </button>
+            <a href="/my/results" class="btn btn--ghost">
+                <img src="/assets/img/cancel.svg" class="btn-icon" width="16" height="16" aria-hidden="true">
+                Сбросить
+            </a>
             <a href="/account" class="btn btn--link">В профиль</a>
         </div>
     </form>
@@ -135,8 +141,14 @@
                 <h3 class="empty-state__title">Результаты не найдены</h3>
                 <p class="empty-state__text">Попробуй изменить фильтры или пройти тесты.</p>
                 <div class="results-empty__actions">
-                    <a href="/my/tests" class="btn btn--ghost">Перейти к тестам</a>
-                    <a href="/my/results" class="btn btn--primary">Сбросить фильтры</a>
+                    <a href="/my/tests" class="btn btn--ghost">
+                        <img src="/assets/img/arrow-right.svg" class="btn-icon" width="15" height="15" aria-hidden="true">
+                        Перейти к тестам
+                    </a>
+                    <a href="/my/results" class="btn btn--primary">
+                        <img src="/assets/img/cancel.svg" class="btn-icon" width="16" height="16" style="filter: brightness(0) invert(1)" aria-hidden="true">
+                        Сбросить фильтры
+                    </a>
                 </div>
             </div>
         </div>
@@ -194,7 +206,10 @@
                             </div>
 
                             <div class="result-item__actions">
-                                <a class="btn btn--ghost" href="/attempts/<?= (int)($row['id'] ?? 0) ?>">Открыть результат</a>
+                                <a class="btn btn--ghost" href="/attempts/<?= (int)($row['id'] ?? 0) ?>">
+                                    <img src="/assets/img/arrow-right.svg" class="btn-icon" width="15" height="15" aria-hidden="true">
+                                    Открыть результат
+                                </a>
                             </div>
                         </div>
 

@@ -2,7 +2,7 @@
     const normalize = (value) => String(value || '').trim().toLowerCase();
     const escapeAttr = (value) => String(value || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const escapeHtml = (value) => String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const PLACEHOLDER = 'Выберите категории';
+    const PLACEHOLDER = 'Выберите категорию';
     const triggerText = (values) => {
         if (values.length === 0) return PLACEHOLDER;
         if (values.length <= 2) return values.join(', ');

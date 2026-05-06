@@ -25,7 +25,7 @@ function test_categories_catalog(): array
         'pozharnaya-bezopasnost' => 'Пожарная безопасность',
         'programmirovanie' => 'Программирование',
         'promyshlennaya-bezopasnost' => 'Промышленная безопасность',
-        'proizvodstvo-i-oborudovanie' => 'Производство и оборудование',
+        'promyshlennoe-oborudovanie' => 'Промышленное оборудование',
         'russkiy-yazyk' => 'Русский язык',
         'sport' => 'Спорт',
         'tekhnicheskie-distsipliny' => 'Технические дисциплины',
@@ -42,6 +42,48 @@ function test_categories_catalog(): array
     return $categories;
 }
 
+function test_category_legacy_slug_map(): array
+{
+    return [
+        'proizvodstvo-i-oborudovanie' => 'promyshlennoe-oborudovanie',
+    ];
+}
+
+function test_category_legacy_name_map(): array
+{
+    return [
+        'Производство и оборудование' => 'Промышленное оборудование',
+    ];
+}
+
+function test_category_canonical_name(string $name): string
+{
+    $name = trim($name);
+    $legacyMap = test_category_legacy_name_map();
+    return $legacyMap[$name] ?? $name;
+}
+
+function test_category_canonical_slug(string $slug): string
+{
+    $slug = trim($slug);
+    $legacyMap = test_category_legacy_slug_map();
+    return $legacyMap[$slug] ?? $slug;
+}
+
+function test_category_match_names(string $name): array
+{
+    $canonicalName = test_category_canonical_name($name);
+    $names = [$canonicalName => $canonicalName];
+
+    foreach (test_category_legacy_name_map() as $legacyName => $targetName) {
+        if ($targetName === $canonicalName) {
+            $names[$legacyName] = $legacyName;
+        }
+    }
+
+    return array_values($names);
+}
+
 function test_category_default_name(): string
 {
     return 'Разное';
@@ -54,7 +96,7 @@ function test_category_default_names(): array
 
 function test_category_placeholder_text(): string
 {
-    return 'Выберите категории';
+    return 'Выберите категорию';
 }
 
 function test_category_name_to_slug_map(): array
@@ -68,6 +110,11 @@ function test_category_name_to_slug_map(): array
     foreach (test_categories_catalog() as $slug => $name) {
         $map[$name] = $slug;
     }
+    foreach (test_category_legacy_name_map() as $legacyName => $targetName) {
+        if (isset($map[$targetName])) {
+            $map[$legacyName] = $map[$targetName];
+        }
+    }
 
     return $map;
 }
@@ -80,7 +127,8 @@ function test_category_slug_to_name(string $slug): ?string
     }
 
     $catalog = test_categories_catalog();
-    return $catalog[$slug] ?? null;
+    $canonicalSlug = test_category_canonical_slug($slug);
+    return $catalog[$canonicalSlug] ?? null;
 }
 
 function test_category_slug_from_name(string $name): ?string
@@ -108,11 +156,12 @@ function test_category_normalize_names(array $rawNames): array
             continue;
         }
 
-        if (!test_category_is_valid($name)) {
+        $canonicalName = test_category_canonical_name($name);
+        if (!test_category_is_valid($canonicalName)) {
             throw new InvalidArgumentException('Выберите категории только из списка');
         }
 
-        $normalized[$name] = $name;
+        $normalized[$canonicalName] = $canonicalName;
     }
 
     return array_values($normalized);
@@ -138,11 +187,12 @@ function test_category_normalize_name(?string $rawName): string
         return test_category_default_name();
     }
 
-    if (!test_category_is_valid($name)) {
+    $canonicalName = test_category_canonical_name($name);
+    if (!test_category_is_valid($canonicalName)) {
         throw new InvalidArgumentException('Выберите категорию из списка');
     }
 
-    return $name;
+    return $canonicalName;
 }
 
 function test_category_display_name(?string $rawName): string
