@@ -42,3 +42,8 @@ config/local.php
 ru.html
 
 _backups/
+
+.claude/
+public/uploads/
+public/phpinfo.php
+public/setup-default-cover.php
