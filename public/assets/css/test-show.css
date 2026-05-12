@@ -81,6 +81,19 @@ button.badge {
     cursor: help;
 }
 
+.test-show__author-link {
+  color: inherit;
+  font-weight: inherit;
+  text-decoration: none;
+}
+
+.test-show__author-link:hover,
+.test-show__author-link:focus-visible {
+  color: #0f766e;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .test-show__title {
     font-size: 26px;
     line-height: 1.2;

@@ -39,7 +39,64 @@ function account_index(): void
         'title' => 'Профиль',
         'profile' => $profile,
         'stats' => $stats,
+        'scripts' => ['/assets/js/copy-link.js'],
         'styles' => ['/assets/css/account.css'],
+    ]);
+}
+
+function public_user_show(string $login): void
+{
+    $login = trim(rawurldecode($login));
+    if ($login === '' || mb_strlen($login) > 64) {
+        http_response_code(404);
+        view_render('404', ['title' => '404']);
+        return;
+    }
+
+    $pdo = db();
+    $stmt = $pdo->prepare('
+        SELECT id, login, created_at
+        FROM users
+        WHERE login = :login
+        LIMIT 1
+    ');
+    $stmt->execute([':login' => $login]);
+    $profile = $stmt->fetch();
+
+    if ($profile === false) {
+        http_response_code(404);
+        view_render('404', ['title' => '404']);
+        return;
+    }
+
+    $userId = (int)($profile['id'] ?? 0);
+    $page = (int)($_GET['page'] ?? 1);
+    if ($page < 1) {
+        $page = 1;
+    }
+
+    $perPage = 12;
+    $total = tests_count_public_by_user_id($userId);
+    $pages = max(1, (int)ceil($total / $perPage));
+    if ($page > $pages) {
+        $page = $pages;
+    }
+    $offset = ($page - 1) * $perPage;
+    $tests = tests_list_public_by_user_id($userId, $perPage, $offset);
+
+    view_render('public_user', [
+        'title' => 'Автор: ' . (string)($profile['login'] ?? 'Пользователь'),
+        'profile' => $profile,
+        'tests' => $tests,
+        'pagination' => [
+            'page' => $page,
+            'pages' => $pages,
+            'total' => $total,
+            'path' => '/u/' . rawurlencode((string)($profile['login'] ?? '')),
+            'query' => [],
+        ],
+        'scripts' => ['/assets/js/my-tests-share.js'],
+        'styles' => ['/assets/css/my-tests.css', '/assets/css/public-user.css'],
     ]);
 }
 
@@ -59,7 +116,7 @@ function my_results_index(): void
     }
 
     $status = (string)($_GET['status'] ?? 'all');
-    if (!in_array($status, ['all', 'excellent', 'good', 'satisfactory', 'bad', 'correct', 'partial', 'wrong'], true)) {
+    if (!in_array($status, ['all', 'excellent', 'good', 'satisfactory', 'bad', 'passed', 'failed', 'correct', 'partial', 'wrong'], true)) {
         $status = 'all';
     }
 
@@ -124,6 +181,7 @@ function my_results_index(): void
         'styles' => [
             '/assets/vendor/air-datepicker/air-datepicker.css',
             '/assets/css/my-results.css',
+            '/assets/css/filter-panels.css',
         ],
     ]);
 }

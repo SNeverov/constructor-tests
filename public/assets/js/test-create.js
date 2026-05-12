@@ -119,63 +119,182 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeLightbox();
 });
 
+// ─── Cover crop modal ─────────────────────────────────────────────────────────
+
+let _cropper = null;
+let _cropCallback = null;
+
+function openCropModal(src, onApply) {
+    const modal = document.getElementById('coverCropModal');
+    const img   = document.getElementById('coverCropperImg');
+    if (!modal || !img) return;
+
+    if (_cropper) { _cropper.destroy(); _cropper = null; }
+
+    img.src = src;
+    _cropCallback = onApply;
+
+    modal.hidden = false;
+    modal.removeAttribute('aria-hidden');
+    document.body.style.overflow = 'hidden';
+
+    img.onload = () => {
+        _cropper = new Cropper(img, {
+            aspectRatio: 16 / 9,
+            viewMode: 1,
+            dragMode: 'move',       // тащим изображение, не рамку
+            autoCropArea: 1,        // рамка = весь canvas
+            cropBoxResizable: false, // хэндлы отключены
+            cropBoxMovable: false,   // рамка фиксирована
+            responsive: true,
+            checkOrientation: false,
+            background: false,
+            guides: false,
+            center: false,
+            highlight: false,
+            toggleDragModeOnDblclick: false,
+        });
+    };
+}
+
+function closeCropModal() {
+    const modal = document.getElementById('coverCropModal');
+    if (!modal) return;
+    if (_cropper) { _cropper.destroy(); _cropper = null; }
+    modal.hidden = true;
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    _cropCallback = null;
+}
+
+document.getElementById('cropApplyBtn')?.addEventListener('click', () => {
+    if (!_cropper || !_cropCallback) return;
+    const btn = document.getElementById('cropApplyBtn');
+    btn.disabled = true;
+    const cb = _cropCallback;
+    _cropper.getCroppedCanvas({ width: 1200, height: 675, imageSmoothingQuality: 'high' })
+        .toBlob((blob) => {
+            btn.disabled = false;
+            closeCropModal();
+            if (cb) cb(blob);
+        }, 'image/jpeg', 0.92);
+});
+
+document.getElementById('cropCancelBtn')?.addEventListener('click', closeCropModal);
+document.getElementById('cropCloseBtn')?.addEventListener('click', closeCropModal);
+document.getElementById('cropModalBackdrop')?.addEventListener('click', closeCropModal);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeCropModal(); });
+
+async function uploadImageBlob(wrap, blob) {
+    const type        = wrap.dataset.imgUpload;
+    const err         = wrap.querySelector('[data-img-error]');
+    const progressEl  = wrap.querySelector('[data-img-progress]');
+    const progressBar = wrap.querySelector('[data-img-progress-bar]');
+    const btnLabel    = wrap.querySelector('[data-img-btn-label]');
+    const csrfInput   = document.querySelector('input[name="csrf_token"]');
+
+    if (err) err.textContent = '';
+    if (btnLabel) btnLabel.textContent = 'Загрузка…';
+    if (progressEl) { progressEl.hidden = false; if (progressBar) progressBar.style.width = '0%'; }
+
+    const fd = new FormData();
+    fd.append('image', blob, 'cover.jpg');
+    fd.append('image_type', type);
+    if (csrfInput) fd.append('csrf_token', csrfInput.value);
+
+    try {
+        const json = await new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/my/tests/upload-image');
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable && progressBar)
+                    progressBar.style.width = Math.round(e.loaded / e.total * 100) + '%';
+            });
+            xhr.addEventListener('load', () => {
+                try { resolve(JSON.parse(xhr.responseText)); }
+                catch { reject(new Error('parse')); }
+            });
+            xhr.addEventListener('error', () => reject(new Error('network')));
+            xhr.send(fd);
+        });
+        if (progressBar) progressBar.style.width = '100%';
+
+        if (!json.ok) {
+            if (err) err.textContent = json.error ?? 'Ошибка загрузки';
+            if (btnLabel) btnLabel.textContent = 'Загрузить';
+        } else {
+            setImgUploadValue(wrap, json.path);
+            markFormDirty();
+        }
+    } catch {
+        if (err) err.textContent = 'Ошибка сети';
+        if (btnLabel) btnLabel.textContent = 'Загрузить';
+    } finally {
+        if (progressEl) setTimeout(() => { progressEl.hidden = true; if (progressBar) progressBar.style.width = '0%'; }, 500);
+    }
+}
+
 // ─── Image upload widget ──────────────────────────────────────────────────────
 
 function resetImgUploadWrap(wrap) {
-    const preview = wrap.querySelector('[data-img-preview]');
-    const hidden  = wrap.querySelector('input[type="hidden"]');
-    const remove  = wrap.querySelector('[data-img-remove]');
-    const btnLabel = wrap.querySelector('[data-img-btn-label]');
-    const err     = wrap.querySelector('[data-img-error]');
+    const preview   = wrap.querySelector('[data-img-preview]');
+    const hidden    = wrap.querySelector('input[type="hidden"]');
+    const remove    = wrap.querySelector('[data-img-remove]');
+    const btnLabel  = wrap.querySelector('[data-img-btn-label]');
+    const err       = wrap.querySelector('[data-img-error]');
     const fileInput = wrap.querySelector('[data-img-file-input]');
+    const placeholder = wrap.querySelector('.tc-cover-zone__placeholder');
 
-    if (preview) {
-        preview.innerHTML = '';
-        preview.classList.remove('has-image');
-    }
+    if (preview) { preview.innerHTML = ''; preview.classList.remove('has-image'); }
     if (hidden) hidden.value = '';
-    if (remove) remove.style.display = 'none';
+    if (remove) { remove.style.display = ''; remove.disabled = true; }
     if (err) err.textContent = '';
     if (fileInput) fileInput.value = '';
+    if (placeholder) placeholder.classList.remove('is-hidden');
     if (btnLabel) {
         const type = wrap.dataset.imgUpload;
-        btnLabel.textContent = type === 'cover' ? 'Загрузить обложку' : 'Добавить фото к вопросу';
+        btnLabel.textContent = type === 'cover' ? 'Загрузить' : 'Добавить фото';
     }
 }
 
 function setImgUploadValue(wrap, path) {
     if (!path) { resetImgUploadWrap(wrap); return; }
 
-    const preview  = wrap.querySelector('[data-img-preview]');
-    const hidden   = wrap.querySelector('input[type="hidden"]');
-    const remove   = wrap.querySelector('[data-img-remove]');
-    const btnLabel = wrap.querySelector('[data-img-btn-label]');
+    const preview     = wrap.querySelector('[data-img-preview]');
+    const hidden      = wrap.querySelector('input[type="hidden"]');
+    const remove      = wrap.querySelector('[data-img-remove]');
+    const btnLabel    = wrap.querySelector('[data-img-btn-label]');
+    const placeholder = wrap.querySelector('.tc-cover-zone__placeholder');
+    const isCover     = wrap.dataset.imgUpload === 'cover';
 
     if (hidden) hidden.value = path;
+    if (placeholder) placeholder.classList.add('is-hidden');
 
     if (preview) {
         preview.innerHTML = `
             <img src="${path}" alt="" class="img-upload-thumb">
             <button type="button" class="img-upload-zoom" data-img-zoom aria-label="Увеличить">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
                 </svg>
             </button>`;
         preview.classList.add('has-image');
     }
-    if (remove) remove.style.display = '';
-    if (btnLabel) btnLabel.textContent = 'Заменить фото';
+    if (remove) { remove.style.display = ''; remove.disabled = false; }
+    if (btnLabel) btnLabel.textContent = isCover ? 'Заменить' : 'Заменить фото';
 }
 
 function initImgUpload(wrap) {
     if (wrap.dataset.imgInited === '1') return;
     wrap.dataset.imgInited = '1';
 
-    const type      = wrap.dataset.imgUpload;
-    const fileInput = wrap.querySelector('[data-img-file-input]');
-    const remove    = wrap.querySelector('[data-img-remove]');
-    const err       = wrap.querySelector('[data-img-error]');
-    const csrfInput = document.querySelector('input[name="csrf_token"]');
+    const type        = wrap.dataset.imgUpload;
+    const fileInput   = wrap.querySelector('[data-img-file-input]');
+    const remove      = wrap.querySelector('[data-img-remove]');
+    const err         = wrap.querySelector('[data-img-error]');
+    const progressEl  = wrap.querySelector('[data-img-progress]');
+    const progressBar = wrap.querySelector('[data-img-progress-bar]');
+    const csrfInput   = document.querySelector('input[name="csrf_token"]');
 
     if (!fileInput) return;
 
@@ -184,6 +303,18 @@ function initImgUpload(wrap) {
         if (!file) return;
         if (err) err.textContent = '';
 
+        // Cover: показываем кроппер перед загрузкой
+        if (type === 'cover') {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                openCropModal(e.target.result, (blob) => uploadImageBlob(wrap, blob));
+            };
+            reader.readAsDataURL(file);
+            fileInput.value = '';
+            return;
+        }
+
+        // Остальные изображения: загрузка напрямую
         const fd = new FormData();
         fd.append('image', file);
         fd.append('image_type', type);
@@ -345,7 +476,7 @@ function initSegmentedSlider(segmented) {
     function update(animate) {
         const checked = segmented.querySelector('input:checked');
         if (!checked) return;
-        const label = checked.closest('.segmented__item, .access-mode-control__item, .answers-mode-control__item');
+        const label = checked.closest('.segmented__item, .tc-segmented__item');
         if (label) movePillTo(label, animate);
     }
 
@@ -791,7 +922,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-answer-text]').forEach(syncAnswerTextUI);
 
     document
-        .querySelectorAll('.form-section .segmented, .access-mode-control, .answers-mode-control')
+        .querySelectorAll('.form-section .segmented, .tc-segmented')
         .forEach(initSegmentedSlider);
 
     document.addEventListener('click', (e) => {
@@ -1032,16 +1163,335 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+function updateResultSettingsUi(animate = true) {
+    const root = document.querySelector('[data-result-settings]');
+    if (!root) return;
+    const checked = root.querySelector('input[name="result_mode"]:checked');
+    const mode    = checked ? checked.value : 'scale';
+    root.dataset.activeMode = mode;
+
+    const panels = [...root.querySelectorAll('.result-settings__panel')];
+
+    if (!animate) {
+        panels.forEach(p => {
+            p.classList.remove('rs-enter', 'rs-exit');
+            p.classList.toggle('is-active', p.dataset.resultPanel === mode);
+        });
+        return;
+    }
+
+    panels.forEach(panel => {
+        const isTarget  = panel.dataset.resultPanel === mode;
+        const wasActive = panel.classList.contains('is-active');
+
+        if (isTarget && !wasActive) {
+            panel.classList.remove('rs-exit');
+            panel.classList.add('is-active', 'rs-enter');
+            panel.addEventListener('animationend', () => {
+                panel.classList.remove('rs-enter');
+            }, { once: true });
+        } else if (!isTarget && wasActive) {
+            panel.classList.remove('is-active', 'rs-enter');
+            panel.classList.add('rs-exit');
+            panel.addEventListener('animationend', () => {
+                panel.classList.remove('rs-exit');
+            }, { once: true });
+        }
+    });
+}
+
+function validateResultSettings(showAlert = true) {
+    const root = document.querySelector('[data-result-settings]');
+    if (!root) return true;
+
+    const errorEl = root.querySelector('[data-result-error]');
+    const setError = (message) => {
+        if (errorEl) errorEl.textContent = message;
+        if (showAlert && message) alert(message);
+    };
+    setError('');
+
+    const checked = root.querySelector('input[name="result_mode"]:checked');
+    const mode = checked ? checked.value : 'scale';
+
+    if (mode === 'pass_fail') {
+        const input = root.querySelector('[data-pass-percent]');
+        const value = Number.parseInt(input ? input.value : '', 10);
+        if (!Number.isInteger(value) || value < 0 || value > 100) {
+            setError('Проходной процент должен быть целым числом от 0 до 100');
+            if (input) input.focus();
+            return false;
+        }
+        return true;
+    }
+
+    const rows = Array.from(root.querySelectorAll('[data-gs-row]'));
+    const maxValues = rows.map(row => Number.parseInt(row.querySelector('[data-gs-max]')?.value ?? '', 10));
+    const scale = rows.map((row, i) => ({
+        label: String(row.querySelector('[data-gs-label]')?.value ?? '').trim(),
+        min:   i > 0 ? maxValues[i - 1] + 1 : 0,
+        max:   maxValues[i],
+        row,
+    }));
+
+    if (scale.length === 0) {
+        setError('Добавьте шкалу оценок');
+        return false;
+    }
+
+    let expectedMin = 0;
+    for (const item of scale) {
+        if (!item.label || !Number.isInteger(item.min) || !Number.isInteger(item.max) || item.min < 0 || item.max > 100 || item.min > item.max) {
+            setError('Заполните все названия и границы шкалы оценок от 0 до 100');
+            const focusTarget = item.row.querySelector('input');
+            if (focusTarget) focusTarget.focus();
+            return false;
+        }
+        if (item.min !== expectedMin) {
+            setError('В шкале оценок не должно быть пропусков или пересечений');
+            const focusTarget = item.row.querySelector('input[type="number"]');
+            if (focusTarget) focusTarget.focus();
+            return false;
+        }
+        expectedMin = item.max + 1;
+    }
+
+    if (expectedMin !== 101) {
+        setError('Шкала оценок должна покрывать весь диапазон от 0 до 100');
+        return false;
+    }
+
+    return true;
+}
+
+// ─── Custom Time Picker ────────────────────────────────────────────────────────
+
+function initTimePicker() {
+    const wrap = document.querySelector('.tc-time-wrap');
+    if (!wrap) return;
+    const nativeInput = wrap.querySelector('.tc-time-input');
+    const openBtn     = wrap.querySelector('[data-time-picker-btn]');
+    if (!nativeInput || !openBtn) return;
+
+    const ITEM_H  = 40;
+    const VISIBLE = 5;
+    const PAD     = ITEM_H * 2;
+    const COLS    = [
+        { key: 'h', max: 24, label: 'Часы' },
+        { key: 'm', max: 60, label: 'Мин'  },
+        { key: 's', max: 60, label: 'Сек'  },
+    ];
+
+    let picker = null;
+    let isOpen = false;
+
+    function fmt(n) { return String(n).padStart(2, '0'); }
+
+    function parseTime(val) {
+        const p = (val || '00:00:00').split(':').map(n => parseInt(n, 10));
+        return [
+            isNaN(p[0]) ? 0 : Math.max(0, Math.min(23, p[0])),
+            isNaN(p[1]) ? 0 : Math.max(0, Math.min(59, p[1])),
+            isNaN(p[2]) ? 0 : Math.max(0, Math.min(59, p[2])),
+        ];
+    }
+
+    function isMobile() { return window.matchMedia('(max-width: 720px)').matches; }
+
+    function highlight(list) {
+        const idx = Math.round(list.scrollTop / ITEM_H);
+        list.querySelectorAll('.tc-time-picker__item').forEach((item, i) => {
+            item.classList.toggle('is-selected', i === idx);
+        });
+    }
+
+    function scrollToIdx(list, idx, smooth) {
+        list.scrollTo({ top: idx * ITEM_H, behavior: smooth ? 'smooth' : 'instant' });
+    }
+
+    function build() {
+        const el = document.createElement('div');
+        el.className = 'tc-time-picker';
+        el.setAttribute('hidden', '');
+
+        const body = document.createElement('div');
+        body.className = 'tc-time-picker__body';
+
+        COLS.forEach((col, ci) => {
+            if (ci > 0) {
+                const sep = document.createElement('span');
+                sep.className = 'tc-time-picker__sep';
+                sep.textContent = ':';
+                body.appendChild(sep);
+            }
+
+            const colEl = document.createElement('div');
+            colEl.className = 'tc-time-picker__col';
+
+            const listWrap = document.createElement('div');
+            listWrap.className = 'tc-time-picker__list-wrap';
+
+            const sel = document.createElement('div');
+            sel.className = 'tc-time-picker__sel';
+            listWrap.appendChild(sel);
+
+            const list = document.createElement('div');
+            list.className = 'tc-time-picker__list';
+            list.dataset.col = col.key;
+
+            const padT = document.createElement('div');
+            padT.style.cssText = `height:${PAD}px;flex-shrink:0`;
+            list.appendChild(padT);
+
+            for (let v = 0; v < col.max; v++) {
+                const item = document.createElement('div');
+                item.className = 'tc-time-picker__item';
+                item.textContent = fmt(v);
+                item.dataset.v = v;
+                list.appendChild(item);
+            }
+
+            const padB = document.createElement('div');
+            padB.style.cssText = `height:${PAD}px;flex-shrink:0`;
+            list.appendChild(padB);
+
+            listWrap.appendChild(list);
+            colEl.appendChild(listWrap);
+
+            const label = document.createElement('div');
+            label.className = 'tc-time-picker__col-label';
+            label.textContent = col.label;
+            colEl.appendChild(label);
+
+            body.appendChild(colEl);
+
+            // Scroll: debounced snap
+            let snapTimer;
+            list.addEventListener('scroll', () => {
+                highlight(list);
+                clearTimeout(snapTimer);
+                snapTimer = setTimeout(() => {
+                    const idx = Math.round(list.scrollTop / ITEM_H);
+                    scrollToIdx(list, idx, true);
+                    highlight(list);
+                }, 120);
+            }, { passive: true });
+
+            // Click item
+            list.addEventListener('click', e => {
+                const item = e.target.closest('.tc-time-picker__item');
+                if (item) scrollToIdx(list, parseInt(item.dataset.v, 10), true);
+            });
+
+            // Wheel
+            list.addEventListener('wheel', e => {
+                e.preventDefault();
+                const cur  = Math.round(list.scrollTop / ITEM_H);
+                const next = Math.max(0, Math.min(col.max - 1, cur + (e.deltaY > 0 ? 1 : -1)));
+                scrollToIdx(list, next, true);
+            }, { passive: false });
+        });
+
+        el.appendChild(body);
+
+        const footer = document.createElement('div');
+        footer.className = 'tc-time-picker__footer';
+
+        const resetBtn = document.createElement('button');
+        resetBtn.type = 'button';
+        resetBtn.className = 'btn btn-ghost btn-sm';
+        resetBtn.textContent = 'Сбросить';
+        resetBtn.addEventListener('click', () => {
+            setVals([0, 0, 0]);
+            nativeInput.value = '00:00:00';
+            nativeInput.dispatchEvent(new Event('change'));
+            close();
+        });
+
+        const applyBtn = document.createElement('button');
+        applyBtn.type = 'button';
+        applyBtn.className = 'btn btn-primary btn-sm';
+        applyBtn.textContent = 'Готово';
+        applyBtn.addEventListener('click', () => { apply(); close(); });
+
+        footer.append(resetBtn, applyBtn);
+        el.appendChild(footer);
+
+        return el;
+    }
+
+    function getLists() { return picker ? [...picker.querySelectorAll('.tc-time-picker__list')] : []; }
+
+    function setVals(vals) {
+        getLists().forEach((list, i) => {
+            scrollToIdx(list, vals[i] ?? 0, false);
+            highlight(list);
+        });
+    }
+
+    function apply() {
+        const vals = getLists().map(l => Math.round(l.scrollTop / ITEM_H));
+        nativeInput.value = `${fmt(vals[0])}:${fmt(vals[1])}:${fmt(vals[2])}`;
+        nativeInput.dispatchEvent(new Event('change'));
+    }
+
+    function open() {
+        if (isOpen) return;
+        if (!picker) { picker = build(); wrap.appendChild(picker); }
+        picker.removeAttribute('hidden');
+        isOpen = true;
+        setVals(parseTime(nativeInput.value));
+        setTimeout(() => {
+            document.addEventListener('mousedown', onOutside);
+            document.addEventListener('keydown', onKey);
+        }, 0);
+    }
+
+    function close() {
+        if (!isOpen) return;
+        isOpen = false;
+        picker?.setAttribute('hidden', '');
+        document.removeEventListener('mousedown', onOutside);
+        document.removeEventListener('keydown', onKey);
+    }
+
+    function onOutside(e) { if (!wrap.contains(e.target)) close(); }
+    function onKey(e) {
+        if (e.key === 'Escape') close();
+        if (e.key === 'Enter') { apply(); close(); }
+    }
+
+    openBtn.addEventListener('click', () => {
+        if (isMobile()) { nativeInput.showPicker?.(); }
+        else { isOpen ? close() : open(); }
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    updateResultSettingsUi(false);
+
+    initTimePicker();
+});
+
 document.addEventListener('input', (e) => {
     if (e.target.closest('form')) markFormDirty();
 });
 
 document.addEventListener('change', (e) => {
+    if (e.target && e.target.matches('[data-result-mode]')) {
+        updateResultSettingsUi();
+    }
     if (e.target.closest('form')) markFormDirty();
 });
 
 document.addEventListener('submit', (e) => {
     if (e.target.id === 'testCreateForm') {
+        if (!validateResultSettings(true)) {
+            e.preventDefault();
+            e.stopPropagation();
+            isSubmitting = false;
+            return;
+        }
         isSubmitting = true;
         window.clearTimeout(autosaveTimer);
         formDirty = false;

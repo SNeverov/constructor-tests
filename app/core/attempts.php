@@ -160,6 +160,9 @@ function test_snapshot_hash_by_test_id(int $testId): string
     $stmt = $pdo->prepare("
         SELECT
             t.updated_at AS updated_at,
+            t.result_mode AS result_mode,
+            t.pass_percent AS pass_percent,
+            t.grade_scale_json AS grade_scale_json,
             (SELECT COUNT(*) FROM questions q WHERE q.test_id = t.id) AS questions_count,
             (
                 SELECT COUNT(*)
@@ -182,10 +185,13 @@ function test_snapshot_hash_by_test_id(int $testId): string
     }
 
     $updatedAt = (string)($row['updated_at'] ?? '');
+    $resultMode = (string)($row['result_mode'] ?? '');
+    $passPercent = (string)($row['pass_percent'] ?? '');
+    $gradeScaleJson = (string)($row['grade_scale_json'] ?? '');
     $qCount = (int)($row['questions_count'] ?? 0);
     $oCount = (int)($row['options_count'] ?? 0);
 
-    return hash('sha256', $testId . '|' . $updatedAt . '|' . $qCount . '|' . $oCount);
+    return hash('sha256', $testId . '|' . $updatedAt . '|' . $resultMode . '|' . $passPercent . '|' . $gradeScaleJson . '|' . $qCount . '|' . $oCount);
 }
 
 function attempt_finish_update(
@@ -195,10 +201,17 @@ function attempt_finish_update(
     float $percent,
     int $totalQuestions,
     string $testSnapshotHash,
-    string $status = 'finished'
+    string $status = 'finished',
+    ?array $resultSnapshot = null
 ): bool
 {
     $pdo = db();
+    $resultSnapshot ??= [
+        'mode' => 'scale',
+        'label' => '',
+        'pass_percent' => null,
+        'scale_json' => null,
+    ];
 
     $stmt = $pdo->prepare("
         UPDATE attempts
@@ -219,6 +232,10 @@ function attempt_finish_update(
             correct_count = :correct_count,
             wrong_count = :wrong_count,
             percent = :percent,
+            result_mode_snapshot = :result_mode_snapshot,
+            result_label_snapshot = :result_label_snapshot,
+            pass_percent_snapshot = :pass_percent_snapshot,
+            grade_scale_snapshot = :grade_scale_snapshot,
             status = :status
         WHERE id = :id
           AND finished_at IS NULL
@@ -232,6 +249,10 @@ function attempt_finish_update(
         ':correct_count' => $correctCount,
         ':wrong_count' => $wrongCount,
         ':percent' => $percent,
+        ':result_mode_snapshot' => (string)($resultSnapshot['mode'] ?? 'scale'),
+        ':result_label_snapshot' => (string)($resultSnapshot['label'] ?? ''),
+        ':pass_percent_snapshot' => $resultSnapshot['pass_percent'] ?? null,
+        ':grade_scale_snapshot' => $resultSnapshot['scale_json'] ?? null,
         ':status' => ($status === 'expired') ? 'expired' : 'finished',
         ':status_for_finished_at' => ($status === 'expired') ? 'expired' : 'finished',
         ':status_for_duration' => ($status === 'expired') ? 'expired' : 'finished',
@@ -314,7 +335,14 @@ function attempt_find_by_id(int $attemptId): ?array
             total_questions,
             correct_count,
             wrong_count,
-            percent
+            percent,
+            result_mode_snapshot,
+            result_label_snapshot,
+            pass_percent_snapshot,
+            grade_scale_snapshot,
+            share_token,
+            share_enabled,
+            shared_at
         FROM attempts
         WHERE id = :id
         LIMIT 1
@@ -351,7 +379,14 @@ function attempt_find_by_id_for_update(int $attemptId): ?array
             total_questions,
             correct_count,
             wrong_count,
-            percent
+            percent,
+            result_mode_snapshot,
+            result_label_snapshot,
+            pass_percent_snapshot,
+            grade_scale_snapshot,
+            share_token,
+            share_enabled,
+            shared_at
         FROM attempts
         WHERE id = :id
         LIMIT 1
@@ -395,6 +430,131 @@ function answers_list_by_attempt_id(int $attemptId): array
     ]);
 
     return $stmt->fetchAll();
+}
+
+function attempt_share_generate_token(): string
+{
+    return rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+}
+
+function attempt_enable_share(int $attemptId, int $userId): ?array
+{
+    $pdo = db();
+
+    $existing = attempt_find_by_id($attemptId);
+    if ($existing === null || (int)($existing['user_id'] ?? 0) !== $userId || ($existing['finished_at'] ?? null) === null) {
+        return null;
+    }
+
+    $currentToken = trim((string)($existing['share_token'] ?? ''));
+    if ($currentToken !== '' && (int)($existing['share_enabled'] ?? 0) === 1) {
+        return attempt_find_by_id($attemptId);
+    }
+
+    $token = $currentToken;
+    for ($i = 0; $i < 10; $i++) {
+        if ($token === '') {
+            $token = attempt_share_generate_token();
+        }
+
+        try {
+            $stmt = $pdo->prepare("
+                UPDATE attempts
+                SET share_token = :share_token,
+                    share_enabled = 1,
+                    shared_at = CURRENT_TIMESTAMP
+                WHERE id = :id
+                  AND user_id = :user_id
+                  AND finished_at IS NOT NULL
+                LIMIT 1
+            ");
+            $stmt->execute([
+                ':share_token' => $token,
+                ':id' => $attemptId,
+                ':user_id' => $userId,
+            ]);
+
+            return $stmt->rowCount() === 1 ? attempt_find_by_id($attemptId) : null;
+        } catch (PDOException $e) {
+            if (($e->errorInfo[1] ?? null) !== 1062) {
+                throw $e;
+            }
+            $token = '';
+        }
+    }
+
+    throw new RuntimeException('Failed to generate unique share token');
+}
+
+function attempt_disable_share(int $attemptId, int $userId): bool
+{
+    $pdo = db();
+    $stmt = $pdo->prepare("
+        UPDATE attempts
+        SET share_enabled = 0
+        WHERE id = :id
+          AND user_id = :user_id
+        LIMIT 1
+    ");
+    $stmt->execute([
+        ':id' => $attemptId,
+        ':user_id' => $userId,
+    ]);
+
+    return $stmt->rowCount() === 1;
+}
+
+function attempt_find_shared_by_token(string $token): ?array
+{
+    $token = trim($token);
+    if ($token === '' || !preg_match('/^[A-Za-z0-9_-]{32,128}$/', $token)) {
+        return null;
+    }
+
+    $pdo = db();
+    $stmt = $pdo->prepare("
+        SELECT
+            a.id,
+            a.test_id,
+            a.test_title_snapshot,
+            a.test_access_snapshot,
+            a.test_snapshot_hash,
+            a.user_id,
+            a.attempt_no,
+            a.started_at,
+            a.finished_at,
+            a.expires_at,
+            a.duration_sec,
+            a.status,
+            a.time_limit_sec_snapshot,
+            a.total_questions,
+            a.correct_count,
+            a.wrong_count,
+            a.percent,
+            a.result_mode_snapshot,
+            a.result_label_snapshot,
+            a.pass_percent_snapshot,
+            a.grade_scale_snapshot,
+            a.share_token,
+            a.share_enabled,
+            a.shared_at,
+            COALESCE(u.login, '') AS attempt_user_login,
+            t.user_id AS test_author_id,
+            t.deleted_at AS test_deleted_at,
+            t.deleted_forever_at AS test_deleted_forever_at,
+            t.status AS test_status
+        FROM attempts a
+        LEFT JOIN users u ON u.id = a.user_id
+        LEFT JOIN tests t ON t.id = a.test_id
+        WHERE a.share_token = :token
+          AND a.share_enabled = 1
+          AND a.finished_at IS NOT NULL
+        LIMIT 1
+    ");
+    $stmt->execute([':token' => $token]);
+
+    $row = $stmt->fetch();
+    return $row !== false ? $row : null;
 }
 
 function attempts_count_finished_by_user_id(int $userId): int
@@ -452,6 +612,10 @@ function attempts_filters_sql(array $filters, array &$params): string
         $where[] = 'a.percent >= 60 AND a.percent < 80';
     } elseif ($status === 'bad' || $status === 'wrong') {
         $where[] = 'a.percent < 60';
+    } elseif ($status === 'passed') {
+        $where[] = "a.result_mode_snapshot = 'pass_fail' AND a.percent >= COALESCE(a.pass_percent_snapshot, 60)";
+    } elseif ($status === 'failed') {
+        $where[] = "a.result_mode_snapshot = 'pass_fail' AND a.percent < COALESCE(a.pass_percent_snapshot, 60)";
     }
 
     $dateFrom = (string)($filters['date_from'] ?? '');
@@ -508,14 +672,19 @@ function attempts_list_by_user_id_filtered(int $userId, array $filters, int $lim
             a.id,
             a.test_id,
             a.test_title_snapshot,
+            a.attempt_no,
             a.correct_count,
             a.wrong_count,
             a.total_questions,
             a.percent,
+            a.result_label_snapshot,
+            a.result_mode_snapshot,
             a.started_at,
             a.finished_at,
+            a.duration_sec,
             t.id AS live_test_id,
-            t.title AS live_test_title
+            t.title AS live_test_title,
+            t.cover_image AS live_cover_image
         FROM attempts a
         LEFT JOIN tests t ON t.id = a.test_id
         WHERE {$whereSql}

@@ -98,33 +98,13 @@ $pluralRu = static function (int $n, string $one, string $few, string $many): st
     </div>
 
     <?php if ($pages > 1): ?>
-        <nav class="pager" aria-label="Пагинация закладок">
-            <?php $prevPage = max(1, $page - 1); ?>
-            <?php $nextPage = min($pages, $page + 1); ?>
-
-            <?php if ($page > 1): ?>
-                <a class="pager__btn" href="<?= htmlspecialchars($pageUrl($pagerPath, $pagerQuery, $prevPage), ENT_QUOTES, 'UTF-8') ?>" aria-label="Предыдущая страница">
-                    <img src="/assets/img/next-page.svg" class="pager__arrow pager__arrow--prev" alt="" aria-hidden="true">
-                </a>
-            <?php else: ?>
-                <span class="pager__btn is-disabled" aria-hidden="true">
-                    <img src="/assets/img/next-page.svg" class="pager__arrow pager__arrow--prev" alt="" aria-hidden="true">
-                </span>
-            <?php endif; ?>
-
-            <span class="pager__info">
-                Страница <strong><?= $page ?></strong> из <strong><?= $pages ?></strong>
-            </span>
-
-            <?php if ($page < $pages): ?>
-                <a class="pager__btn" href="<?= htmlspecialchars($pageUrl($pagerPath, $pagerQuery, $nextPage), ENT_QUOTES, 'UTF-8') ?>" aria-label="Следующая страница">
-                    <img src="/assets/img/next-page.svg" class="pager__arrow" alt="" aria-hidden="true">
-                </a>
-            <?php else: ?>
-                <span class="pager__btn is-disabled" aria-hidden="true">
-                    <img src="/assets/img/next-page.svg" class="pager__arrow" alt="" aria-hidden="true">
-                </span>
-            <?php endif; ?>
-        </nav>
+        <?php
+        $pagerPage = $page;
+        $pagerPages = $pages;
+        $pagerPrevUrl = $pageUrl($pagerPath, $pagerQuery, max(1, $page - 1));
+        $pagerNextUrl = $pageUrl($pagerPath, $pagerQuery, min($pages, $page + 1));
+        $pagerLabel = 'Пагинация закладок';
+        require __DIR__ . '/partials/pager.php';
+        ?>
     <?php endif; ?>
 </div>

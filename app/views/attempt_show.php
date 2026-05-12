@@ -13,6 +13,7 @@ declare(strict_types=1);
 /** @var string $sourceState */
 /** @var bool $show_rate_prompt */
 /** @var bool $revealCorrectAnswers */
+/** @var bool $can_manage_share */
 
 function _h(string $s): string {
     return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
@@ -25,9 +26,9 @@ function _norm_opt(string $s): string {
 }
 
 $summaryCorrect = 0;
-$summaryPartial = 0;
 $summaryWrong = 0;
 $revealCorrectAnswers = (bool)($revealCorrectAnswers ?? true);
+$testUrl = test_url((int)($test['id'] ?? 0), (string)($test['title'] ?? 'Тест'));
 
 foreach ($questions as $q) {
     $qid = (int)($q['id'] ?? 0);
@@ -89,13 +90,10 @@ foreach ($questions as $q) {
             }
             $selectedNorm = array_values(array_unique($selectedNorm));
 
-            $tp = 0;
-            foreach ($selectedNorm as $sNorm) {
-                if (in_array($sNorm, $correctNorm, true)) {
-                    $tp++;
-                }
-            }
-            $questionScore = count($correctNorm) > 0 ? ($tp / count($correctNorm)) : 0.0;
+            sort($correctNorm);
+            sort($selectedNorm);
+            $isCorrect = (!empty($correctNorm) || !empty($selectedNorm)) && ($selectedNorm === $correctNorm);
+            $questionScore = $isCorrect ? 1.0 : 0.0;
         } else {
             $questionScore = $isCorrect ? 1.0 : 0.0;
         }
@@ -113,13 +111,7 @@ foreach ($questions as $q) {
             $u = $userOptIds; sort($u);
             $c = array_map('intval', $correctOptionIdsByQ[$qid] ?? []); sort($c);
             $isCorrect = (!empty($u) || !empty($c)) && ($u === $c);
-            $tp = 0;
-            foreach ($u as $oid) {
-                if (in_array((int)$oid, $c, true)) {
-                    $tp++;
-                }
-            }
-            $questionScore = count($c) > 0 ? ($tp / count($c)) : 0.0;
+            $questionScore = $isCorrect ? 1.0 : 0.0;
         } elseif ($type === 'order') {
             // order type always stores a snapshot; without one, treat as wrong
             $isCorrect = false;
@@ -133,8 +125,6 @@ foreach ($questions as $q) {
 
     if ($isCorrect) {
         $summaryCorrect++;
-    } elseif ($questionScore > 0.0) {
-        $summaryPartial++;
     } else {
         $summaryWrong++;
     }
@@ -150,6 +140,10 @@ if (($sourceState ?? 'ok') === 'changed') {
 $attemptStatus = (string)($attempt['status'] ?? '');
 $expiredNotice = '';
 $percentVal = (float)($attempt['percent'] ?? 0);
+$resultLabel = trim((string)($attempt['result_label_snapshot'] ?? ''));
+if ($resultLabel === '') {
+    $resultLabel = $percentVal >= 90 ? 'Отлично' : ($percentVal >= 80 ? 'Хорошо' : ($percentVal >= 60 ? 'Удовлетворительно' : 'Плохо'));
+}
 $scoreGrade = $percentVal >= 90 ? 'excellent' : ($percentVal >= 80 ? 'good' : ($percentVal >= 60 ? 'ok' : 'bad'));
 
 $durationSec = (int)($attempt['duration_sec'] ?? 0);
@@ -169,6 +163,12 @@ if ($durationSec > 0) {
 if ($attemptStatus === 'expired') {
     $expiredNotice = 'Время на прохождение истекло. Попытка завершена автоматически, засчитаны только ответы, на которые вы успели ответить.';
 }
+$canManageShare = (bool)($can_manage_share ?? false);
+$shareToken = trim((string)($attempt['share_token'] ?? ''));
+$shareEnabled = (int)($attempt['share_enabled'] ?? 0) === 1 && $shareToken !== '';
+$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+$host = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
+$shareUrl = $shareEnabled ? ($scheme . '://' . $host . '/s/' . $shareToken) : '';
 ?>
 <?php if (!empty($show_rate_prompt) && auth_is_logged_in() && (int)($test['id'] ?? 0) > 0): ?>
     <div class="ui-backdrop is-open" data-rate-modal="1" aria-hidden="false">
@@ -210,6 +210,7 @@ if ($attemptStatus === 'expired') {
         ?>
         <div class="attempt__meta">
             <span class="badge"><?= _h($testIdBadge) ?></span>
+            <span class="badge">Попытка №<?= max(1, (int)($attempt['attempt_no'] ?? 1)) ?></span>
             <span class="badge">Результат ID: <?= (int)($attempt['id'] ?? 0) ?></span>
             <?php if ($attemptStatus === 'expired'): ?>
                 <span class="badge badge--danger-soft">Время истекло</span>
@@ -244,6 +245,7 @@ if ($attemptStatus === 'expired') {
                         <div class="scorecard__bar scorecard__bar--<?= $scoreGrade ?>" style="width: <?= min(100.0, (float)($attempt['percent'] ?? 0)) ?>%"></div>
                     </div>
                     <div class="scorecard__hero-label">Результат</div>
+                    <div class="scorecard__result-label"><?= _h($resultLabel) ?></div>
                 </div>
 
                 <div class="scorecard__divider" aria-hidden="true"></div>
@@ -253,11 +255,6 @@ if ($attemptStatus === 'expired') {
                         <span class="scorecard__stat-icon scorecard__stat-icon--ok" aria-hidden="true">✓</span>
                         <span class="scorecard__stat-val"><?= (int)$summaryCorrect ?></span>
                         <span class="scorecard__stat-label">Правильных</span>
-                    </div>
-                    <div class="scorecard__stat">
-                        <span class="scorecard__stat-icon scorecard__stat-icon--partial" aria-hidden="true">≈</span>
-                        <span class="scorecard__stat-val"><?= (int)$summaryPartial ?></span>
-                        <span class="scorecard__stat-label">Частично верно</span>
                     </div>
                     <div class="scorecard__stat">
                         <span class="scorecard__stat-icon scorecard__stat-icon--bad" aria-hidden="true">✗</span>
@@ -283,9 +280,6 @@ if ($attemptStatus === 'expired') {
                     <span class="legend-sep" aria-hidden="true">·</span>
                     <span class="legend-dot legend-dot--bad" aria-hidden="true"></span>
                     <span>Выбранный неверный</span>
-                    <span class="legend-sep" aria-hidden="true">·</span>
-                    <span class="legend-dot legend-dot--partial" aria-hidden="true"></span>
-                    <span>Частично верно</span>
                 </div>
             <?php else: ?>
                 <div class="scorecard__legend" aria-label="Ответы скрыты">
@@ -294,6 +288,34 @@ if ($attemptStatus === 'expired') {
             <?php endif; ?>
         </div>
 
+        <?php if ($canManageShare): ?>
+            <div class="share-result">
+                <div class="share-result__head">
+                    <div>
+                        <div class="share-result__title">Поделиться результатом</div>
+                        <div class="share-result__hint">Публичная ссылка показывает подробности только вам и автору теста.</div>
+                    </div>
+                    <?php if (!$shareEnabled): ?>
+                        <?= form_open('/attempts/' . (int)($attempt['id'] ?? 0) . '/share', 'post') ?>
+                            <button type="submit" class="btn btn--primary">Создать ссылку</button>
+                        </form>
+                    <?php endif; ?>
+                </div>
+
+                <?php if ($shareEnabled): ?>
+                    <div class="share-result__body">
+                        <input class="share-result__link input" type="text" value="<?= _h($shareUrl) ?>" readonly>
+                        <button type="button" class="btn btn--ghost" data-copy="/s/<?= _h($shareToken) ?>">
+                            <span data-copy-label>Копировать</span>
+                        </button>
+                        <?= form_open('/attempts/' . (int)($attempt['id'] ?? 0) . '/share/disable', 'post', ['class' => 'inline-form']) ?>
+                            <button type="submit" class="btn btn--danger">Отключить ссылку</button>
+                        </form>
+                    </div>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
+
         <div class="attempt__actions-wrap">
         <div class="attempt__actions">
             <?php if (empty($testMissing)): ?>
@@ -301,7 +323,7 @@ if ($attemptStatus === 'expired') {
                     <svg class="btn-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3V9M3 9H9M3 9C5.33 6.91 7.48 4.55 10.75 4.09C12.68 3.82 14.65 4.18 16.35 5.12C18.06 6.07 19.42 7.54 20.21 9.32M21 21V15M21 15H15M21 15C18.67 17.09 16.52 19.45 13.25 19.91C11.32 20.18 9.35 19.82 7.65 18.88C5.94 17.93 4.58 16.46 3.79 14.68"/></svg>
                     Пройти ещё раз
                 </a>
-                <a class="btn btn--ghost" href="/tests/<?= (int)($test['id'] ?? 0) ?>">
+                <a class="btn btn--ghost" href="<?= _h($testUrl) ?>">
                     <svg class="btn-icon" width="15" height="15" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="4" aria-hidden="true"><path d="M16 10h24l10 10v32H16z" stroke-linejoin="round"/><path d="M40 10v10h10" stroke-linejoin="round"/><path d="M23 30h20M23 38h20M23 46h20" stroke-linecap="round"/></svg>
                     К описанию теста
                 </a>
@@ -388,13 +410,10 @@ if ($attemptStatus === 'expired') {
                 }
                 $selectedNorm = array_values(array_unique($selectedNorm));
 
-                $tp = 0;
-                foreach ($selectedNorm as $sNorm) {
-                    if (in_array($sNorm, $correctNorm, true)) {
-                        $tp++;
-                    }
-                }
-                $questionScore = count($correctNorm) > 0 ? ($tp / count($correctNorm)) : 0.0;
+                sort($correctNorm);
+                sort($selectedNorm);
+                $isCorrect = (!empty($correctNorm) || !empty($selectedNorm)) && ($selectedNorm === $correctNorm);
+                $questionScore = $isCorrect ? 1.0 : 0.0;
             } else {
                 $questionScore = $isCorrect ? 1.0 : 0.0;
             }
@@ -412,13 +431,7 @@ if ($attemptStatus === 'expired') {
                 $u = $userOptIds; sort($u);
                 $c = $correctOptIds; sort($c);
                 $isCorrect = (!empty($u) || !empty($c)) && ($u === $c);
-                $tp = 0;
-                foreach ($u as $oid) {
-                    if (in_array((int)$oid, $c, true)) {
-                        $tp++;
-                    }
-                }
-                $questionScore = count($c) > 0 ? ($tp / count($c)) : 0.0;
+                $questionScore = $isCorrect ? 1.0 : 0.0;
             } else { // radio
                 $isCorrect = (!empty($userOptIds)) && in_array((int)$userOptIds[0], $correctOptIds, true);
                 $questionScore = $isCorrect ? 1.0 : 0.0;
@@ -430,9 +443,6 @@ if ($attemptStatus === 'expired') {
         if ($isCorrect) {
             $stateText = 'Правильно';
             $stateClass = 'qres__state--ok';
-        } elseif ($questionScore > 0.0) {
-            $stateText = 'Частично верно';
-            $stateClass = 'qres__state--partial';
         }
         ?>
 
@@ -442,9 +452,11 @@ if ($attemptStatus === 'expired') {
                     <span class="qres__num"><?= (int)($i + 1) ?></span>
                     Вопрос
                 </div>
-                <div class="qres__state <?= $stateClass ?>">
-                    <?= $stateText ?>
-                </div>
+                <?php if ($revealCorrectAnswers): ?>
+                    <div class="qres__state <?= $stateClass ?>">
+                        <?= $stateText ?>
+                    </div>
+                <?php endif; ?>
             </div>
 
             <div class="qres__body">
@@ -510,7 +522,7 @@ if ($attemptStatus === 'expired') {
                     <div class="input-res">
                         <div class="input-res__row">
                             <div class="input-res__label">Твой ответ</div>
-                            <div class="input-res__value <?= $isCorrect ? 'ok' : 'bad' ?>">
+                            <div class="input-res__value <?= $revealCorrectAnswers ? ($isCorrect ? 'ok' : 'bad') : '' ?>">
                                 <?= _h($userTextRaw !== '' ? $userTextRaw : '—') ?>
                             </div>
                         </div>
@@ -611,7 +623,7 @@ if ($attemptStatus === 'expired') {
 
                                 $optCls = 'opt';
                                 if ($revealCorrectAnswers && $isCorrectOpt) $optCls .= ' opt--correct';
-                                if ($isUserOpt && !$isCorrectOpt) $optCls .= ' opt--wrong';
+                                if ($revealCorrectAnswers && $isUserOpt && !$isCorrectOpt) $optCls .= ' opt--wrong';
                                 if ($optImg !== '') $optCls .= ' opt--has-image';
                                 ?>
                                 <div class="<?= $optCls ?>">
@@ -650,7 +662,7 @@ if ($attemptStatus === 'expired') {
 
                                 $cls = 'opt';
                                 if ($revealCorrectAnswers && $isCorrectOpt) $cls .= ' opt--correct';
-                                if ($isUserOpt && !$isCorrectOpt) $cls .= ' opt--wrong';
+                                if ($revealCorrectAnswers && $isUserOpt && !$isCorrectOpt) $cls .= ' opt--wrong';
                                 if ($oimg !== '') $cls .= ' opt--has-image';
                                 ?>
                                 <div class="<?= $cls ?>">

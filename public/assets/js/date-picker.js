@@ -20,8 +20,10 @@
       showEvent: "",
       isMobile: window.matchMedia("(max-width: 640px)").matches,
       onShow() {
-        // Match calendar width to the input on every open
-        dp.$datepicker.style.width = displayInput.offsetWidth + "px";
+        const viewportPadding = 24;
+        const maxWidth = Math.max(220, window.innerWidth - viewportPadding);
+        const calendarWidth = Math.min(Math.max(displayInput.offsetWidth, 286), maxWidth);
+        dp.$datepicker.style.width = calendarWidth + "px";
       },
       buttons: [
         {

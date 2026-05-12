@@ -63,6 +63,7 @@
             const selected = options.find((option) => option.dataset.value === value) ?? options[0];
             input.value = selected.dataset.value || 'all';
             current.textContent = selected.textContent || '';
+            trigger.classList.toggle('is-placeholder', (selected.dataset.value || 'all') === 'all');
 
             options.forEach((option) => {
                 const isSelected = option === selected;

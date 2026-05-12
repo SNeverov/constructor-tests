@@ -34,6 +34,7 @@ $creatorName = trim((string)($test['creator_login'] ?? ''));
 if ($creatorName === '') {
     $creatorName = $currentUserLogin !== '' ? $currentUserLogin : '—';
 }
+$creatorUrl = $creatorName !== '—' ? ('/u/' . rawurlencode($creatorName)) : '';
 $createdDate = '—';
 if ($createdAt !== '') {
     $datePart = preg_split('/\s+/', $createdAt)[0] ?? $createdAt;
@@ -90,6 +91,8 @@ $formatTimeStat = static function (?int $seconds): array {
 
     return [(string)(int)floor($seconds / 60), 'мин'];
 };
+
+$testUrl = test_url($testId, $cardTitle);
 ?>
 
 <article class="card test-card test-card--premium<?= $isUnavailable ? ' test-card--unavailable' : '' ?><?= $stateClass ?><?= $contextClass ?><?= !$showBookmark ? ' test-card--no-bookmark' : '' ?>" data-test-card-id="<?= $testId ?>">
@@ -108,7 +111,7 @@ $formatTimeStat = static function (?int $seconds): array {
                     <?= htmlspecialchars($cardTitle, ENT_QUOTES, 'UTF-8') ?>
                 </a>
             <?php elseif (!$isUnavailable && !$isTrashContext): ?>
-                <a class="test-card__cover-title" href="/tests/<?= $testId ?>">
+                <a class="test-card__cover-title" href="<?= htmlspecialchars($testUrl, ENT_QUOTES, 'UTF-8') ?>">
                     <?= htmlspecialchars($cardTitle, ENT_QUOTES, 'UTF-8') ?>
                 </a>
             <?php else: ?>
@@ -129,7 +132,7 @@ $formatTimeStat = static function (?int $seconds): array {
                 <?= htmlspecialchars($cardTitle, ENT_QUOTES, 'UTF-8') ?>
             </a>
         <?php elseif (!$isUnavailable && !$isTrashContext): ?>
-            <a class="test-title-link" href="/tests/<?= $testId ?>">
+            <a class="test-title-link" href="<?= htmlspecialchars($testUrl, ENT_QUOTES, 'UTF-8') ?>">
                 <?= htmlspecialchars($cardTitle, ENT_QUOTES, 'UTF-8') ?>
             </a>
         <?php else: ?>
@@ -154,7 +157,11 @@ $formatTimeStat = static function (?int $seconds): array {
 
             <span class="test-chip test-chip--soft test-chip--creator">
                 <img src="/assets/img/test_card_svg/user.svg" alt="" aria-hidden="true">
-                <span><?= htmlspecialchars($creatorName, ENT_QUOTES, 'UTF-8') ?></span>
+                <?php if ($creatorUrl !== ''): ?>
+                    <a class="test-card__author-link" href="<?= htmlspecialchars($creatorUrl, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($creatorName, ENT_QUOTES, 'UTF-8') ?></a>
+                <?php else: ?>
+                    <span><?= htmlspecialchars($creatorName, ENT_QUOTES, 'UTF-8') ?></span>
+                <?php endif; ?>
             </span>
 
             <?php if ($isTrashContext && $deletedAt !== ''): ?>
@@ -185,9 +192,8 @@ $formatTimeStat = static function (?int $seconds): array {
         <div class="test-card__icon-actions">
             <?php if ($showPass): ?>
                 <a
-                    href="/tests/<?= $testId ?>"
-                    class="test-card__icon-btn test-card__icon-btn--primary<?= !$canPass ? ' test-card__icon-btn--primary-auth' : '' ?> ui-tooltip ui-tooltip--bottom"
-                    data-tooltip="<?= $canPass ? 'Пройти тест' : 'Войти для прохождения' ?>"
+                    href="<?= htmlspecialchars($testUrl, ENT_QUOTES, 'UTF-8') ?>"
+                    class="test-card__icon-btn test-card__icon-btn--primary<?= !$canPass ? ' test-card__icon-btn--primary-auth' : '' ?>"
                     aria-label="<?= $canPass ? 'Пройти тест' : 'Войти для прохождения теста' ?>"
                 >
                     <img src="/assets/img/test_card_svg/play.svg" alt="" aria-hidden="true">
@@ -219,7 +225,7 @@ $formatTimeStat = static function (?int $seconds): array {
                 <button
                     type="button"
                     class="test-card__icon-btn test-card__icon-btn--share ui-tooltip ui-tooltip--bottom"
-                    data-share-copy="/tests/<?= $testId ?>"
+                    data-share-copy="<?= htmlspecialchars($testUrl, ENT_QUOTES, 'UTF-8') ?>"
                     data-tooltip="Поделиться"
                     aria-label="Поделиться ссылкой на тест"
                 >
@@ -359,7 +365,11 @@ $formatTimeStat = static function (?int $seconds): array {
             <span class="test-card__home-footer-item test-card__home-footer-item--creator">
                 <img src="/assets/img/test_card_svg/autor_of_tests.svg" alt="" aria-hidden="true">
                 <span class="test-card__home-footer-text">
-                    <span class="test-card__home-footer-value"><?= htmlspecialchars($creatorName, ENT_QUOTES, 'UTF-8') ?></span>
+                    <?php if ($creatorUrl !== ''): ?>
+                        <a class="test-card__home-footer-value test-card__author-link" href="<?= htmlspecialchars($creatorUrl, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($creatorName, ENT_QUOTES, 'UTF-8') ?></a>
+                    <?php else: ?>
+                        <span class="test-card__home-footer-value"><?= htmlspecialchars($creatorName, ENT_QUOTES, 'UTF-8') ?></span>
+                    <?php endif; ?>
                     <span class="test-card__home-footer-label">Автор теста</span>
                 </span>
             </span>

@@ -15,6 +15,7 @@ declare(strict_types=1);
 $showAnswers = (bool)($showAnswers ?? false);
 $correctOptionIdsByQ = is_array($correctOptionIdsByQ ?? null) ? $correctOptionIdsByQ : [];
 $correctTextAnswersByQ = is_array($correctTextAnswersByQ ?? null) ? $correctTextAnswersByQ : [];
+$testUrl = test_url((int)($test['id'] ?? 0), (string)($test['title'] ?? 'Тест'));
 ?>
 
 <div
@@ -30,7 +31,7 @@ $correctTextAnswersByQ = is_array($correctTextAnswersByQ ?? null) ? $correctText
             <button
 				type="button"
 				class="badge badge--copy badge--copy-link"
-				data-copy="/tests/<?= (int)($test['id'] ?? 0) ?>"
+				data-copy="<?= htmlspecialchars($testUrl, ENT_QUOTES, 'UTF-8') ?>"
 				title="Скопировать ссылку на тест"
 			>
 				<img
@@ -237,7 +238,7 @@ $correctTextAnswersByQ = is_array($correctTextAnswersByQ ?? null) ? $correctText
                     <img src="/assets/img/done-ring-round.svg" class="btn-icon" width="18" height="18" style="filter: brightness(0) invert(1)" aria-hidden="true">
                     Закончить тест
                 </button>
-                <a class="btn btn--link" href="/tests/<?= (int)($test['id'] ?? 0) ?>">
+                <a class="btn btn--link" href="<?= htmlspecialchars($testUrl, ENT_QUOTES, 'UTF-8') ?>">
                     <img src="/assets/img/arrow-left.svg" class="btn-icon" width="15" height="15" aria-hidden="true">
                     Назад к описанию
                 </a>

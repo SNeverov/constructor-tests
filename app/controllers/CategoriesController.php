@@ -60,6 +60,6 @@ function category_show(string $slug): void
             'query' => $sort !== 'new' ? ['sort' => $sort] : [],
         ],
         'scripts' => ['/assets/js/my-tests-share.js', '/assets/js/home-category-filter.js'],
-        'styles' => ['/assets/css/my-tests.css'],
+        'styles' => ['/assets/css/my-tests.css', '/assets/css/filter-panels.css'],
     ]);
 }

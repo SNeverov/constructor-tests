@@ -27,7 +27,8 @@ function test_rate(int $testId): void
             redirect($back);
             return;
         }
-        redirect('/tests/' . $testId);
+        $test = tests_find_by_id($testId);
+        redirect($test !== null ? test_url($testId, (string)($test['title'] ?? 'Тест')) : '/tests/' . $testId);
     }
 
     try {
@@ -82,5 +83,6 @@ function test_rate(int $testId): void
         return;
     }
 
-    redirect('/tests/' . $testId);
+    $test = tests_find_by_id($testId);
+    redirect($test !== null ? test_url($testId, (string)($test['title'] ?? 'Тест')) : '/tests/' . $testId);
 }

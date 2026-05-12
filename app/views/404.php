@@ -9,16 +9,22 @@
             </p>
 
             <div class="nf__actions">
-                <a class="btn" href="/">
-                    <img src="/assets/img/test_result_svg/homepage.svg" class="btn-icon" width="16" height="16" aria-hidden="true">
+                <a class="btn btn-outline btn-md btn-with-icon" href="/">
+                    <svg class="btn__icon-img" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1v-9.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                    </svg>
                     На главную
                 </a>
-                <button class="btn" type="button" data-nf-back>
-                    <img src="/assets/img/arrow-left.svg" class="btn-icon" width="16" height="16" aria-hidden="true">
+                <button class="btn btn-outline btn-md btn-with-icon" type="button" data-nf-back>
+                    <svg class="btn__icon-img" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
                     Назад
                 </button>
-                <a class="btn btn--primary" href="/my/tests/create">
-                    <img src="/assets/img/hdr-icon-create.svg" class="btn-icon" width="16" height="16" aria-hidden="true">
+                <a class="btn btn-primary btn-md btn-with-icon" href="/my/tests/create">
+                    <svg class="btn__icon-img" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
                     Создать тест
                 </a>
             </div>

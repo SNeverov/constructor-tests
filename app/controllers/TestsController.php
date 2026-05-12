@@ -56,6 +56,9 @@ function test_form_old_from_db(array $test): array
         'shuffle_questions' => test_bool_setting($test['shuffle_questions'] ?? 0),
         'shuffle_answers' => test_bool_setting($test['shuffle_answers'] ?? 0),
         'attempt_limit' => test_attempt_limit_from_row($test),
+        'result_mode' => test_result_mode_from_value($test['result_mode'] ?? test_result_mode_scale()),
+        'pass_percent' => test_normalize_pass_percent($test['pass_percent'] ?? 60, false),
+        'grade_scale' => test_normalize_grade_scale($test['grade_scale_json'] ?? null, false),
         'questions' => $oldQuestions,
     ];
 }
@@ -142,6 +145,25 @@ function tests_collect_form_payload(array $source, bool $strictValidation = true
     $attemptLimit = null;
     try {
         $attemptLimit = normalize_test_attempt_limit($source['attempt_limit'] ?? null, $strictValidation);
+    } catch (InvalidArgumentException $e) {
+        if ($strictValidation) {
+            $errors[] = $e->getMessage();
+        }
+    }
+
+    $resultMode = test_result_mode_from_value($source['result_mode'] ?? test_result_mode_scale());
+    $passPercent = 60;
+    try {
+        $passPercent = test_normalize_pass_percent($source['pass_percent'] ?? 60, $strictValidation);
+    } catch (InvalidArgumentException $e) {
+        if ($strictValidation) {
+            $errors[] = $e->getMessage();
+        }
+    }
+
+    $gradeScale = test_default_grade_scale();
+    try {
+        $gradeScale = test_normalize_grade_scale($source['grade_scale'] ?? null, $strictValidation);
     } catch (InvalidArgumentException $e) {
         if ($strictValidation) {
             $errors[] = $e->getMessage();
@@ -382,6 +404,9 @@ function tests_collect_form_payload(array $source, bool $strictValidation = true
             'shuffle_questions' => $shuffleQuestions,
             'shuffle_answers' => $shuffleAnswers,
             'attempt_limit' => $attemptLimit,
+            'result_mode' => $resultMode,
+            'pass_percent' => $passPercent,
+            'grade_scale' => $gradeScale,
             'questions' => $questions,
         ],
         'errors' => $errors,
@@ -412,6 +437,15 @@ function tests_payload_has_meaningful_content(array $payload, array $source): bo
         return true;
     }
     if (($payload['attempt_limit'] ?? null) !== null) {
+        return true;
+    }
+    if (($payload['result_mode'] ?? test_result_mode_scale()) !== test_result_mode_scale()) {
+        return true;
+    }
+    if ((int)($payload['pass_percent'] ?? 60) !== 60) {
+        return true;
+    }
+    if (test_grade_scale_json((array)($payload['grade_scale'] ?? test_default_grade_scale())) !== test_grade_scale_json(test_default_grade_scale())) {
         return true;
     }
     if (($payload['cover_image'] ?? null) !== null) {
@@ -478,7 +512,7 @@ function tests_render_form_with_errors(string $title, array $errors, array $old,
 {
     view_render('test_create', [
         'title' => $title,
-        'styles' => ['/assets/css/test-create.css'],
+        'styles' => ['/assets/css/cropper.min.css', '/assets/css/test-create.css'],
         'errors' => $errors,
         'old' => $old,
         'is_edit' => $isEdit,
@@ -509,6 +543,10 @@ function my_tests_index(): void
     if (!isset($sortOptions[$sort])) {
         $sort = 'new';
     }
+    $search = trim((string)($_GET['search'] ?? ''));
+    if (mb_strlen($search) > 100) {
+        $search = mb_substr($search, 0, 100);
+    }
 
     $page = (int)($_GET['page'] ?? 1);
     if ($page < 1) {
@@ -517,15 +555,18 @@ function my_tests_index(): void
 
     $perPage = 10;
     $allTotal = tests_count_active_by_user_id($userId);
-    $total = $categoryName !== null ? tests_count_active_by_user_id($userId, $categoryName) : $allTotal;
+    $total = tests_count_active_by_user_id($userId, $categoryName, $search);
     $pages = max(1, (int)ceil($total / $perPage));
     if ($page > $pages) {
         $page = $pages;
     }
     $offset = ($page - 1) * $perPage;
 
-    $tests = tests_list_by_user_id_paginated($userId, $perPage, $offset, $categoryName, $sort);
+    $tests = tests_list_by_user_id_paginated($userId, $perPage, $offset, $categoryName, $sort, $search);
     $pagerQuery = [];
+    if ($search !== '') {
+        $pagerQuery['search'] = $search;
+    }
     if ($categorySlug !== '') {
         $pagerQuery['category'] = $categorySlug;
     }
@@ -544,6 +585,7 @@ function my_tests_index(): void
         'selected_category_slug' => $categorySlug,
         'sort_options' => $sortOptions,
         'selected_sort' => $sort,
+        'search' => $search,
 		'pagination' => [
             'page' => $page,
             'pages' => $pages,
@@ -552,7 +594,7 @@ function my_tests_index(): void
             'query' => $pagerQuery,
         ],
 		'scripts' => ['/assets/js/list-loading.js', '/assets/js/my-tests-share.js', '/assets/js/home-category-filter.js'],
-		'styles' => ['/assets/css/my-tests.css'],
+		'styles' => ['/assets/css/my-tests.css', '/assets/css/filter-panels.css'],
     ]);
 }
 
@@ -562,7 +604,7 @@ function my_tests_create_form(): void
 
     view_render('test_create', [
         'title' => 'Создать тест',
-        'styles' => ['/assets/css/test-create.css'],
+        'styles' => ['/assets/css/cropper.min.css', '/assets/css/test-create.css'],
         'submit_label' => 'Опубликовать',
     ]);
 }
@@ -587,7 +629,7 @@ function my_tests_edit_form(int $testId): void
 
     view_render('test_create', [
         'title' => 'Редактировать тест',
-        'styles' => ['/assets/css/test-create.css'],
+        'styles' => ['/assets/css/cropper.min.css', '/assets/css/test-create.css'],
         'is_edit' => true,
         'form_action' => '/my/tests/' . $testId,
         'submit_label' => tests_is_draft_row($test) ? 'Опубликовать' : 'Сохранить изменения',
@@ -632,7 +674,10 @@ function my_tests_draft_save(): void
             (int)($payload['show_answers'] ?? 0),
             (int)($payload['shuffle_questions'] ?? 0),
             (int)($payload['shuffle_answers'] ?? 0),
-            $payload['attempt_limit'] ?? null
+            $payload['attempt_limit'] ?? null,
+            (string)($payload['result_mode'] ?? test_result_mode_scale()),
+            (int)($payload['pass_percent'] ?? 60),
+            (array)($payload['grade_scale'] ?? test_default_grade_scale())
         );
         test_categories_replace_by_test_id($testId, (array)$payload['category_names']);
         tests_replace_questions_payload($testId, (array)$payload['questions']);
@@ -706,7 +751,10 @@ function my_tests_draft_update(int $testId): void
             (int)($payload['show_answers'] ?? 0),
             (int)($payload['shuffle_questions'] ?? 0),
             (int)($payload['shuffle_answers'] ?? 0),
-            $payload['attempt_limit'] ?? null
+            $payload['attempt_limit'] ?? null,
+            (string)($payload['result_mode'] ?? test_result_mode_scale()),
+            (int)($payload['pass_percent'] ?? 60),
+            (array)($payload['grade_scale'] ?? test_default_grade_scale())
         );
         test_categories_replace_by_test_id($testId, (array)$payload['category_names']);
         tests_replace_questions_payload($testId, (array)$payload['questions']);
@@ -756,6 +804,9 @@ function my_tests_store(): void
             'shuffle_questions' => test_bool_setting($_POST['shuffle_questions'] ?? 0),
             'shuffle_answers' => test_bool_setting($_POST['shuffle_answers'] ?? 0),
             'attempt_limit' => normalize_test_attempt_limit($_POST['attempt_limit'] ?? null, false),
+            'result_mode' => test_result_mode_from_value($_POST['result_mode'] ?? test_result_mode_scale()),
+            'pass_percent' => test_normalize_pass_percent($_POST['pass_percent'] ?? 60, false),
+            'grade_scale' => test_normalize_grade_scale($_POST['grade_scale'] ?? null, false),
             'questions' => $_POST['questions'] ?? [],
             'status' => test_status_draft(),
         ], false, null, 'Опубликовать');
@@ -783,7 +834,10 @@ function my_tests_store(): void
             (int)($payload['show_answers'] ?? 0),
             (int)($payload['shuffle_questions'] ?? 0),
             (int)($payload['shuffle_answers'] ?? 0),
-            $payload['attempt_limit'] ?? null
+            $payload['attempt_limit'] ?? null,
+            (string)($payload['result_mode'] ?? test_result_mode_scale()),
+            (int)($payload['pass_percent'] ?? 60),
+            (array)($payload['grade_scale'] ?? test_default_grade_scale())
         );
         test_categories_replace_by_test_id($testId, (array)$payload['category_names']);
         tests_replace_questions_payload($testId, (array)$payload['questions']);
@@ -837,6 +891,9 @@ function my_tests_update(int $testId): void
             'shuffle_questions' => test_bool_setting($_POST['shuffle_questions'] ?? 0),
             'shuffle_answers' => test_bool_setting($_POST['shuffle_answers'] ?? 0),
             'attempt_limit' => normalize_test_attempt_limit($_POST['attempt_limit'] ?? null, false),
+            'result_mode' => test_result_mode_from_value($_POST['result_mode'] ?? test_result_mode_scale()),
+            'pass_percent' => test_normalize_pass_percent($_POST['pass_percent'] ?? 60, false),
+            'grade_scale' => test_normalize_grade_scale($_POST['grade_scale'] ?? null, false),
             'questions' => $_POST['questions'] ?? [],
             'status' => (string)($existingTest['status'] ?? test_status_published()),
             'published_at' => (string)($existingTest['published_at'] ?? ''),
@@ -868,7 +925,10 @@ function my_tests_update(int $testId): void
             (int)($payload['show_answers'] ?? 0),
             (int)($payload['shuffle_questions'] ?? 0),
             (int)($payload['shuffle_answers'] ?? 0),
-            $payload['attempt_limit'] ?? null
+            $payload['attempt_limit'] ?? null,
+            (string)($payload['result_mode'] ?? test_result_mode_scale()),
+            (int)($payload['pass_percent'] ?? 60),
+            (array)($payload['grade_scale'] ?? test_default_grade_scale())
         );
         test_categories_replace_by_test_id($testId, (array)$payload['category_names']);
         tests_replace_questions_payload($testId, (array)$payload['questions']);
@@ -930,7 +990,7 @@ function my_tests_delete(int $testId): void
     redirect('/my/tests');
 }
 
-function test_show(int $testId): void
+function test_show(int $testId, ?string $requestedSlug = null): void
 {
     $test = tests_find_by_id($testId);
 
@@ -940,6 +1000,12 @@ function test_show(int $testId): void
             'title' => '404',
         ]);
         return;
+    }
+
+    $actualUrl = test_url($testId, (string)($test['title'] ?? 'Тест'));
+    $actualSlug = substr($actualUrl, strlen('/tests/' . $testId . '-'));
+    if ($requestedSlug !== $actualSlug) {
+        redirect_permanent($actualUrl);
     }
 
     $viewerId = null;

@@ -48,6 +48,7 @@
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <link rel="stylesheet" href="<?= htmlspecialchars($asset('/assets/css/base.css'), ENT_QUOTES, 'UTF-8') ?>">
 		<link rel="stylesheet" href="<?= htmlspecialchars($asset('/assets/css/page-shell.css'), ENT_QUOTES, 'UTF-8') ?>">
+		<link rel="stylesheet" href="<?= htmlspecialchars($asset('/assets/css/ui-buttons.css'), ENT_QUOTES, 'UTF-8') ?>">
 		<link rel="stylesheet" href="<?= htmlspecialchars($asset('/assets/css/dashboard-shell.css'), ENT_QUOTES, 'UTF-8') ?>">
 		<link rel="stylesheet" href="<?= htmlspecialchars($asset('/assets/css/ui.css'), ENT_QUOTES, 'UTF-8') ?>">
         <?php if (!empty($styles) && is_array($styles)): ?>
@@ -59,6 +60,7 @@
                 <link rel="stylesheet" href="<?= htmlspecialchars($hrefOut, ENT_QUOTES, 'UTF-8') ?>">
             <?php endforeach; ?>
         <?php endif; ?>
+        <link rel="stylesheet" href="<?= htmlspecialchars($asset('/assets/css/form-focus.css'), ENT_QUOTES, 'UTF-8') ?>">
 
     </head>
 
@@ -91,8 +93,8 @@
                 <div class="container site-header__inner">
                     <div class="site-header__left">
                         <a class="brand-wrap" href="/" aria-label="Q-Platform">
-                            <img src="<?= htmlspecialchars($asset('/assets/img/hdr-logo-q.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" class="brand-wrap__logo" aria-hidden="true">
-                            <span class="brand-wrap__text">U A Z A R</span>
+                            <span class="brand-wrap__text">Q U A Z A R</span>
+                            <span class="brand-wrap__subtitle">Платформа тестов</span>
                         </a>
                     </div>
 
@@ -106,19 +108,19 @@
                         <?php if (auth_is_logged_in()): ?>
                             <div class="header-controls">
                                 <nav class="header-actions" aria-label="Главная навигация">
-                                    <a class="icon-btn icon-btn--create ui-tooltip ui-tooltip--bottom" href="/my/tests/create" data-tooltip="Создать тест" aria-label="Создать тест">
-                                        <img src="<?= htmlspecialchars($asset('/assets/img/hdr-icon-create.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
+                                    <a class="btn btn-primary btn-md btn-with-icon icon-btn icon-btn--create ui-tooltip ui-tooltip--bottom" href="/my/tests/create" data-tooltip="Создать тест" aria-label="Создать тест">
+                                        <img class="btn__icon-img" src="<?= htmlspecialchars($asset('/assets/img/hdr-icon-create.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
                                         <span class="icon-btn__text">Создать тест</span>
                                     </a>
-                                    <a class="icon-btn ui-tooltip ui-tooltip--bottom" href="/my/tests" data-tooltip="Мои тесты" aria-label="Мои тесты">
-                                        <img src="<?= htmlspecialchars($asset('/assets/img/hdr-icon-tests-new.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
+                                    <a class="btn btn-outline btn-icon icon-btn ui-tooltip ui-tooltip--bottom" href="/my/tests" data-tooltip="Мои тесты" aria-label="Мои тесты">
+                                        <img class="btn__icon-img" src="<?= htmlspecialchars($asset('/assets/img/hdr-icon-tests-new.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
                                     </a>
-                                    <a class="icon-btn ui-tooltip ui-tooltip--bottom" href="/my/results" data-tooltip="Мои результаты" aria-label="Мои результаты">
-                                        <img src="<?= htmlspecialchars($asset('/assets/img/hdr-icon-results.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
+                                    <a class="btn btn-outline btn-icon icon-btn ui-tooltip ui-tooltip--bottom" href="/my/results" data-tooltip="Мои результаты" aria-label="Мои результаты">
+                                        <img class="btn__icon-img" src="<?= htmlspecialchars($asset('/assets/img/hdr-icon-results.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
                                     </a>
                                     <?php $bookmarksTotal = (int)($bookmarksCount ?? 0); ?>
-                                    <a class="icon-btn icon-btn--bookmarks ui-tooltip ui-tooltip--bottom" href="/my/bookmarks" data-tooltip="Мои закладки" aria-label="Мои закладки" data-header-bookmarks-link>
-                                        <img src="<?= htmlspecialchars($asset('/assets/img/hdr-icon-bookmarks.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true" class="icon-btn__bookmark-icon">
+                                    <a class="btn btn-outline btn-icon icon-btn icon-btn--bookmarks ui-tooltip ui-tooltip--bottom" href="/my/bookmarks" data-tooltip="Мои закладки" aria-label="Мои закладки" data-header-bookmarks-link>
+                                        <img src="<?= htmlspecialchars($asset('/assets/img/hdr-icon-bookmarks.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true" class="btn__icon-img icon-btn__bookmark-icon">
                                         <span
                                             class="icon-btn__badge<?= $bookmarksTotal > 0 ? '' : ' is-hidden' ?>"
                                             aria-label="В закладках: <?= $bookmarksTotal ?>"
@@ -127,14 +129,14 @@
                                             <?= $bookmarksTotal ?>
                                         </span>
                                     </a>
-                                    <a class="icon-btn ui-tooltip ui-tooltip--bottom" href="/account" data-tooltip="Мой профиль" aria-label="Мой профиль">
-                                        <img src="<?= htmlspecialchars($asset('/assets/img/hdr-icon-profile.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
+                                    <a class="btn btn-outline btn-icon icon-btn ui-tooltip ui-tooltip--bottom" href="/account" data-tooltip="Мой профиль" aria-label="Мой профиль">
+                                        <img class="btn__icon-img" src="<?= htmlspecialchars($asset('/assets/img/hdr-icon-profile.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
                                     </a>
-                                    <a class="icon-btn ui-tooltip ui-tooltip--bottom" href="/feedback" data-tooltip="Обратная связь" aria-label="Обратная связь">
-                                        <img src="<?= htmlspecialchars($asset('/assets/img/hdr-icon-feedback.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
+                                    <a class="btn btn-outline btn-icon icon-btn ui-tooltip ui-tooltip--bottom" href="/feedback" data-tooltip="Обратная связь" aria-label="Обратная связь">
+                                        <img class="btn__icon-img" src="<?= htmlspecialchars($asset('/assets/img/hdr-icon-feedback.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
                                     </a>
-                                    <a class="icon-btn ui-tooltip ui-tooltip--bottom" href="/my/tests/trash" data-tooltip="Корзина" aria-label="Корзина">
-                                        <img src="<?= htmlspecialchars($asset('/assets/img/trash.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
+                                    <a class="btn btn-danger-soft btn-icon icon-btn ui-tooltip ui-tooltip--bottom" href="/my/tests/trash" data-tooltip="Корзина" aria-label="Корзина">
+                                        <img class="btn__icon-img" src="<?= htmlspecialchars($asset('/assets/img/trash.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
                                         <?php $trashTotal = (int)($trashCount ?? 0); ?>
                                         <span
                                             class="icon-btn__badge<?= $trashTotal > 0 ? '' : ' is-hidden' ?>"
@@ -147,14 +149,14 @@
                                 </nav>
 
                                 <?= form_open('/logout', 'post', ['class' => 'inline-form']) ?>
-                                    <button type="submit" class="icon-btn icon-btn--logout ui-tooltip ui-tooltip--bottom" data-tooltip="Выйти" aria-label="Выйти">
-                                        <img src="<?= htmlspecialchars($asset('/assets/img/hdr-icon-logout.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
+                                    <button type="submit" class="btn btn-danger-soft btn-icon icon-btn icon-btn--logout ui-tooltip ui-tooltip--bottom" data-tooltip="Выйти" aria-label="Выйти">
+                                        <img class="btn__icon-img" src="<?= htmlspecialchars($asset('/assets/img/hdr-icon-logout.svg'), ENT_QUOTES, 'UTF-8') ?>" alt="" aria-hidden="true">
                                     </button>
                                 </form>
                             </div>
                         <?php else: ?>
                             <div class="auth-menu" id="authMenu">
-                                <button type="button" class="btn auth-menu__btn" id="authMenuTrigger" aria-expanded="false" aria-haspopup="menu">
+                                <button type="button" class="btn btn-outline auth-menu__btn" id="authMenuTrigger" aria-expanded="false" aria-haspopup="menu">
                                     Войти
                                     <svg class="auth-menu__chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
                                         <path d="M2 4.5l4 3 4-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
@@ -162,12 +164,12 @@
                                 </button>
                                 <div class="auth-menu__dropdown" id="authMenuDropdown" aria-hidden="true" role="menu" aria-labelledby="authMenuTrigger">
                                     <a href="/login" class="auth-menu__item" role="menuitem">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
                                         Войти
                                     </a>
                                     <div class="auth-menu__sep" aria-hidden="true"></div>
                                     <a href="/register" class="auth-menu__item auth-menu__item--register" role="menuitem">
-                                        <img src="/assets/img/user-plus.svg" width="16" height="16" style="filter: invert(1)" aria-hidden="true">
+                                        <img src="/assets/img/user-plus.svg" width="16" height="16" aria-hidden="true">
                                         Создать аккаунт
                                     </a>
                                 </div>
@@ -189,8 +191,10 @@
                 </div>
             </main>
 
-            <button type="button" class="scroll-top ui-tooltip ui-tooltip--force-top" id="scrollTopBtn" aria-label="Наверх" data-tooltip="Наверх">
-                <span class="scroll-top__icon" aria-hidden="true"></span>
+            <button type="button" class="scroll-top btn btn-outline btn-icon btn-lg ui-tooltip ui-tooltip--force-top" id="scrollTopBtn" aria-label="Наверх" data-tooltip="Наверх">
+                <svg class="scroll-top__icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m6 14 6-6 6 6"></path>
+                </svg>
             </button>
 
             <?php
@@ -256,7 +260,7 @@
 
 					<div class="site-footer__left">
 						<div class="site-footer__brand">
-							Q-Platform — конструктор онлайн-тестов
+							Q U A Z A R — платформа тестов
 						</div>
 						<div class="site-footer__copy">
 							© <?= date('Y') ?>

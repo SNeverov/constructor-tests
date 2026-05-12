@@ -47,3 +47,6 @@ _backups/
 public/uploads/
 public/phpinfo.php
 public/setup-default-cover.php
+
+AGENTS.md
+CLAUDE.md

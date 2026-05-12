@@ -16,6 +16,7 @@ if ($createdAt !== '') {
     }
 }
 $avatarInitial = mb_strtoupper(mb_substr($login !== '' ? $login : $email, 0, 1));
+$publicProfileUrl = $login !== '' ? ('/u/' . rawurlencode($login)) : '';
 ?>
 
 <div class="account">
@@ -28,6 +29,20 @@ $avatarInitial = mb_strtoupper(mb_substr($login !== '' ? $login : $email, 0, 1))
                 <div class="account__eyebrow">Профиль</div>
                 <h1><?= htmlspecialchars($login !== '' ? $login : 'Пользователь', ENT_QUOTES, 'UTF-8') ?></h1>
                 <div class="account__email"><?= htmlspecialchars($email, ENT_QUOTES, 'UTF-8') ?></div>
+                <?php if ($publicProfileUrl !== ''): ?>
+                    <div class="account__public-actions">
+                        <a class="account__public-link" href="<?= htmlspecialchars($publicProfileUrl, ENT_QUOTES, 'UTF-8') ?>">
+                            Открыть публичный профиль
+                        </a>
+                        <button
+                            type="button"
+                            class="account__public-link account__public-link--copy"
+                            data-copy="<?= htmlspecialchars($publicProfileUrl, ENT_QUOTES, 'UTF-8') ?>"
+                        >
+                            <span data-copy-label>Скопировать ссылку</span>
+                        </button>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
 

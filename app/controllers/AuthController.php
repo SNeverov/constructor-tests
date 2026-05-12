@@ -35,6 +35,7 @@ function auth_login_submit(): void
 
     $identity = trim((string) ($_POST['identity'] ?? ''));
     $password = (string) ($_POST['password'] ?? '');
+    $remember = (string)($_POST['remember_me'] ?? '') === '1';
     $identityNorm = mb_strtolower($identity);
     $ip = (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown');
 
@@ -56,7 +57,7 @@ function auth_login_submit(): void
         view_render('login', [
             'title' => 'Вход',
             'errors' => $errors,
-            'old' => ['identity' => $identity],
+            'old' => ['identity' => $identity, 'remember_me' => $remember],
 			'styles' => ['/assets/css/auth.css'],
         ]);
         return;
@@ -67,7 +68,7 @@ function auth_login_submit(): void
         view_render('login', [
             'title' => 'Вход',
             'errors' => ['Слишком много попыток входа. Повторите через 10 минут.'],
-            'old' => ['identity' => $identity],
+            'old' => ['identity' => $identity, 'remember_me' => $remember],
 			'styles' => ['/assets/css/auth.css'],
         ]);
         return;
@@ -98,7 +99,7 @@ function auth_login_submit(): void
         view_render('login', [
             'title' => 'Вход',
             'errors' => ['Временная ошибка сервера. Код: ' . $errorId],
-            'old' => ['identity' => $identity],
+            'old' => ['identity' => $identity, 'remember_me' => $remember],
 			'styles' => ['/assets/css/auth.css'],
         ]);
         return;
@@ -112,7 +113,7 @@ function auth_login_submit(): void
         view_render('login', [
             'title' => 'Вход',
             'errors' => ['Неверный логин/email или пароль'],
-            'old' => ['identity' => $identity],
+            'old' => ['identity' => $identity, 'remember_me' => $remember],
 			'styles' => ['/assets/css/auth.css'],
         ]);
         return;
@@ -125,7 +126,7 @@ function auth_login_submit(): void
         view_render('login', [
             'title' => 'Вход',
             'errors' => ['Неверный логин/email или пароль'],
-            'old' => ['identity' => $identity],
+            'old' => ['identity' => $identity, 'remember_me' => $remember],
 			'styles' => ['/assets/css/auth.css'],
         ]);
         return;
@@ -135,10 +136,10 @@ function auth_login_submit(): void
     rate_limit_reset($failBucket);
     rate_limit_reset($lockBucket);
 
-    $_SESSION['user'] = [
+    auth_login([
         'id' => (int) $user['id'],
         'login' => (string) $user['login'],
-    ];
+    ], $remember);
 
     $to = $_SESSION['redirect_to'] ?? '/';
     unset($_SESSION['redirect_to']);

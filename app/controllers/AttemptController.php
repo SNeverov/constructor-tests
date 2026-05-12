@@ -6,6 +6,8 @@ function expire_attempt_by_timeout(int $attemptId, int $testId): void
     $questions = questions_list_by_test_id($testId);
     $totalQuestions = count($questions);
     $testSnapshotHash = test_snapshot_hash_by_test_id($testId);
+    $test = tests_find_by_id($testId) ?? [];
+    $resultSnapshot = test_result_snapshot_from_test($test, 0.0);
 
     attempt_finish_update(
         $attemptId,
@@ -14,7 +16,8 @@ function expire_attempt_by_timeout(int $attemptId, int $testId): void
         0.0,
         $totalQuestions,
         $testSnapshotHash,
-        'expired'
+        'expired',
+        $resultSnapshot
     );
 }
 
@@ -209,7 +212,7 @@ function test_finish(int $testId): void
     }
 
     if (($test['access_level'] ?? '') === 'registered' && !auth_is_logged_in()) {
-        $_SESSION['redirect_to'] = '/tests/' . $testId;
+        $_SESSION['redirect_to'] = test_url($testId, (string)($test['title'] ?? 'Тест'));
         redirect('/login');
     }
 
@@ -389,16 +392,7 @@ function test_finish(int $testId): void
                 sort($correctSorted);
 
                 $isCorrect = (!empty($correctSorted) || !empty($userOptIds)) && ($userOptIds === $correctSorted);
-                $correctCountTotal = count($correctSorted);
-                $correctSelectedCount = 0;
-                if ($correctCountTotal > 0) {
-                    foreach ($userOptIds as $selectedOid) {
-                        if (in_array((int)$selectedOid, $correctSorted, true)) {
-                            $correctSelectedCount++;
-                        }
-                    }
-                    $questionScore = $correctSelectedCount / $correctCountTotal;
-                }
+                $questionScore = $isCorrect ? 1.0 : 0.0;
                 $correctOptionTexts = [];
                 foreach ($correctSorted as $correctOid) {
                     $correctOptionTexts[] = (string)($optionTextById[$correctOid] ?? ('Вариант #' . $correctOid));
@@ -547,7 +541,8 @@ function test_finish(int $testId): void
 		$totalQuestions = $total;
 		$testSnapshotHash = test_snapshot_hash_by_test_id($testId);
 		$finishStatus = $isExpiredSubmit ? 'expired' : 'finished';
-		$finished = attempt_finish_update($attemptId, $correctCount, $wrongCount, $percent, $totalQuestions, $testSnapshotHash, $finishStatus);
+        $resultSnapshot = test_result_snapshot_from_test($test, $percent);
+		$finished = attempt_finish_update($attemptId, $correctCount, $wrongCount, $percent, $totalQuestions, $testSnapshotHash, $finishStatus, $resultSnapshot);
         if (!$finished) {
             $freshAttempt = attempt_find_by_id($attemptId);
             if ($freshAttempt !== null && ($freshAttempt['finished_at'] ?? null) !== null) {
@@ -606,7 +601,7 @@ function test_finish(int $testId): void
     }
 }
 
-function attempt_show(int $attemptId): void
+function attempt_show(int $attemptId, bool $allowTestAuthor = false, bool $showShareControls = true): void
 {
     $attempt = attempt_find_by_id($attemptId);
 
@@ -627,7 +622,12 @@ function attempt_show(int $attemptId): void
 
         $viewer = auth_user();
         $viewerId = (int)($viewer['id'] ?? 0);
-        if (!auth_is_admin($viewer) && ($viewerId <= 0 || $viewerId !== (int)$attemptUserId)) {
+        $isAllowedTestAuthor = false;
+        if ($allowTestAuthor && $viewerId > 0) {
+            $authorTest = tests_find_by_id((int)($attempt['test_id'] ?? 0));
+            $isAllowedTestAuthor = $authorTest !== null && (int)($authorTest['user_id'] ?? 0) === $viewerId;
+        }
+        if (!auth_is_admin($viewer) && ($viewerId <= 0 || ($viewerId !== (int)$attemptUserId && !$isAllowedTestAuthor))) {
             http_response_code(403);
             view_render('error', [
                 'title' => 'Ошибка 403',
@@ -687,7 +687,14 @@ function attempt_show(int $attemptId): void
         redirect('/login');
     }
 
-    $revealCorrectAnswers = test_answers_reveal_after_finish($test);
+    $viewerIsTestAuthor = false;
+    if (auth_is_logged_in()) {
+        $viewer = auth_user();
+        $viewerId = (int)($viewer['id'] ?? 0);
+        $viewerIsTestAuthor = $viewerId > 0 && $viewerId === (int)($test['user_id'] ?? 0);
+    }
+
+    $revealCorrectAnswers = $viewerIsTestAuthor ? true : test_answers_reveal_after_finish($test);
 
     $questions = questions_list_by_test_id($testId);
     $questionIds = [];
@@ -838,7 +845,77 @@ function attempt_show(int $attemptId): void
         'testMissing' => $testMissing,
         'sourceState' => $sourceState,
         'styles' => ['/assets/css/attempt-show.css'],
-        'scripts' => ['/assets/js/attempt-show.js', '/assets/js/attempt-rate-modal.js'],
+        'scripts' => ['/assets/js/attempt-show.js', '/assets/js/attempt-rate-modal.js', '/assets/js/copy-link.js'],
         'show_rate_prompt' => $showRatePrompt,
+        'can_manage_share' => $showShareControls && auth_is_logged_in() && (int)(auth_user()['id'] ?? 0) > 0 && (int)(auth_user()['id'] ?? 0) === (int)($attempt['user_id'] ?? 0),
+    ]);
+}
+
+function attempt_share_enable(int $attemptId): void
+{
+    auth_required();
+    $userId = (int)(auth_user()['id'] ?? 0);
+    $attempt = attempt_enable_share($attemptId, $userId);
+    if ($attempt === null) {
+        http_response_code(403);
+        view_render('error', [
+            'title' => 'Ошибка 403',
+            'message' => 'Нельзя создать публичную ссылку для этого результата.',
+        ]);
+        return;
+    }
+
+    flash_set('toast', ['type' => 'success', 'text' => 'Публичная ссылка создана']);
+    redirect('/attempts/' . $attemptId);
+}
+
+function attempt_share_disable(int $attemptId): void
+{
+    auth_required();
+    $userId = (int)(auth_user()['id'] ?? 0);
+    if (!attempt_disable_share($attemptId, $userId)) {
+        http_response_code(403);
+        view_render('error', [
+            'title' => 'Ошибка 403',
+            'message' => 'Нельзя отключить публичную ссылку для этого результата.',
+        ]);
+        return;
+    }
+
+    flash_set('toast', ['type' => 'success', 'text' => 'Публичная ссылка отключена']);
+    redirect('/attempts/' . $attemptId);
+}
+
+function shared_result_show(string $token): void
+{
+    $attempt = attempt_find_shared_by_token($token);
+    if ($attempt === null) {
+        http_response_code(404);
+        view_render('404', ['title' => '404']);
+        return;
+    }
+
+    $viewerId = auth_is_logged_in() ? (int)(auth_user()['id'] ?? 0) : 0;
+    $isOwner = $viewerId > 0 && $viewerId === (int)($attempt['user_id'] ?? 0);
+    $isAuthor = $viewerId > 0 && $viewerId === (int)($attempt['test_author_id'] ?? 0);
+    if ($isOwner || $isAuthor || auth_is_admin()) {
+        attempt_show((int)$attempt['id'], true, false);
+        return;
+    }
+
+    $testTitle = trim((string)($attempt['test_title_snapshot'] ?? ''));
+    if ($testTitle === '') {
+        $test = tests_find_by_id((int)($attempt['test_id'] ?? 0));
+        $testTitle = trim((string)($test['title'] ?? ''));
+    }
+    if ($testTitle === '') {
+        $testTitle = 'Тест';
+    }
+
+    view_render('shared_result_summary', [
+        'title' => 'Результат: ' . $testTitle,
+        'attempt' => $attempt,
+        'test_title' => $testTitle,
+        'styles' => ['/assets/css/attempt-show.css'],
     ]);
 }

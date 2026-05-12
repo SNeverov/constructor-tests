@@ -95,34 +95,14 @@ $pluralRu = static function (int $n, string $one, string $few, string $many): st
     <?php endforeach; ?>
 
     <?php if ($pages > 1): ?>
-        <nav class="pager" aria-label="Пагинация корзины">
-            <?php $prevPage = max(1, $page - 1); ?>
-            <?php $nextPage = min($pages, $page + 1); ?>
-
-            <?php if ($page > 1): ?>
-                <a class="pager__btn" href="/my/tests/trash?page=<?= $prevPage ?>" aria-label="Предыдущая страница">
-                    <img src="/assets/img/next-page.svg" class="pager__arrow pager__arrow--prev" alt="" aria-hidden="true">
-                </a>
-            <?php else: ?>
-                <span class="pager__btn is-disabled" aria-hidden="true">
-                    <img src="/assets/img/next-page.svg" class="pager__arrow pager__arrow--prev" alt="" aria-hidden="true">
-                </span>
-            <?php endif; ?>
-
-            <span class="pager__info">
-                Страница <strong><?= $page ?></strong> из <strong><?= $pages ?></strong>
-            </span>
-
-            <?php if ($page < $pages): ?>
-                <a class="pager__btn" href="/my/tests/trash?page=<?= $nextPage ?>" aria-label="Следующая страница">
-                    <img src="/assets/img/next-page.svg" class="pager__arrow" alt="" aria-hidden="true">
-                </a>
-            <?php else: ?>
-                <span class="pager__btn is-disabled" aria-hidden="true">
-                    <img src="/assets/img/next-page.svg" class="pager__arrow" alt="" aria-hidden="true">
-                </span>
-            <?php endif; ?>
-        </nav>
+        <?php
+        $pagerPage = $page;
+        $pagerPages = $pages;
+        $pagerPrevUrl = '/my/tests/trash?page=' . max(1, $page - 1);
+        $pagerNextUrl = '/my/tests/trash?page=' . min($pages, $page + 1);
+        $pagerLabel = 'Пагинация корзины';
+        require __DIR__ . '/partials/pager.php';
+        ?>
     <?php endif; ?>
 
 <?php endif; ?>

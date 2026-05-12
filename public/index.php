@@ -23,6 +23,7 @@ require __DIR__ . '/../app/controllers/AttemptController.php';
 require __DIR__ . '/../app/controllers/BookmarkController.php';
 require __DIR__ . '/../app/controllers/RatingController.php';
 require __DIR__ . '/../app/controllers/AccountController.php';
+require __DIR__ . '/../app/controllers/UiController.php';
 require __DIR__ . '/../app/core/auth.php';
 require_once __DIR__ . '/../app/core/db.php';
 require __DIR__ . '/../app/core/tests.php';
@@ -105,6 +106,11 @@ if ($path === '/account' && $method === 'GET') {
     exit();
 }
 
+if ($method === 'GET' && preg_match('~^/u/([^/]+)$~', $path, $m)) {
+    public_user_show($m[1]);
+    exit();
+}
+
 if ($path === '/my/results' && $method === 'GET') {
     my_results_index();
     exit();
@@ -127,6 +133,16 @@ if ($path === '/my/tests' && $method === 'GET') {
 
 if ($path === '/my/tests/trash' && $method === 'GET') {
     my_tests_trash_index();
+    exit();
+}
+
+if ($path === '/ui/buttons' && $method === 'GET') {
+    ui_buttons_library();
+    exit();
+}
+
+if ($path === '/ui/palette' && $method === 'GET') {
+    ui_palette_library();
     exit();
 }
 
@@ -213,14 +229,29 @@ if ($method === 'GET' && preg_match('~^/attempts/(\d+)$~', $path, $m)) {
     exit();
 }
 
+if ($method === 'POST' && preg_match('~^/attempts/(\d+)/share$~', $path, $m)) {
+    attempt_share_enable((int)$m[1]);
+    exit();
+}
+
+if ($method === 'POST' && preg_match('~^/attempts/(\d+)/share/disable$~', $path, $m)) {
+    attempt_share_disable((int)$m[1]);
+    exit();
+}
+
+if ($method === 'GET' && preg_match('~^/s/([A-Za-z0-9_-]{32,128})$~', $path, $m)) {
+    shared_result_show($m[1]);
+    exit();
+}
+
 
 if ($method === 'GET' && preg_match('~^/tests/(\d+)/pass$~', $path, $m)) {
     test_pass((int)$m[1]);
     exit();
 }
 
-if ($method === 'GET' && preg_match('~^/tests/(\d+)$~', $path, $m)) {
-    test_show((int)$m[1]);
+if ($method === 'GET' && preg_match('~^/tests/(\d+)(?:-([a-z0-9-]+))?$~', $path, $m)) {
+    test_show((int)$m[1], $m[2] ?? null);
     exit();
 }
 

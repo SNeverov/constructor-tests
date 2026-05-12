@@ -10,10 +10,28 @@
 $filterAction = (string)($filter_action ?? '/');
 $filterId = preg_replace('/[^a-z0-9_-]+/i', '_', (string)($filter_id ?? 'home'));
 $filterAria = (string)($filter_aria ?? 'Дополнительные фильтры');
+$filterPanelClass = trim((string)($filter_panel_class ?? ''));
+$filterShowActions = (bool)($filter_show_actions ?? false);
+$filterResetUrl = (string)($filter_reset_url ?? $filterAction);
+$filterShowSearch = (bool)($filter_show_search ?? false);
+$filterSearchValue = (string)($filter_search_value ?? '');
+$filterPanelClasses = trim('home-filter-panel' . ($filterPanelClass !== '' ? ' ' . $filterPanelClass : ''));
 ?>
 
-<div class="home-filter-panel" aria-label="Фильтры тестов">
+<div class="<?= htmlspecialchars($filterPanelClasses, ENT_QUOTES, 'UTF-8') ?>" aria-label="Фильтры тестов">
     <form class="home-filter-controls" action="<?= htmlspecialchars($filterAction, ENT_QUOTES, 'UTF-8') ?>" method="get" aria-label="<?= htmlspecialchars($filterAria, ENT_QUOTES, 'UTF-8') ?>">
+        <?php if ($filterShowSearch): ?>
+            <label class="home-filter-search">
+                <input
+                    type="text"
+                    class="input"
+                    name="search"
+                    value="<?= htmlspecialchars($filterSearchValue, ENT_QUOTES, 'UTF-8') ?>"
+                    placeholder="Название теста"
+                    aria-label="Название теста"
+                >
+            </label>
+        <?php endif; ?>
         <div class="home-category-filter" data-home-category-filter>
             <input type="hidden" name="category" value="<?= htmlspecialchars($selectedCategorySlug, ENT_QUOTES, 'UTF-8') ?>" data-home-category-value>
             <button class="home-category-filter__trigger" type="button" data-home-category-trigger aria-haspopup="listbox" aria-expanded="false">
@@ -90,5 +108,21 @@ $filterAria = (string)($filter_aria ?? 'Дополнительные фильт�
                 </div>
             </div>
         </div>
+        <?php if ($filterShowActions): ?>
+            <div class="home-filter-actions">
+                <button type="submit" class="btn btn-primary btn-md btn-with-icon">
+                    <svg class="btn__icon-img" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="m5 12 4 4L19 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    Применить
+                </button>
+                <a href="<?= htmlspecialchars($filterResetUrl, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-outline btn-md btn-with-icon">
+                    <svg class="btn__icon-img" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+                    </svg>
+                    Сбросить
+                </a>
+            </div>
+        <?php endif; ?>
     </form>
 </div>

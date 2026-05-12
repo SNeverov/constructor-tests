@@ -7,6 +7,7 @@
 /** @var string $selected_category_slug */
 /** @var array $sort_options */
 /** @var string $selected_sort */
+/** @var string $search */
 
 $page = (int)($pagination['page'] ?? 1);
 $pages = (int)($pagination['pages'] ?? 1);
@@ -18,6 +19,7 @@ $currentUser = auth_user();
 $currentUserId = (int)($currentUser['id'] ?? 0);
 $currentUserLogin = trim((string)($currentUser['login'] ?? ''));
 $homeTotal = (int)($home_total ?? $total);
+$search = trim((string)($search ?? ''));
 $categoryOptions = is_array($category_options ?? null) ? $category_options : test_categories_catalog();
 $categoryCounts = is_array($category_counts ?? null) ? $category_counts : [];
 $selectedCategorySlug = trim((string)($selected_category_slug ?? ''));
@@ -35,10 +37,14 @@ $selectedSort = (string)($selected_sort ?? 'new');
 if (!isset($sortOptions[$selectedSort])) {
     $selectedSort = 'new';
 }
-$emptyTitle = $selectedCategorySlug !== '' ? 'В этой категории нет ваших тестов' : 'У вас пока нет тестов';
-$emptyText = $selectedCategorySlug !== ''
+$emptyTitle = $search !== ''
+    ? 'Тесты не найдены'
+    : ($selectedCategorySlug !== '' ? 'В этой категории нет ваших тестов' : 'У вас пока нет тестов');
+$emptyText = $search !== ''
+    ? 'Попробуйте изменить запрос или сбросить фильтры.'
+    : ($selectedCategorySlug !== ''
     ? 'Попробуйте выбрать другую категорию или сбросить фильтр.'
-    : 'Здесь будут отображаться все тесты, которые вы создадите. Вы сможете редактировать их, удалять и смотреть результаты прохождения.';
+    : 'Здесь будут отображаться все тесты, которые вы создадите. Вы сможете редактировать их, удалять и смотреть результаты прохождения.');
 $pageUrl = static function (string $path, array $query, int $targetPage): string {
     if ($targetPage > 1) {
         $query['page'] = $targetPage;
@@ -67,7 +73,15 @@ $pluralRu = static function (int $n, string $one, string $few, string $many): st
         <h1>Мои тесты</h1>
     </div>
 
-    <?php require __DIR__ . '/partials/home-filter-panel.php'; ?>
+    <?php
+    $filter_panel_class = 'home-filter-panel--results';
+    $filter_show_actions = true;
+    $filter_show_search = true;
+    $filter_search_value = $search;
+    $filter_reset_url = '/my/tests';
+    require __DIR__ . '/partials/home-filter-panel.php';
+    unset($filter_panel_class, $filter_show_actions, $filter_show_search, $filter_search_value, $filter_reset_url);
+    ?>
 
     <?php if (!empty($tests)): ?>
         <div class="results-meta muted">Найдено: <?= $total ?></div>
@@ -99,34 +113,14 @@ $pluralRu = static function (int $n, string $one, string $few, string $many): st
             <?php endforeach; ?>
 
             <?php if ($pages > 1): ?>
-                <nav class="pager" aria-label="Пагинация тестов">
-                    <?php $prevPage = max(1, $page - 1); ?>
-                    <?php $nextPage = min($pages, $page + 1); ?>
-
-                    <?php if ($page > 1): ?>
-                        <a class="pager__btn" href="<?= htmlspecialchars($pageUrl($pagerPath, $pagerQuery, $prevPage), ENT_QUOTES, 'UTF-8') ?>" aria-label="Предыдущая страница">
-                            <img src="/assets/img/next-page.svg" class="pager__arrow pager__arrow--prev" alt="" aria-hidden="true">
-                        </a>
-                    <?php else: ?>
-                        <span class="pager__btn is-disabled" aria-hidden="true">
-                            <img src="/assets/img/next-page.svg" class="pager__arrow pager__arrow--prev" alt="" aria-hidden="true">
-                        </span>
-                    <?php endif; ?>
-
-                    <span class="pager__info">
-                        Страница <strong><?= $page ?></strong> из <strong><?= $pages ?></strong>
-                    </span>
-
-                    <?php if ($page < $pages): ?>
-                        <a class="pager__btn" href="<?= htmlspecialchars($pageUrl($pagerPath, $pagerQuery, $nextPage), ENT_QUOTES, 'UTF-8') ?>" aria-label="Следующая страница">
-                            <img src="/assets/img/next-page.svg" class="pager__arrow" alt="" aria-hidden="true">
-                        </a>
-                    <?php else: ?>
-                        <span class="pager__btn is-disabled" aria-hidden="true">
-                            <img src="/assets/img/next-page.svg" class="pager__arrow" alt="" aria-hidden="true">
-                        </span>
-                    <?php endif; ?>
-                </nav>
+                <?php
+                $pagerPage = $page;
+                $pagerPages = $pages;
+                $pagerPrevUrl = $pageUrl($pagerPath, $pagerQuery, max(1, $page - 1));
+                $pagerNextUrl = $pageUrl($pagerPath, $pagerQuery, min($pages, $page + 1));
+                $pagerLabel = 'Пагинация тестов';
+                require __DIR__ . '/partials/pager.php';
+                ?>
             <?php endif; ?>
         </div>
 

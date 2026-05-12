@@ -1,0 +1,72 @@
+/* Unified soft focus for form fields across the constructor. */
+:root {
+    --field-focus-border: var(--btn-outline-border, #BFE7DF);
+    --field-focus-ring: rgba(13, 148, 136, 0.08);
+    --field-focus-ring-sm: rgba(13, 148, 136, 0.06);
+}
+
+:where(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="submit"]):not([type="button"]):not([type="reset"]),
+    textarea,
+    select,
+    .input,
+    .select,
+    .textarea,
+    .question-textarea,
+    .option-textarea,
+    .answer-textarea,
+    .tc-setting__attempt-input,
+    .home-category-filter__search,
+    .tc-category__search
+):focus,
+:where(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="submit"]):not([type="button"]):not([type="reset"]),
+    textarea,
+    select,
+    .input,
+    .select,
+    .textarea,
+    .question-textarea,
+    .option-textarea,
+    .answer-textarea,
+    .tc-setting__attempt-input,
+    .home-category-filter__search,
+    .tc-category__search
+):focus-visible {
+    outline: none !important;
+    border-color: var(--field-focus-border) !important;
+    box-shadow: 0 0 0 3px var(--field-focus-ring) !important;
+}
+
+:where(
+    .results-status__trigger,
+    .home-category-filter__trigger,
+    .home-sort-filter__trigger,
+    .tc-category__trigger
+):focus-visible {
+    outline: none !important;
+    border-color: var(--field-focus-border) !important;
+    box-shadow: 0 0 0 3px var(--field-focus-ring) !important;
+}
+
+:where(
+    .tc-setting,
+    .question-card,
+    .form-section
+):focus-within {
+    border-color: var(--field-focus-border) !important;
+    box-shadow: 0 0 0 2px var(--field-focus-ring-sm) !important;
+}
+
+:where(
+    .segmented__item input,
+    .access-mode-control__item input,
+    .answers-mode-control__item input,
+    .setting-toggle input,
+    .test-pass .opt input[type="radio"],
+    .test-pass .opt input[type="checkbox"],
+    .option-correct
+):focus-visible {
+    outline: none !important;
+    box-shadow: 0 0 0 2px var(--field-focus-ring) !important;
+}

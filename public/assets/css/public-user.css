@@ -1,0 +1,119 @@
+.public-user {
+  display: grid;
+  gap: 18px;
+}
+
+.public-user__hero {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 24px;
+  border: 1px solid #dbe4f0;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+.public-user__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  background: #0f766e;
+  color: #fff;
+  font-size: 32px;
+  font-weight: 900;
+  flex: 0 0 auto;
+}
+
+.public-user__main {
+  min-width: 0;
+}
+
+.public-user__eyebrow {
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.public-user__hero h1 {
+  margin: 4px 0 10px;
+  color: #0f172a;
+  font-size: 30px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.public-user__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.public-user__section-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.public-user__section-head h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 22px;
+}
+
+.public-user__empty {
+  padding: 28px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+  background: #f8fafc;
+  text-align: center;
+}
+
+.public-user__empty h3 {
+  margin: 0 0 6px;
+  color: #0f172a;
+  font-size: 18px;
+}
+
+.public-user__empty p {
+  margin: 0;
+  color: #64748b;
+}
+
+.public-user__grid {
+  margin-top: 0;
+}
+
+.test-card__author-link,
+.test-show__author-link {
+  color: inherit;
+  font-weight: inherit;
+  text-decoration: none;
+}
+
+.test-card__author-link:hover,
+.test-card__author-link:focus-visible,
+.test-show__author-link:hover,
+.test-show__author-link:focus-visible {
+  color: #0f766e;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .public-user__hero {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .public-user__section-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

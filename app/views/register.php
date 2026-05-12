@@ -18,12 +18,13 @@
         <?= form_open('/register') ?>
 
             <div class="form-row">
-                <label class="form-label" for="login">Логин</label>
+                <label class="form-label sr-only" for="login">Логин</label>
                 <input
                     id="login"
                     class="input"
                     type="text"
                     name="login"
+                    placeholder="Логин"
                     value="<?= htmlspecialchars((string)($old['login'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                     minlength="3"
                     maxlength="24"
@@ -35,31 +36,33 @@
             </div>
 
             <div class="form-row">
-                <label class="form-label" for="email">Email</label>
+                <label class="form-label sr-only" for="email">Email</label>
                 <input
                     id="email"
                     class="input"
                     type="email"
                     name="email"
+                    placeholder="Email"
                     value="<?= htmlspecialchars((string)($old['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                     required
                 >
             </div>
 
             <div class="form-row">
-                <label class="form-label" for="password">Пароль</label>
+                <label class="form-label sr-only" for="password">Пароль</label>
                 <input
                     id="password"
                     class="input"
                     type="password"
                     name="password"
+                    placeholder="Пароль"
                     required
                 >
             </div>
 
             <div class="auth-actions">
-                <button class="btn btn--primary" type="submit">
-                    <img src="/assets/img/user-plus.svg" class="btn-icon" width="16" height="16" style="filter: invert(1)" aria-hidden="true">
+                <button class="btn btn-primary btn-md btn-with-icon" type="submit">
+                    <img src="/assets/img/user-plus.svg" class="btn__icon-img" width="16" height="16" style="filter: invert(1)" aria-hidden="true">
                     Зарегистрироваться
                 </button>
 

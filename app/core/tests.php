@@ -185,6 +185,170 @@ function test_answers_mode_label(int $mode): string
     };
 }
 
+function test_result_mode_pass_fail(): string
+{
+    return 'pass_fail';
+}
+
+function test_result_mode_scale(): string
+{
+    return 'scale';
+}
+
+function test_default_grade_scale(): array
+{
+    return [
+        ['label' => 'Плохо', 'min' => 0, 'max' => 59],
+        ['label' => 'Удовлетворительно', 'min' => 60, 'max' => 79],
+        ['label' => 'Хорошо', 'min' => 80, 'max' => 89],
+        ['label' => 'Отлично', 'min' => 90, 'max' => 100],
+    ];
+}
+
+function test_result_mode_from_value(mixed $raw): string
+{
+    $mode = (string)$raw;
+    return $mode === test_result_mode_pass_fail() ? test_result_mode_pass_fail() : test_result_mode_scale();
+}
+
+function test_normalize_pass_percent(mixed $raw, bool $strictValidation = true): int
+{
+    $value = trim((string)$raw);
+    if ($value === '') {
+        return 60;
+    }
+    if (!preg_match('/^\d{1,3}$/', $value)) {
+        if ($strictValidation) {
+            throw new InvalidArgumentException('Проходной процент должен быть целым числом от 0 до 100');
+        }
+        return 60;
+    }
+
+    $percent = (int)$value;
+    if ($percent < 0 || $percent > 100) {
+        if ($strictValidation) {
+            throw new InvalidArgumentException('Проходной процент должен быть от 0 до 100');
+        }
+        return max(0, min(100, $percent));
+    }
+
+    return $percent;
+}
+
+function test_normalize_grade_scale(mixed $raw, bool $strictValidation = true): array
+{
+    if (is_string($raw)) {
+        $decoded = json_decode($raw, true);
+        $raw = is_array($decoded) ? $decoded : [];
+    }
+    if (!is_array($raw) || $raw === []) {
+        return test_default_grade_scale();
+    }
+
+    $scale = [];
+    foreach (array_values($raw) as $row) {
+        if (!is_array($row)) {
+            if ($strictValidation) {
+                throw new InvalidArgumentException('Некорректная строка шкалы оценок');
+            }
+            continue;
+        }
+
+        $label  = trim((string)($row['label'] ?? ''));
+        $maxRaw = trim((string)($row['max'] ?? ''));
+
+        if ($label === '' || !preg_match('/^\d{1,3}$/', $maxRaw)) {
+            if ($strictValidation) {
+                throw new InvalidArgumentException('Заполните все названия и границы шкалы оценок');
+            }
+            continue;
+        }
+
+        $max = (int)$maxRaw;
+        if ($max < 0 || $max > 100) {
+            if ($strictValidation) {
+                throw new InvalidArgumentException('Границы шкалы оценок должны быть от 0 до 100');
+            }
+            continue;
+        }
+
+        $scale[] = ['label' => mb_substr($label, 0, 80), 'max' => $max];
+    }
+
+    usort($scale, static fn(array $a, array $b): int => $a['max'] <=> $b['max']);
+
+    if ($scale === []) {
+        return test_default_grade_scale();
+    }
+    if (count($scale) > 20) {
+        if ($strictValidation) {
+            throw new InvalidArgumentException('В шкале оценок должно быть не больше 20 уровней');
+        }
+        $scale = array_slice($scale, 0, 20);
+    }
+
+    if ($scale[count($scale) - 1]['max'] !== 100) {
+        if ($strictValidation) {
+            throw new InvalidArgumentException('Последний уровень шкалы оценок должен заканчиваться на 100%');
+        }
+        return test_default_grade_scale();
+    }
+
+    $result     = [];
+    $currentMin = 0;
+    $prevMax    = -1;
+    foreach ($scale as $row) {
+        if ($row['max'] === $prevMax) {
+            if ($strictValidation) {
+                throw new InvalidArgumentException('В шкале оценок не должно быть одинаковых границ');
+            }
+            return test_default_grade_scale();
+        }
+        $result[]   = ['label' => $row['label'], 'min' => $currentMin, 'max' => $row['max']];
+        $currentMin = $row['max'] + 1;
+        $prevMax    = $row['max'];
+    }
+
+    return $result;
+}
+
+function test_grade_scale_json(array $scale): string
+{
+    $json = json_encode(array_values($scale), JSON_UNESCAPED_UNICODE);
+    return is_string($json) ? $json : '[]';
+}
+
+function test_result_snapshot_from_test(array $test, float $percent): array
+{
+    $mode = test_result_mode_from_value($test['result_mode'] ?? test_result_mode_scale());
+    $passPercent = test_normalize_pass_percent($test['pass_percent'] ?? 60, false);
+    $scale = test_normalize_grade_scale($test['grade_scale_json'] ?? null, false);
+
+    if ($mode === test_result_mode_pass_fail()) {
+        return [
+            'mode' => $mode,
+            'label' => $percent >= $passPercent ? 'Сдано' : 'Не сдано',
+            'pass_percent' => $passPercent,
+            'scale_json' => null,
+        ];
+    }
+
+    $label = 'Плохо';
+    foreach ($scale as $row) {
+        if ($percent >= (float)$row['min'] && $percent <= (float)$row['max']) {
+            $label = (string)$row['label'];
+            break;
+        }
+    }
+
+    return [
+        'mode' => $mode,
+        'label' => $label,
+        'pass_percent' => null,
+        'scale_json' => test_grade_scale_json($scale),
+    ];
+}
+
 // --- Tests ---
 
 function tests_list_by_user_id(int $userId): array
@@ -336,7 +500,10 @@ function tests_create(
     int $showAnswers = 0,
     int $shuffleQuestions = 0,
     int $shuffleAnswers = 0,
-    ?int $attemptLimit = null
+    ?int $attemptLimit = null,
+    string $resultMode = 'scale',
+    int $passPercent = 60,
+    ?array $gradeScale = null
 ): int
 {
     $pdo = db();
@@ -358,6 +525,9 @@ function tests_create(
             shuffle_questions,
             shuffle_answers,
             attempt_limit,
+            result_mode,
+            pass_percent,
+            grade_scale_json,
             status,
             published_at,
             last_saved_at
@@ -374,6 +544,9 @@ function tests_create(
             :shuffle_questions,
             :shuffle_answers,
             :attempt_limit,
+            :result_mode,
+            :pass_percent,
+            :grade_scale_json,
             :status,
             :published_at,
             :last_saved_at
@@ -392,6 +565,9 @@ function tests_create(
         ':shuffle_questions' => test_bool_setting($shuffleQuestions),
         ':shuffle_answers' => test_bool_setting($shuffleAnswers),
         ':attempt_limit' => ($attemptLimit !== null && $attemptLimit > 0) ? $attemptLimit : null,
+        ':result_mode' => test_result_mode_from_value($resultMode),
+        ':pass_percent' => test_normalize_pass_percent($passPercent, false),
+        ':grade_scale_json' => test_grade_scale_json(test_normalize_grade_scale($gradeScale, false)),
         ':status' => $status,
         ':published_at' => $publishedAt,
         ':last_saved_at' => $lastSavedAt,
@@ -514,6 +690,9 @@ function tests_find_by_id(int $testId): ?array
             t.shuffle_questions,
             t.shuffle_answers,
             t.attempt_limit,
+            t.result_mode,
+            t.pass_percent,
+            t.grade_scale_json,
             (SELECT COUNT(*) FROM attempts a WHERE a.test_id = t.id) AS attempts_count
 		FROM tests t
         LEFT JOIN users u ON u.id = t.user_id
@@ -557,7 +736,7 @@ function test_rating_find_by_test_id_and_user_id(int $testId, int $userId): ?int
     return (int)$value;
 }
 
-function tests_list_by_user_id_paginated(int $userId, int $limit, int $offset, ?string $categoryName = null, string $sort = 'new'): array
+function tests_list_by_user_id_paginated(int $userId, int $limit, int $offset, ?string $categoryName = null, string $sort = 'new', string $search = ''): array
 {
     $pdo = db();
     $limit = max(1, min(100, $limit));
@@ -573,6 +752,12 @@ function tests_list_by_user_id_paginated(int $userId, int $limit, int $offset, ?
     $categoryWhere = '';
     if ($categoryName !== null && trim($categoryName) !== '') {
         $categoryWhere = ' AND ' . tests_category_filter_sql($categoryName, $params, 't', 'my_tests_category');
+    }
+    $searchWhere = '';
+    $search = trim($search);
+    if ($search !== '') {
+        $searchWhere = ' AND t.title LIKE :my_tests_search';
+        $params[':my_tests_search'] = '%' . $search . '%';
     }
     $orderBy = tests_user_order_by($sort);
 
@@ -600,6 +785,9 @@ function tests_list_by_user_id_paginated(int $userId, int $limit, int $offset, ?
             t.shuffle_questions,
             t.shuffle_answers,
             t.attempt_limit,
+            t.result_mode,
+            t.pass_percent,
+            t.grade_scale_json,
             COALESCE(u.login, '') AS creator_login,
             CASE WHEN tb.user_id IS NULL THEN 0 ELSE 1 END AS is_bookmarked,
             (
@@ -617,6 +805,7 @@ function tests_list_by_user_id_paginated(int $userId, int $limit, int $offset, ?
         LEFT JOIN test_bookmarks tb ON tb.test_id = t.id AND tb.user_id = :viewer_id
 		WHERE {$ownerWhere}t.deleted_at IS NULL
           {$categoryWhere}
+          {$searchWhere}
 		ORDER BY {$orderBy}
         LIMIT {$limit} OFFSET {$offset}
 	");
@@ -640,6 +829,89 @@ function tests_count_for_home(): int
 
     $stmt->execute();
     return (int)$stmt->fetchColumn();
+}
+
+function tests_count_public_by_user_id(int $userId): int
+{
+    $pdo = db();
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM tests t
+        WHERE t.user_id = :user_id
+          AND t.deleted_at IS NULL
+          AND t.deleted_forever_at IS NULL
+          AND t.status = 'published'
+    ");
+    $stmt->execute([':user_id' => $userId]);
+
+    return (int)$stmt->fetchColumn();
+}
+
+function tests_list_public_by_user_id(int $userId, int $limit, int $offset): array
+{
+    $pdo = db();
+    $limit = max(1, min(100, $limit));
+    $offset = max(0, $offset);
+    $viewerId = auth_is_logged_in() ? (int)(auth_user()['id'] ?? 0) : 0;
+    $bookmarksJoin = $viewerId > 0 ? 'LEFT JOIN test_bookmarks tb ON tb.test_id = t.id AND tb.user_id = :viewer_id' : '';
+
+    $stmt = $pdo->prepare("
+        SELECT
+            t.id,
+            t.user_id,
+            t.title,
+            t.description,
+            t.access_level,
+            t.status,
+            t.category_name,
+            COALESCE(t.time_limit_sec, CASE WHEN t.time_limit_min IS NOT NULL THEN t.time_limit_min * 60 ELSE NULL END) AS time_limit_sec,
+            t.time_limit_min,
+            t.created_at,
+            t.updated_at,
+            t.published_at,
+            t.last_saved_at,
+            t.bookmarks_count,
+            t.views_count,
+            t.rating_count,
+            t.rating_sum,
+            COALESCE(u.login, '') AS creator_login,
+            t.cover_image,
+            t.show_answers,
+            t.shuffle_questions,
+            t.shuffle_answers,
+            t.attempt_limit,
+            t.result_mode,
+            t.pass_percent,
+            t.grade_scale_json,
+            " . ($viewerId > 0 ? 'CASE WHEN tb.user_id IS NULL THEN 0 ELSE 1 END' : '0') . " AS is_bookmarked,
+            (
+                SELECT COUNT(*)
+                FROM questions q
+                WHERE q.test_id = t.id
+            ) AS questions_count,
+            (
+                SELECT COUNT(*)
+                FROM attempts a
+                WHERE a.test_id = t.id
+            ) AS attempts_count
+        FROM tests t
+        LEFT JOIN users u ON u.id = t.user_id
+        {$bookmarksJoin}
+        WHERE t.user_id = :user_id
+          AND t.deleted_at IS NULL
+          AND t.deleted_forever_at IS NULL
+          AND t.status = 'published'
+        ORDER BY COALESCE(t.published_at, t.created_at) DESC, t.id DESC
+        LIMIT {$limit} OFFSET {$offset}
+    ");
+
+    $params = [':user_id' => $userId];
+    if ($viewerId > 0) {
+        $params[':viewer_id'] = $viewerId;
+    }
+    $stmt->execute($params);
+
+    return tests_attach_category_names($stmt->fetchAll());
 }
 
 function tests_count_for_category(string $categoryName): int
@@ -823,6 +1095,9 @@ function tests_list_for_home(int $limit = 20, int $offset = 0, string $sort = 'n
             t.shuffle_questions,
             t.shuffle_answers,
             t.attempt_limit,
+            t.result_mode,
+            t.pass_percent,
+            t.grade_scale_json,
             " . ($viewerId > 0 ? 'CASE WHEN tb.user_id IS NULL THEN 0 ELSE 1 END' : '0') . " AS is_bookmarked,
             (
                 SELECT COUNT(*)
@@ -910,6 +1185,9 @@ function tests_list_for_category(string $categoryName, int $limit = 20, int $off
             t.shuffle_questions,
             t.shuffle_answers,
             t.attempt_limit,
+            t.result_mode,
+            t.pass_percent,
+            t.grade_scale_json,
             " . ($viewerId > 0 ? 'CASE WHEN tb.user_id IS NULL THEN 0 ELSE 1 END' : '0') . " AS is_bookmarked,
             (
                 SELECT COUNT(*)
@@ -990,6 +1268,9 @@ function tests_list_bookmarked_by_user_id_paginated(int $userId, int $limit, int
             t.shuffle_questions,
             t.shuffle_answers,
             t.attempt_limit,
+            t.result_mode,
+            t.pass_percent,
+            t.grade_scale_json,
             1 AS is_bookmarked,
             CASE
                 WHEN t.id IS NULL THEN 'deleted'
@@ -1277,6 +1558,9 @@ function tests_find_active_by_id_and_user_id(int $testId, int $userId): ?array
             shuffle_questions,
             shuffle_answers,
             attempt_limit,
+            result_mode,
+            pass_percent,
+            grade_scale_json,
             COALESCE(time_limit_sec, CASE WHEN time_limit_min IS NOT NULL THEN time_limit_min * 60 ELSE NULL END) AS time_limit_sec,
             time_limit_min,
             created_at,
@@ -1732,7 +2016,10 @@ function tests_update_by_id_and_user_id(
     int $showAnswers = 0,
     int $shuffleQuestions = 0,
     int $shuffleAnswers = 0,
-    ?int $attemptLimit = null
+    ?int $attemptLimit = null,
+    string $resultMode = 'scale',
+    int $passPercent = 60,
+    ?array $gradeScale = null
 ): bool
 {
     $pdo = db();
@@ -1754,6 +2041,9 @@ function tests_update_by_id_and_user_id(
             shuffle_questions = :shuffle_questions,
             shuffle_answers = :shuffle_answers,
             attempt_limit = :attempt_limit,
+            result_mode = :result_mode,
+            pass_percent = :pass_percent,
+            grade_scale_json = :grade_scale_json,
             status = COALESCE(:status, status),
             published_at = CASE
                 WHEN :published_at_check IS NULL THEN published_at
@@ -1781,6 +2071,9 @@ function tests_update_by_id_and_user_id(
         ':shuffle_questions' => test_bool_setting($shuffleQuestions),
         ':shuffle_answers' => test_bool_setting($shuffleAnswers),
         ':attempt_limit' => ($attemptLimit !== null && $attemptLimit > 0) ? $attemptLimit : null,
+        ':result_mode' => test_result_mode_from_value($resultMode),
+        ':pass_percent' => test_normalize_pass_percent($passPercent, false),
+        ':grade_scale_json' => test_grade_scale_json(test_normalize_grade_scale($gradeScale, false)),
         ':status' => $status,
         ':published_at_check' => $publishedAt,
         ':published_at_value' => $publishedAt,
@@ -1835,7 +2128,7 @@ function tests_trash_list_by_user_id_paginated(int $userId, int $limit, int $off
     return $stmt->fetchAll();
 }
 
-function tests_count_active_by_user_id(int $userId, ?string $categoryName = null): int
+function tests_count_active_by_user_id(int $userId, ?string $categoryName = null, string $search = ''): int
 {
     $pdo = db();
     $isAdmin = auth_is_admin();
@@ -1848,11 +2141,18 @@ function tests_count_active_by_user_id(int $userId, ?string $categoryName = null
     if ($categoryName !== null && trim($categoryName) !== '') {
         $categoryWhere = ' AND ' . tests_category_filter_sql($categoryName, $params, 't', 'active_count_category');
     }
+    $searchWhere = '';
+    $search = trim($search);
+    if ($search !== '') {
+        $searchWhere = ' AND t.title LIKE :active_count_search';
+        $params[':active_count_search'] = '%' . $search . '%';
+    }
     $stmt = $pdo->prepare("
         SELECT COUNT(*)
         FROM tests t
         WHERE {$ownerWhere}t.deleted_at IS NULL
           {$categoryWhere}
+          {$searchWhere}
     ");
     $stmt->execute($params);
 

@@ -12,9 +12,11 @@ $timeLimitSec  = isset($test['time_limit_sec']) && (int)$test['time_limit_sec'] 
 $viewsCount    = (int)($test['views_count'] ?? 0);
 $attemptsCount = (int)($test['attempts_count'] ?? 0);
 $creatorLogin  = trim((string)($test['creator_login'] ?? ''));
+$creatorUrl = $creatorLogin !== '' ? ('/u/' . rawurlencode($creatorLogin)) : '';
 $defaultCover  = '/assets/img/cover/default_test_cover.webp';
 $answersMode = test_answers_mode_from_value($test['show_answers'] ?? test_answers_mode_after_finish());
 $answersModeLabel = test_answers_mode_label($answersMode);
+$testUrl = test_url((int)($test['id'] ?? 0), (string)($test['title'] ?? 'Тест'));
 
 $categoryNames = test_category_display_names($test['category_names'] ?? ($test['category_name'] ?? null));
 $visibleCategoryNames = array_slice($categoryNames, 0, 3);
@@ -75,7 +77,7 @@ $timeLimitView = $formatTimeLimit($timeLimitSec);
                 <button
                     type="button"
                     class="badge badge--copy badge--copy-link ui-tooltip ui-tooltip--bottom"
-                    data-copy="/tests/<?= (int)($test['id'] ?? 0) ?>"
+                    data-copy="<?= htmlspecialchars($testUrl, ENT_QUOTES, 'UTF-8') ?>"
                     data-tooltip="Скопировать ссылку на тест"
                 >
                     <img
@@ -96,7 +98,7 @@ $timeLimitView = $formatTimeLimit($timeLimitSec);
                 <?php if ($creatorLogin !== ''): ?>
                     <span class="test-chip test-chip--soft">
                         <img src="/assets/img/test_card_svg/user.svg" alt="" aria-hidden="true">
-                        <span><?= htmlspecialchars($creatorLogin, ENT_QUOTES, 'UTF-8') ?></span>
+                        <a class="test-show__author-link" href="<?= htmlspecialchars($creatorUrl, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($creatorLogin, ENT_QUOTES, 'UTF-8') ?></a>
                     </span>
                 <?php endif; ?>
                 <?php if ($createdDate !== ''): ?>

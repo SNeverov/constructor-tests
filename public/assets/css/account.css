@@ -67,6 +67,39 @@
     font-size: 14px;
 }
 
+.account__public-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.account__public-link {
+    display: inline-flex;
+    align-items: center;
+    padding: 7px 11px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1;
+    text-decoration: none;
+}
+
+.account__public-link--copy {
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.account__public-link:hover,
+.account__public-link:focus-visible {
+    background: rgba(255, 255, 255, 0.18);
+    color: #ffffff;
+    text-decoration: none;
+}
+
 .account__actions {
     display: grid;
     grid-template-columns: repeat(3, minmax(112px, 1fr));

@@ -132,10 +132,11 @@ a:hover {
     padding: 12px 0;
 }
 
-.site-header a {
+.site-header a:not(.btn) {
     color: rgba(255, 255, 255, 0.92);
 }
-.site-header a:hover {
+
+.site-header a:not(.btn):hover {
     color: #fff;
 }
 
@@ -195,7 +196,7 @@ a:hover {
 
 .brand-wrap {
     display: inline-flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 12px;
     text-decoration: none;
     min-width: 0;
@@ -224,112 +225,6 @@ a:hover {
     gap: 6px;
 }
 
-.icon-btn {
-    position: relative;
-    width: 45px;
-    height: 40px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    text-decoration: none;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 10px;
-	background-color: rgba(41, 60, 90, 0.486);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    appearance: none;
-    outline: none;
-    cursor: pointer;
-    transition:
-        transform 0.16s ease,
-        border-color 0.16s ease,
-        background 0.16s ease,
-        box-shadow 0.16s ease;
-}
-
-.icon-btn:hover {
-    transform: translateY(-1px);
-    border-color: rgba(255, 255, 255, 0.18);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.12),
-        inset 0 -10px 22px rgba(9, 17, 34, 0.20),
-        0 10px 28px rgba(3, 8, 20, 0.22);
-}
-
-.icon-btn:active {
-    transform: translateY(0);
-    box-shadow:
-        inset 0 2px 6px rgba(255, 255, 255, 0.04),
-        inset 0 -6px 14px rgba(9, 17, 34, 0.18),
-        0 4px 14px rgba(3, 8, 20, 0.16);
-}
-
-.icon-btn:focus-visible {
-    border-color: rgba(148, 191, 255, 0.42);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.12),
-        0 0 0 3px rgba(103, 152, 255, 0.14),
-        0 10px 28px rgba(3, 8, 20, 0.22);
-}
-
-.icon-btn img {
-    width: 30px;
-    height: 30px;
-    display: block;
-    opacity: .94;
-}
-
-.icon-btn--bookmarks .icon-btn__bookmark-icon {
-    width: 26px;
-    height: 26px;
-}
-
-.icon-btn__badge {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    min-width: 16px;
-    height: 16px;
-    padding: 0 4px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 214, 223, 0.95);
-    background: #ef476f;
-    color: #fff;
-    font-size: 9px;
-    font-weight: 700;
-    line-height: 14px;
-    text-align: center;
-    box-shadow: 0 3px 8px rgba(127, 29, 29, 0.28);
-    pointer-events: none;
-    z-index: 3;
-}
-
-.icon-btn__badge.is-hidden {
-    display: none;
-}
-
-.icon-btn--logout,
-.icon-btn--danger {
-    /* background:
-        linear-gradient(180deg, rgba(173, 95, 132, 0.20) 0%, rgba(94, 44, 84, 0.24) 100%),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%); */
-    border-color: rgba(255, 130, 170, 0.15);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.08),
-        inset 0 -10px 20px rgba(33, 10, 24, 0.16),
-        0 8px 24px rgba(17, 5, 12, 0.16);
-	background-color: rgba(190, 104, 144, 0.2);
-}
-
-.icon-btn--logout:hover,
-.icon-btn--danger:hover {
-    border-color: rgba(255, 130, 170, 0.25);
-    /* background:
-        linear-gradient(180deg, rgba(190, 104, 144, 0.24) 0%, rgba(109, 50, 95, 0.28) 100%),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.015) 100%); */
-}
-
-
 /* Tooltip */
 .ui-tooltip {
     position: relative;
@@ -351,14 +246,19 @@ a:hover {
     width: max-content;
     max-width: min(260px, calc(100vw - 32px));
     padding: 7px 10px;
-    border-radius: 9px;
-    border: 1px solid rgba(34, 199, 184, 0.26);
-    background: #071426;
-    color: #e2fdfa;
+    border-radius: var(--btn-border-radius, 8px);
+    border: 1px solid var(--btn-primary-bg-active, #115e59);
+    background: var(--btn-primary-bg-hover, #0f766e);
+    color: var(--btn-primary-text, #ffffff);
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 12px;
+    font-weight: 500;
+    font-style: normal;
     line-height: 1.25;
+    letter-spacing: 0;
+    text-transform: none;
     text-align: center;
-    box-shadow: 0 10px 22px rgba(7, 20, 38, 0.28);
+    box-shadow: 0 10px 22px rgba(13, 148, 136, 0.18);
     transform: translate(calc(-50% + var(--tt-shift-x, 0px)), 3px);
     bottom: calc(100% + 10px);
     white-space: normal;
@@ -370,6 +270,11 @@ a:hover {
 .ui-tooltip:focus-visible::after {
     opacity: 1;
     visibility: visible;
+}
+
+.ui-tooltip:hover::after,
+.ui-tooltip:focus-visible::after {
+    background: var(--btn-primary-bg-active, #115e59);
     transform: translate(calc(-50% + var(--tt-shift-x, 0px)), 0);
 }
 
@@ -540,53 +445,15 @@ p {
 
 
 
-.site-header .btn {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    text-decoration: none;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: var(--control-radius);
-	background-color: rgba(41, 60, 90, 0.486);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    appearance: none;
-    outline: none;
-    cursor: pointer;
-    transition:
-        transform 0.16s ease,
-        border-color 0.16s ease,
-        background 0.16s ease,
-        box-shadow 0.16s ease;
-}
-
-.site-header .btn:hover {
-    transform: translateY(-1px);
-    border-color: rgba(255, 255, 255, 0.18);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.12),
-        inset 0 -10px 22px rgba(9, 17, 34, 0.20),
-        0 10px 28px rgba(3, 8, 20, 0.22);
-}
-
-
-
 /* Auth menu (header login/register dropdown) */
 .auth-menu {
     position: relative;
 }
 
 .auth-menu__btn {
-    color: rgba(255, 255, 255, 0.9);
     font-size: 14px;
-    font-weight: 500;
-    padding: 9px 14px;
+    font-weight: var(--btn-font-weight, 600);
     gap: 6px;
-}
-
-.auth-menu__btn:hover {
-    color: #fff;
 }
 
 .auth-menu__chevron {
@@ -607,16 +474,12 @@ p {
     min-width: 192px;
     padding: 4px;
 
-    background:
-        radial-gradient(220px 120px at 100% 0, rgba(20, 184, 166, 0.20), transparent 72%),
-        linear-gradient(135deg, rgba(7, 20, 38, 0.98) 0%, rgba(11, 27, 51, 0.98) 58%, rgba(15, 118, 110, 0.92) 100%);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(34, 199, 184, 0.24);
-    border-radius: 14px;
-    box-shadow:
-        0 18px 34px rgba(7, 20, 38, 0.30),
-        inset 0 1px 0 rgba(255, 255, 255, 0.10);
+    background: #ffffff;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border: 1px solid #d8e2ea;
+    border-radius: 8px;
+    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.12);
 
     z-index: 200;
 
@@ -643,18 +506,18 @@ p {
     align-items: center;
     gap: 10px;
     padding: 11px 14px;
-    color: rgba(226, 253, 250, 0.86);
+    color: #0f172a;
     text-decoration: none;
     font-size: 14px;
-    font-weight: 500;
-    border-radius: 10px;
+    font-weight: 600;
+    border-radius: 8px;
     transition: background 0.14s, color 0.14s;
     white-space: nowrap;
 }
 
 .auth-menu__item:hover {
-    background: rgba(20, 184, 166, 0.16);
-    color: #fff;
+    background: #f0fdfa;
+    color: #0f766e;
     text-decoration: none;
 }
 
@@ -671,12 +534,12 @@ p {
 }
 
 .auth-menu__item--register {
-    color: #8ff1e8;
+    color: #0f766e;
 }
 
 .auth-menu__item--register:hover {
-    background: rgba(34, 199, 184, 0.18);
-    color: #ffffff;
+    background: #dffaf0;
+    color: #0f766e;
 }
 
 .auth-menu__item--register svg {
@@ -685,7 +548,7 @@ p {
 
 .auth-menu__sep {
     height: 1px;
-    background: rgba(34, 199, 184, 0.18);
+    background: #d8e2ea;
     margin: 3px 10px;
 }
 
@@ -733,14 +596,12 @@ a.test-chip:hover {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
-    padding: 8px 10px;
-    border-radius: 16px;
-    border: 1px solid rgba(34, 199, 184, 0.24);
-    background:
-        radial-gradient(240px 90px at 80% 0, rgba(20, 184, 166, 0.18), transparent 70%),
-        linear-gradient(135deg, #071426 0%, #10233f 60%, #0f766e 100%);
-    box-shadow: 0 10px 24px rgba(7, 20, 38, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.10);
+    gap: 8px;
+    padding: 8px;
+    border-radius: var(--btn-border-radius, 8px);
+    border: 1px solid var(--btn-outline-border, #BFE7DF);
+    background: var(--btn-outline-bg, #FFFFFF);
+    box-shadow: var(--shadow);
     transform: none;
 }
 
@@ -753,74 +614,61 @@ a.test-chip:hover {
     z-index: 4;
 }
 
-.pager__btn {
-    width: 38px;
-    height: 38px;
-    border-radius: 12px;
-    border: 1px solid rgba(226, 232, 240, 0.14);
-    background: rgba(255, 255, 255, 0.08);
-    color: #e2fdfa;
+.pager .pager__btn.btn-icon {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    border-radius: var(--btn-border-radius, 8px);
     text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
     user-select: none;
-    transition:
-        border-color 0.16s ease,
-        background 0.16s ease,
-        box-shadow 0.16s ease;
 }
 
-.pager__arrow {
-    width: 14px;
-    height: 14px;
+.pager .pager__arrow {
+    width: 20px;
+    height: 20px;
     display: block;
-    filter: brightness(0) saturate(100%) invert(92%) sepia(14%) saturate(486%) hue-rotate(124deg) brightness(108%) contrast(99%);
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
-.pager__arrow--prev {
+.pager .pager__arrow--prev {
     transform: scaleX(-1);
 }
 
-.pager__btn:hover .pager__arrow {
-    filter: brightness(0) saturate(100%) invert(95%) sepia(9%) saturate(366%) hue-rotate(181deg) brightness(104%) contrast(98%);
+.pager .pager__btn.is-disabled .pager__arrow {
+    opacity: 0.65;
 }
 
-.pager__btn.is-disabled .pager__arrow {
-    opacity: 0.32;
+.pager .pager__btn:active {
+    transform: translateY(1px);
 }
 
-.pager__btn:hover {
-    border-color: rgba(34, 199, 184, 0.42);
-    background: rgba(20, 184, 166, 0.15);
-    box-shadow: 0 6px 14px rgba(7, 20, 38, 0.16);
-}
-
-.pager__btn:active {
-    transform: translateY(0);
-    box-shadow: none;
-}
-
-.pager__btn.is-disabled {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.08);
-    opacity: .48;
+.pager .pager__btn.is-disabled {
+    background: var(--btn-ghost-bg, #F8FAFC);
+    border-color: var(--btn-ghost-border, #E5E7EB);
+    color: var(--btn-ghost-text, #475569);
+    opacity: .55;
     pointer-events: none;
 }
 
 .pager__info {
-    min-width: 154px;
+    min-width: 142px;
     text-align: center;
-    color: rgba(226, 232, 240, 0.88);
+    color: var(--color-text-secondary, #64748B);
     font-size: 14px;
-    font-weight: 700;
+    font-weight: 600;
     line-height: 1.2;
     white-space: nowrap;
-    letter-spacing: 0.01em;
+    letter-spacing: 0;
 }
 
 .pager__info strong {
-    color: #e2fdfa;
+    color: var(--color-primary-hover, #0F766E);
+    font-weight: 800;
 }
 
 @media (max-width: 980px) {
@@ -851,34 +699,20 @@ a.test-chip:hover {
         font-size: 28px;
     }
 
-    .icon-btn {
-        width: 46px;
-        height: 33px;
-        border-radius: 9px;
-    }
-
-    .icon-btn img {
-        width: 24px;
-        height: 24px;
-    }
-
-    .icon-btn--logout img {
-        width: 24px;
-        height: 24px;
-    }
-
     .pager {
         gap: 7px;
         padding: 6px;
     }
 
-    .pager__btn {
-        width: 34px;
-        height: 31px;
+    .pager .pager__btn.btn-icon {
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
+        min-height: 36px;
     }
 
     .pager__info {
-        min-width: 152px;
+        min-width: 138px;
         font-size: 13px;
     }
 
@@ -911,36 +745,20 @@ a.test-chip:hover {
         font-size: 22px;
     }
 
-    .icon-btn {
-        width: 40px;
-        height: 30px;
-        border-radius: 8px;
-    }
-
-    .icon-btn img {
-        width: 20px;
-        height: 20px;
-    }
-
-    .icon-btn--logout img {
-        width: 20px;
-        height: 20px;
-    }
-
     .pager {
         gap: 6px;
         padding: 5px;
-        border-radius: 14px;
     }
 
-    .pager__btn {
-        width: 30px;
-        height: 28px;
-        border-radius: 9px;
+    .pager .pager__btn.btn-icon {
+        width: 32px;
+        height: 32px;
+        min-width: 32px;
+        min-height: 32px;
     }
 
     .pager__info {
-        min-width: 130px;
+        min-width: 122px;
         font-size: 12px;
     }
 
