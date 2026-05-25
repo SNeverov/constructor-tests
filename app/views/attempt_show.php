@@ -140,10 +140,7 @@ if (($sourceState ?? 'ok') === 'changed') {
 $attemptStatus = (string)($attempt['status'] ?? '');
 $expiredNotice = '';
 $percentVal = (float)($attempt['percent'] ?? 0);
-$resultLabel = trim((string)($attempt['result_label_snapshot'] ?? ''));
-if ($resultLabel === '') {
-    $resultLabel = $percentVal >= 90 ? 'Отлично' : ($percentVal >= 80 ? 'Хорошо' : ($percentVal >= 60 ? 'Удовлетворительно' : 'Плохо'));
-}
+$resultLabel = test_attempt_result_label_from_snapshot($attempt);
 $scoreGrade = $percentVal >= 90 ? 'excellent' : ($percentVal >= 80 ? 'good' : ($percentVal >= 60 ? 'ok' : 'bad'));
 
 $durationSec = (int)($attempt['duration_sec'] ?? 0);

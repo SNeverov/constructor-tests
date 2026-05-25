@@ -144,7 +144,7 @@ function my_results_index(): void
         $page = 1;
     }
 
-    $perPage = 10;
+    $perPage = 12;
 
     $filters = [
         'search' => $search,

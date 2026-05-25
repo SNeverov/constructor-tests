@@ -167,6 +167,16 @@ if ($method === 'GET' && preg_match('~^/my/tests/(\d+)/edit$~', $path, $m)) {
     exit();
 }
 
+if ($method === 'GET' && preg_match('~^/my/tests/(\d+)/questions$~', $path, $m)) {
+    my_tests_questions_form((int)$m[1]);
+    exit();
+}
+
+if ($method === 'POST' && preg_match('~^/my/tests/(\d+)/questions$~', $path, $m)) {
+    my_tests_questions_store((int)$m[1]);
+    exit();
+}
+
 if ($path === '/my/tests' && $method === 'POST') {
     my_tests_store();
     exit();
@@ -219,10 +229,6 @@ if ($method === 'POST' && preg_match('~^/tests/(\d+)/finish$~', $path, $m)) {
     exit();
 }
 
-if ($method === 'POST' && preg_match('~^/tests/(\d+)/rate$~', $path, $m)) {
-    test_rate((int)$m[1]);
-    exit();
-}
 
 if ($method === 'GET' && preg_match('~^/attempts/(\d+)$~', $path, $m)) {
     attempt_show((int)$m[1]);

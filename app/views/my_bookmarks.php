@@ -66,7 +66,15 @@ $pluralRu = static function (int $n, string $one, string $few, string $many): st
     <h1>Мои закладки</h1>
 </div>
 
-<?php require __DIR__ . '/partials/home-filter-panel.php'; ?>
+<?php
+    $filter_panel_class   = 'home-filter-panel--results';
+    $filter_show_actions  = true;
+    $filter_show_search   = true;
+    $filter_search_value  = (string)($search ?? '');
+    $filter_reset_url     = '/my/bookmarks';
+    require __DIR__ . '/partials/home-filter-panel.php';
+    unset($filter_panel_class, $filter_show_actions, $filter_show_search, $filter_search_value, $filter_reset_url);
+?>
 
 <div class="results-meta muted<?= $total > 0 ? '' : ' is-hidden' ?>" data-bookmarks-page-meta>
     В закладках: <span data-bookmarks-page-count><?= $total ?></span>

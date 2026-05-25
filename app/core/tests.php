@@ -318,6 +318,45 @@ function test_grade_scale_json(array $scale): string
     return is_string($json) ? $json : '[]';
 }
 
+function test_grade_scale_label_for_percent(array $scale, float $percent): string
+{
+    $label = 'Плохо';
+    $previousMax = null;
+
+    foreach ($scale as $row) {
+        $max = (float)($row['max'] ?? 0);
+        $isLowerBoundPassed = $previousMax === null || $percent > $previousMax;
+
+        if ($isLowerBoundPassed && $percent <= $max) {
+            return (string)($row['label'] ?? $label);
+        }
+
+        $previousMax = $max;
+        $label = (string)($row['label'] ?? $label);
+    }
+
+    return $label;
+}
+
+function test_attempt_result_label_from_snapshot(array $attempt): string
+{
+    $label = trim((string)($attempt['result_label_snapshot'] ?? ''));
+    if ($label !== '') {
+        return $label;
+    }
+
+    $percent = (float)($attempt['percent'] ?? 0);
+    $mode = test_result_mode_from_value($attempt['result_mode_snapshot'] ?? test_result_mode_scale());
+
+    if ($mode === test_result_mode_pass_fail()) {
+        $passPercent = test_normalize_pass_percent($attempt['pass_percent_snapshot'] ?? 60, false);
+        return $percent >= $passPercent ? 'Сдано' : 'Не сдано';
+    }
+
+    $scale = test_normalize_grade_scale($attempt['grade_scale_snapshot'] ?? null, false);
+    return test_grade_scale_label_for_percent($scale, $percent);
+}
+
 function test_result_snapshot_from_test(array $test, float $percent): array
 {
     $mode = test_result_mode_from_value($test['result_mode'] ?? test_result_mode_scale());
@@ -333,17 +372,9 @@ function test_result_snapshot_from_test(array $test, float $percent): array
         ];
     }
 
-    $label = 'Плохо';
-    foreach ($scale as $row) {
-        if ($percent >= (float)$row['min'] && $percent <= (float)$row['max']) {
-            $label = (string)$row['label'];
-            break;
-        }
-    }
-
     return [
         'mode' => $mode,
-        'label' => $label,
+        'label' => test_grade_scale_label_for_percent($scale, $percent),
         'pass_percent' => null,
         'scale_json' => test_grade_scale_json($scale),
     ];
@@ -1215,7 +1246,7 @@ function tests_list_for_category(string $categoryName, int $limit = 20, int $off
     return tests_attach_category_names($stmt->fetchAll());
 }
 
-function tests_count_bookmarked_by_user_id(int $userId, ?string $categoryName = null): int
+function tests_count_bookmarked_by_user_id(int $userId, ?string $categoryName = null, string $search = ''): int
 {
     $pdo = db();
     $params = [':user_id' => $userId];
@@ -1223,18 +1254,25 @@ function tests_count_bookmarked_by_user_id(int $userId, ?string $categoryName = 
     if ($categoryName !== null && trim($categoryName) !== '') {
         $categoryWhere = ' AND t.id IS NOT NULL AND ' . tests_category_filter_sql($categoryName, $params, 't', 'bookmarks_count_category');
     }
+    $searchWhere = '';
+    $search = trim($search);
+    if ($search !== '') {
+        $searchWhere = ' AND t.title LIKE :bookmarks_count_search';
+        $params[':bookmarks_count_search'] = '%' . $search . '%';
+    }
     $stmt = $pdo->prepare("
         SELECT COUNT(*)
         FROM test_bookmarks tb
         LEFT JOIN tests t ON t.id = tb.test_id
         WHERE tb.user_id = :user_id
           {$categoryWhere}
+          {$searchWhere}
     ");
     $stmt->execute($params);
     return (int)$stmt->fetchColumn();
 }
 
-function tests_list_bookmarked_by_user_id_paginated(int $userId, int $limit, int $offset, ?string $categoryName = null, string $sort = 'new'): array
+function tests_list_bookmarked_by_user_id_paginated(int $userId, int $limit, int $offset, ?string $categoryName = null, string $sort = 'new', string $search = ''): array
 {
     $pdo = db();
     $limit = max(1, min(100, $limit));
@@ -1243,6 +1281,12 @@ function tests_list_bookmarked_by_user_id_paginated(int $userId, int $limit, int
     $categoryWhere = '';
     if ($categoryName !== null && trim($categoryName) !== '') {
         $categoryWhere = ' AND t.id IS NOT NULL AND ' . tests_category_filter_sql($categoryName, $params, 't', 'bookmarks_list_category');
+    }
+    $searchWhere = '';
+    $search = trim($search);
+    if ($search !== '') {
+        $searchWhere = ' AND t.title LIKE :bookmarks_list_search';
+        $params[':bookmarks_list_search'] = '%' . $search . '%';
     }
     $orderBy = tests_bookmarks_order_by($sort);
 
@@ -1294,6 +1338,7 @@ function tests_list_bookmarked_by_user_id_paginated(int $userId, int $limit, int
         LEFT JOIN users u ON u.id = t.user_id
         WHERE tb.user_id = :user_id
           {$categoryWhere}
+          {$searchWhere}
         ORDER BY {$orderBy}
         LIMIT {$limit} OFFSET {$offset}
     ");
@@ -2105,27 +2150,57 @@ function questions_delete_by_test_id(int $testId): int
 function tests_trash_list_by_user_id_paginated(int $userId, int $limit, int $offset): array
 {
     $pdo = db();
-    $limit = max(1, min(100, $limit));
+    $limit  = max(1, min(100, $limit));
     $offset = max(0, $offset);
-    $isAdmin = auth_is_admin();
-    $ownerWhere = $isAdmin ? '' : 'user_id = :user_id AND ';
+    $isAdmin    = auth_is_admin();
+    $ownerWhere = $isAdmin ? '' : 't.user_id = :user_id AND ';
 
-    $stmt = $pdo->prepare("
-        SELECT id, user_id, title, description, access_level, created_at, updated_at, deleted_at
-        FROM tests
-        WHERE {$ownerWhere}deleted_at IS NOT NULL
-          AND deleted_forever_at IS NULL
-        ORDER BY deleted_at DESC, id DESC
-        LIMIT {$limit} OFFSET {$offset}
-    ");
-
-    $params = [];
+    $params = [':viewer_id' => $userId];
     if (!$isAdmin) {
         $params[':user_id'] = $userId;
     }
+
+    $stmt = $pdo->prepare("
+        SELECT
+            t.id,
+            t.user_id,
+            t.title,
+            t.description,
+            t.access_level,
+            t.status,
+            t.category_name,
+            COALESCE(t.time_limit_sec, CASE WHEN t.time_limit_min IS NOT NULL THEN t.time_limit_min * 60 ELSE NULL END) AS time_limit_sec,
+            t.created_at,
+            t.updated_at,
+            t.deleted_at,
+            t.views_count,
+            t.bookmarks_count,
+            t.rating_count,
+            t.rating_sum,
+            t.cover_image,
+            t.show_answers,
+            t.shuffle_questions,
+            t.shuffle_answers,
+            t.attempt_limit,
+            t.result_mode,
+            t.pass_percent,
+            t.grade_scale_json,
+            COALESCE(u.login, '') AS creator_login,
+            CASE WHEN tb.user_id IS NULL THEN 0 ELSE 1 END AS is_bookmarked,
+            (SELECT COUNT(*) FROM questions q WHERE q.test_id = t.id) AS questions_count,
+            (SELECT COUNT(*) FROM attempts a WHERE a.test_id = t.id) AS attempts_count
+        FROM tests t
+        LEFT JOIN users u  ON u.id  = t.user_id
+        LEFT JOIN test_bookmarks tb ON tb.test_id = t.id AND tb.user_id = :viewer_id
+        WHERE {$ownerWhere}t.deleted_at IS NOT NULL
+          AND t.deleted_forever_at IS NULL
+        ORDER BY t.deleted_at DESC, t.id DESC
+        LIMIT {$limit} OFFSET {$offset}
+    ");
+
     $stmt->execute($params);
 
-    return $stmt->fetchAll();
+    return tests_attach_category_names($stmt->fetchAll());
 }
 
 function tests_count_active_by_user_id(int $userId, ?string $categoryName = null, string $search = ''): int

@@ -191,9 +191,10 @@
                 </div>
             </main>
 
-            <button type="button" class="scroll-top btn btn-outline btn-icon btn-lg ui-tooltip ui-tooltip--force-top" id="scrollTopBtn" aria-label="Наверх" data-tooltip="Наверх">
-                <svg class="scroll-top__icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="m6 14 6-6 6 6"></path>
+            <button type="button" class="scroll-top btn btn-icon btn-lg ui-tooltip ui-tooltip--force-top" id="scrollTopBtn" aria-label="Наверх" data-tooltip="Наверх">
+                <svg class="scroll-top__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="8 13 12 9 16 13"/>
                 </svg>
             </button>
 

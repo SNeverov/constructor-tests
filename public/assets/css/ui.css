@@ -104,124 +104,89 @@
     }
 }
 
-/* базовый тёмный “диалог” */
 .ui-toast {
     pointer-events: auto;
-    width: min(380px, calc(100vw - 32px));
-
-    background: rgba(17, 24, 39, 0.92);          /* #111827 */
-    border: 1px solid rgba(255, 255, 255, 0.10);
-    border-radius: 16px;
-
+    width: min(360px, calc(100vw - 32px));
+    background: #134E4A;
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 14px;
     box-shadow:
-    0 24px 70px rgba(0, 0, 0, 0.45),
-    0 8px 22px rgba(0, 0, 0, 0.22),
-    0 1px 0 rgba(255, 255, 255, 0.06) inset;
-
-    padding: 18px 14px;
+        0 8px 32px rgba(13, 148, 136, 0.28),
+        0 2px 8px rgba(0, 0, 0, 0.18);
+    padding: 14px 12px 14px 16px;
     display: flex;
     gap: 12px;
     align-items: center;
-
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-
-    transform: translateY(-10px);
+    transform: translateX(14px);
     opacity: 0;
-    transition: transform 340ms cubic-bezier(.22,.61,.36,1), opacity 340ms ease;
+    transition: transform 320ms cubic-bezier(.22,.61,.36,1), opacity 320ms ease;
 }
 
 .ui-toast.is-show {
-    transform: translateY(0);
+    transform: translateX(0);
     opacity: 1;
 }
 
-/* Иконка (не “кружок ради кружка”, а нормальный badge) */
 .ui-toast__dot {
     width: 28px;
     height: 28px;
-    border-radius: 999px;
+    border-radius: 50%;
     display: grid;
     place-items: center;
     flex: 0 0 auto;
-
-    /* background: rgba(16, 185, 129, 0.14); */
-	background: rgba(16, 185, 129, 0.10);
-    border-color: rgba(16, 185, 129, 0.22);
-    border: 1px solid rgba(16, 185, 129, 0.30);
+    background: rgba(255,255,255,.12);
+    border: 1px solid rgba(255,255,255,.20);
+    color: #ffffff;
 }
 
-.ui-toast__dot::before {
-    content: "✓";
-    font-weight: 900;
-    font-size: 15px;
-    line-height: 1;
-    /* color: rgba(16, 185, 129, 0.95); */
-	color: rgba(16, 185, 129, 0.85);
-    transform: translateY(-0.5px);
-}
-
-/* Текст — белый, но не “кислотный” */
 .ui-toast__text {
-    font-weight: 650;
-    color: rgba(255, 255, 255, 0.92);
-    font-size: 14px;
-    line-height: 1.3;
-    letter-spacing: 0.2px;
+    font-weight: 600;
+    color: rgba(255,255,255,.95);
+    font-size: 13px;
+    line-height: 1.35;
+    flex: 1 1 auto;
 }
 
-/* Крестик — мягкий, не “вырви глаз” */
 .ui-toast__close {
     margin-left: auto;
+    flex-shrink: 0;
     border: 0;
-    /* background: rgba(255, 255, 255, 0.06); */
-	background: transparent;
-    color: rgba(255, 255, 255, 0.65);
+    background: transparent;
+    color: rgba(255,255,255,.50);
     cursor: pointer;
-    padding: 8px 10px;
-    border-radius: 999px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    font-size: 14px;
     line-height: 1;
     display: grid;
     place-items: center;
-    transition: background 160ms ease, color 160ms ease, transform 160ms ease;
+    transition: background 140ms ease, color 140ms ease;
 }
 
 .ui-toast__close:hover {
-    /* background: rgba(255, 255, 255, 0.10); */
-	background: rgba(255, 255, 255, 0.06);
-    color: rgba(255, 255, 255, 0.92);
-    transform: translateY(-1px);
+    background: rgba(255,255,255,.10);
+    color: rgba(255,255,255,.90);
 }
 
-/* Типы (если понадобятся позже — уже готово) */
-.ui-toast--success .ui-toast__dot {
-    background: rgba(16, 185, 129, 0.14);
-    border-color: rgba(16, 185, 129, 0.30);
-}
-.ui-toast--success .ui-toast__dot::before {
-    color: rgba(16, 185, 129, 0.95);
+/* success — фирменный тил */
+.ui-toast--success {
+    background: #134E4A;
 }
 
-.ui-toast--danger .ui-toast__dot {
-    background: rgba(239, 68, 68, 0.14);
-    border-color: rgba(239, 68, 68, 0.30);
-}
-.ui-toast--danger .ui-toast__dot::before {
-    content: "!";
-    font-size: 16px;
-    transform: translateY(-0.5px);
-    color: rgba(239, 68, 68, 0.95);
+/* danger — тёмно-красный */
+.ui-toast--danger {
+    background: #7F1D1D;
+    box-shadow:
+        0 8px 32px rgba(239, 68, 68, 0.22),
+        0 2px 8px rgba(0, 0, 0, 0.18);
 }
 
-.ui-toast--warning .ui-toast__dot {
-    background: rgba(245, 158, 11, 0.14);
-    border-color: rgba(245, 158, 11, 0.30);
-}
-.ui-toast--warning .ui-toast__dot::before {
-    content: "!";
-    font-size: 16px;
-    transform: translateY(-0.5px);
-    color: rgba(245, 158, 11, 0.95);
+/* warning — тёмно-янтарный */
+.ui-toast--warning {
+    background: #78350F;
+    box-shadow:
+        0 8px 32px rgba(245, 158, 11, 0.22),
+        0 2px 8px rgba(0, 0, 0, 0.18);
 }
 
 

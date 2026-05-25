@@ -1,18 +1,64 @@
-.page-head--row{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:16px;
-    flex-wrap:wrap;
+.page-head--row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
 }
-.page-head__actions{
-    display:flex;
-    gap:10px;
-    flex-wrap:wrap;
+
+.page-head__actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
 }
-.page-head__actions .inline{
-    display:inline-flex;
+
+.page-head__actions .inline {
+    display: inline-flex;
 }
-.page-head__actions .btn--ghost{
-    min-height:0;
+
+/* ── Header action buttons size ───────────────────────────────────────────── */
+
+.page-head__actions .btn {
+    height: 32px;
+    min-height: 32px;
+    padding-inline: 12px;
+    font-size: 13px;
+}
+
+/* ── Trash card: full-width equal buttons ─────────────────────────────────── */
+
+.test-card-grid .test-card--ctx-trash .test-card__icon-actions {
+    flex-wrap: nowrap;
+}
+
+.test-card-grid .test-card--ctx-trash .test-card__icon-actions .inline {
+    flex: 1 1 0;
+    width: auto;
+    display: flex;
+}
+
+.test-card-grid .test-card--ctx-trash .test-card__icon-actions .btn {
+    flex: 1 1 0;
+    width: 100%;
+    justify-content: center;
+    min-height: 36px;
+}
+
+/* Восстановить: hover как у btn-success */
+.test-card-grid .test-card--ctx-trash .test-card__icon-actions .btn-ghost:hover {
+    background: #ECFDF5;
+    border-color: #BBF7D0;
+    color: #047857;
+}
+
+/* ── Trash card: footer — date only, no border ───────────────────────────── */
+
+.test-card-grid .test-card--ctx-trash .test-card__home-footer {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    margin: 4px 18px 18px;
+    padding: 4px 0 0;
+    justify-content: flex-end;
 }

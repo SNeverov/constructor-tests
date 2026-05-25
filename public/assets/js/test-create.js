@@ -52,6 +52,8 @@ function syncAnswerTextUI(textarea) {
 document.addEventListener('input', (e) => {
     if (e.target.closest('[data-option-text]')) syncOptionTextUI(e.target.closest('[data-option-text]'));
     if (e.target.closest('[data-answer-text]')) syncAnswerTextUI(e.target.closest('[data-answer-text]'));
+    const questionTextarea = e.target.closest('[data-question-text]');
+    if (questionTextarea) updateQuestionPreview(questionTextarea.closest('[data-question]'));
 });
 
 // ─── Lightbox ────────────────────────────────────────────────────────────────
@@ -131,7 +133,6 @@ function openCropModal(src, onApply) {
 
     if (_cropper) { _cropper.destroy(); _cropper = null; }
 
-    img.src = src;
     _cropCallback = onApply;
 
     modal.hidden = false;
@@ -142,10 +143,10 @@ function openCropModal(src, onApply) {
         _cropper = new Cropper(img, {
             aspectRatio: 16 / 9,
             viewMode: 1,
-            dragMode: 'move',       // тащим изображение, не рамку
-            autoCropArea: 1,        // рамка = весь canvas
-            cropBoxResizable: false, // хэндлы отключены
-            cropBoxMovable: false,   // рамка фиксирована
+            dragMode: 'move',
+            autoCropArea: 1,
+            cropBoxResizable: false,
+            cropBoxMovable: false,
             responsive: true,
             checkOrientation: false,
             background: false,
@@ -155,6 +156,7 @@ function openCropModal(src, onApply) {
             toggleDragModeOnDblclick: false,
         });
     };
+    img.src = src;
 }
 
 function closeCropModal() {
@@ -409,14 +411,58 @@ function reindexQuestions() {
     questions.forEach((q, i) => {
         setQuestionIndex(q, i);
 
-        const title = q.querySelector('[data-question-title]') || q.querySelector('.question-card__title');
-        if (title) title.innerHTML = `<span class="question-card__num">${i + 1}</span> Вопрос`;
+        const num = q.querySelector('.question-card__num');
+        if (num) num.textContent = String(i + 1);
 
         reindexOptions(q);
         reindexAnswers(q);
         updateAddOptionVisibility(q);
         updateAddAnswerVisibility(q);
     });
+}
+
+function setQuestionCollapsed(q, collapsed, animate = true) {
+    const wrap = q.querySelector('.question-card__body-wrap');
+    const btn  = q.querySelector('[data-question-collapse-btn]');
+    if (btn) btn.setAttribute('aria-label', collapsed ? 'Развернуть' : 'Свернуть');
+
+    if (!animate || !wrap) {
+        q.classList.toggle('is-collapsed', collapsed);
+        if (wrap) {
+            wrap.style.height    = collapsed ? '0px' : '';
+            wrap.style.overflow  = collapsed ? 'hidden' : '';
+        }
+        return;
+    }
+
+    if (collapsed) {
+        wrap.style.overflow = 'hidden';
+        wrap.style.height = wrap.scrollHeight + 'px';
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+            q.classList.add('is-collapsed');
+            wrap.style.height = '0px';
+        }));
+    } else {
+        wrap.style.overflow = 'hidden';
+        q.classList.remove('is-collapsed');
+        const target = wrap.scrollHeight;
+        wrap.style.height = '0px';
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+            wrap.style.height = target + 'px';
+        }));
+        wrap.addEventListener('transitionend', () => {
+            wrap.style.height   = '';
+            wrap.style.overflow = '';
+        }, { once: true });
+    }
+}
+
+function updateQuestionPreview(q) {
+    const preview = q.querySelector('[data-question-preview]');
+    if (!preview) return;
+    const textarea = q.querySelector('[data-question-text]');
+    const text = textarea ? textarea.value.trim() : '';
+    preview.textContent = text !== '' ? text : 'Вопрос';
 }
 
 function updateAddAnswerVisibility(q) {
@@ -774,7 +820,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // img-upload для обложки (вне карточек вопросов)
-    document.querySelectorAll('.form-section [data-img-upload]').forEach(initImgUpload);
+    document.querySelectorAll('.tc-cover-zone[data-img-upload]').forEach(initImgUpload);
 
     const wrap = document.querySelector('#questionsList') || document.querySelector('#questions');
     const baseTemplate = wrap ? wrap.querySelector('[data-question]') : null;
@@ -912,12 +958,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 wrap.appendChild(q);
                 initQuestion(q);
+                updateQuestionPreview(q);
+                setQuestionCollapsed(q, true, false);
             });
         }
     }
 
     document.querySelectorAll('[data-question]').forEach(initQuestion);
     reindexQuestions();
+    document.querySelectorAll('[data-question]').forEach(updateQuestionPreview);
     document.querySelectorAll('[data-option-text]').forEach(syncOptionTextUI);
     document.querySelectorAll('[data-answer-text]').forEach(syncAnswerTextUI);
 
@@ -926,10 +975,19 @@ document.addEventListener('DOMContentLoaded', () => {
         .forEach(initSegmentedSlider);
 
     document.addEventListener('click', (e) => {
+        const toggleHead = e.target.closest('[data-question-toggle]');
+        if (toggleHead && !e.target.closest('[data-action="remove-question"]')) {
+            const card = toggleHead.closest('[data-question]');
+            if (card) setQuestionCollapsed(card, !card.classList.contains('is-collapsed'));
+            return;
+        }
+
         const addAfterBtn = e.target.closest('[data-action="add-question-after"]');
         if (addAfterBtn) {
-            const current = addAfterBtn.closest('[data-question]');
-            if (!current || !questionTemplate) return;
+            if (!questionTemplate) return;
+            const all = document.querySelectorAll('[data-question]');
+            const current = addAfterBtn.closest('[data-question]') ?? all[all.length - 1];
+            if (!current) return;
 
             const clone = questionTemplate.cloneNode(true);
             clone.removeAttribute('data-qid');
@@ -959,6 +1017,12 @@ document.addEventListener('DOMContentLoaded', () => {
             current.after(clone);
             initQuestion(clone);
             reindexQuestions();
+            document.querySelectorAll('[data-question]').forEach((q) => {
+                if (q !== clone) setQuestionCollapsed(q, true, false);
+            });
+            setQuestionCollapsed(clone, false, false);
+            current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            setTimeout(() => clone.querySelector('[data-question-text]')?.focus(), 300);
             markFormDirty();
             return;
         }
@@ -1047,7 +1111,10 @@ function updateDraftRouting(payload) {
     const testId = String(payload.test_id);
     form.dataset.testId = testId;
     form.dataset.testStatus = payload.status || 'draft';
-    form.action = `/my/tests/${testId}`;
+    const currentPath = new URL(form.action, window.location.href).pathname;
+    if (currentPath === '/my/tests') {
+        form.action = `/my/tests/${testId}`;
+    }
     if (payload.draft_url) form.dataset.draftUrl = payload.draft_url;
     if (payload.edit_url) {
         form.dataset.editUrl = payload.edit_url;

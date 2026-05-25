@@ -21,6 +21,123 @@ function expire_attempt_by_timeout(int $attemptId, int $testId): void
     );
 }
 
+function test_pass_order_session_key(int $attemptId): string
+{
+    return (string)$attemptId;
+}
+
+function test_pass_attempt_order(int $attemptId, array $test, array $questions, array $optionsByQuestionId): array
+{
+    if (!isset($_SESSION['test_pass_order_by_attempt']) || !is_array($_SESSION['test_pass_order_by_attempt'])) {
+        $_SESSION['test_pass_order_by_attempt'] = [];
+    }
+
+    $key = test_pass_order_session_key($attemptId);
+    $stored = $_SESSION['test_pass_order_by_attempt'][$key] ?? null;
+    if (is_array($stored)) {
+        return $stored;
+    }
+
+    $orderedQuestions = $questions;
+    if (test_shuffle_questions_enabled($test)) {
+        shuffle($orderedQuestions);
+    }
+
+    $questionOrder = [];
+    foreach ($orderedQuestions as $question) {
+        $qid = (int)($question['id'] ?? 0);
+        if ($qid > 0) {
+            $questionOrder[] = $qid;
+        }
+    }
+
+    $optionOrder = [];
+    foreach ($questions as $question) {
+        $qid = (int)($question['id'] ?? 0);
+        if ($qid <= 0 || !isset($optionsByQuestionId[$qid]) || !is_array($optionsByQuestionId[$qid])) {
+            continue;
+        }
+
+        $type = (string)($question['type'] ?? 'radio');
+        $optionIds = [];
+        foreach ($optionsByQuestionId[$qid] as $option) {
+            $oid = (int)($option['id'] ?? 0);
+            if ($oid > 0) {
+                $optionIds[] = $oid;
+            }
+        }
+
+        if (($type === 'order' || (in_array($type, ['radio', 'checkbox'], true) && test_shuffle_answers_enabled($test))) && count($optionIds) > 1) {
+            shuffle($optionIds);
+        }
+
+        $optionOrder[$qid] = $optionIds;
+    }
+
+    $order = [
+        'questions' => $questionOrder,
+        'options' => $optionOrder,
+    ];
+
+    $_SESSION['test_pass_order_by_attempt'][$key] = $order;
+
+    return $order;
+}
+
+function test_pass_apply_attempt_order(array $questions, array $optionsByQuestionId, array $order): array
+{
+    $questionById = [];
+    foreach ($questions as $question) {
+        $qid = (int)($question['id'] ?? 0);
+        if ($qid > 0) {
+            $questionById[$qid] = $question;
+        }
+    }
+
+    $orderedQuestions = [];
+    foreach ((array)($order['questions'] ?? []) as $qidRaw) {
+        $qid = (int)$qidRaw;
+        if (isset($questionById[$qid])) {
+            $orderedQuestions[] = $questionById[$qid];
+            unset($questionById[$qid]);
+        }
+    }
+    foreach ($questionById as $question) {
+        $orderedQuestions[] = $question;
+    }
+
+    foreach ((array)($order['options'] ?? []) as $qidRaw => $optionIdsRaw) {
+        $qid = (int)$qidRaw;
+        if (!isset($optionsByQuestionId[$qid]) || !is_array($optionsByQuestionId[$qid])) {
+            continue;
+        }
+
+        $optionById = [];
+        foreach ($optionsByQuestionId[$qid] as $option) {
+            $oid = (int)($option['id'] ?? 0);
+            if ($oid > 0) {
+                $optionById[$oid] = $option;
+            }
+        }
+
+        $orderedOptions = [];
+        foreach ((array)$optionIdsRaw as $oidRaw) {
+            $oid = (int)$oidRaw;
+            if (isset($optionById[$oid])) {
+                $orderedOptions[] = $optionById[$oid];
+                unset($optionById[$oid]);
+            }
+        }
+        foreach ($optionById as $option) {
+            $orderedOptions[] = $option;
+        }
+
+        $optionsByQuestionId[$qid] = $orderedOptions;
+    }
+
+    return [$orderedQuestions, $optionsByQuestionId];
+}
+
 function test_pass(int $testId): void
 {
     $test = tests_find_by_id($testId);
@@ -43,20 +160,6 @@ function test_pass(int $testId): void
     $optionsByQuestionId = is_array($payload['options_by_question_id'] ?? null)
         ? $payload['options_by_question_id']
         : [];
-
-    if (test_shuffle_questions_enabled($test)) {
-        shuffle($questions);
-    }
-
-    if (test_shuffle_answers_enabled($test)) {
-        foreach ($questions as $question) {
-            $qid = (int)($question['id'] ?? 0);
-            $type = (string)($question['type'] ?? 'radio');
-            if ($qid > 0 && in_array($type, ['radio', 'checkbox'], true) && isset($optionsByQuestionId[$qid]) && is_array($optionsByQuestionId[$qid])) {
-                shuffle($optionsByQuestionId[$qid]);
-            }
-        }
-    }
 
     $showAnswers = test_answers_show_immediately($test);
     $correctOptionIdsByQ = [];
@@ -113,6 +216,7 @@ function test_pass(int $testId): void
                 }
 
                 unset($_SESSION['active_attempt_id_by_test'][$testId]);
+                unset($_SESSION['test_pass_order_by_attempt'][test_pass_order_session_key($candidateId)]);
                 if ($userId === null) {
                     if (!isset($_SESSION['guest_attempt_ids']) || !is_array($_SESSION['guest_attempt_ids'])) {
                         $_SESSION['guest_attempt_ids'] = [];
@@ -168,6 +272,9 @@ function test_pass(int $testId): void
 		$attemptId = attempt_create($testId, $userId);
 		$_SESSION['active_attempt_id_by_test'][$testId] = $attemptId;
 	}
+
+    $attemptOrder = test_pass_attempt_order($attemptId, $test, $questions, $optionsByQuestionId);
+    [$questions, $optionsByQuestionId] = test_pass_apply_attempt_order($questions, $optionsByQuestionId, $attemptOrder);
 
     $attempt = attempt_find_by_id($attemptId);
     $timeLimitSec = $attempt !== null ? (int)($attempt['time_limit_sec_snapshot'] ?? 0) : 0;
@@ -555,6 +662,7 @@ function test_finish(int $testId): void
         }
 
 		unset($_SESSION['active_attempt_id_by_test'][$testId]);
+        unset($_SESSION['test_pass_order_by_attempt'][test_pass_order_session_key($attemptId)]);
         if ($userId === null) {
             if (!isset($_SESSION['guest_attempt_ids']) || !is_array($_SESSION['guest_attempt_ids'])) {
                 $_SESSION['guest_attempt_ids'] = [];

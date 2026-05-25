@@ -605,13 +605,13 @@ function attempts_filters_sql(array $filters, array &$params): string
 
     $status = (string)($filters['status'] ?? 'all');
     if ($status === 'excellent' || $status === 'correct') {
-        $where[] = 'a.percent >= 90';
+        $where[] = "(a.result_mode_snapshot = 'scale' AND (a.result_label_snapshot = 'Отлично' OR (a.result_label_snapshot = '' AND a.percent >= 90)))";
     } elseif ($status === 'good') {
-        $where[] = 'a.percent >= 80 AND a.percent < 90';
+        $where[] = "(a.result_mode_snapshot = 'scale' AND (a.result_label_snapshot = 'Хорошо' OR (a.result_label_snapshot = '' AND a.percent >= 80 AND a.percent < 90)))";
     } elseif ($status === 'satisfactory' || $status === 'partial') {
-        $where[] = 'a.percent >= 60 AND a.percent < 80';
+        $where[] = "(a.result_mode_snapshot = 'scale' AND (a.result_label_snapshot = 'Удовлетворительно' OR (a.result_label_snapshot = '' AND a.percent >= 60 AND a.percent < 80)))";
     } elseif ($status === 'bad' || $status === 'wrong') {
-        $where[] = 'a.percent < 60';
+        $where[] = "(a.result_mode_snapshot = 'scale' AND (a.result_label_snapshot = 'Плохо' OR (a.result_label_snapshot = '' AND a.percent < 60)))";
     } elseif ($status === 'passed') {
         $where[] = "a.result_mode_snapshot = 'pass_fail' AND a.percent >= COALESCE(a.pass_percent_snapshot, 60)";
     } elseif ($status === 'failed') {
@@ -679,6 +679,8 @@ function attempts_list_by_user_id_filtered(int $userId, array $filters, int $lim
             a.percent,
             a.result_label_snapshot,
             a.result_mode_snapshot,
+            a.pass_percent_snapshot,
+            a.grade_scale_snapshot,
             a.started_at,
             a.finished_at,
             a.duration_sec,

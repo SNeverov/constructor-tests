@@ -24,6 +24,11 @@ function my_bookmarks_index(): void
         $sort = 'new';
     }
 
+    $search = trim((string)($_GET['search'] ?? ''));
+    if (mb_strlen($search) > 100) {
+        $search = mb_substr($search, 0, 100);
+    }
+
     $page = (int)($_GET['page'] ?? 1);
     if ($page < 1) {
         $page = 1;
@@ -31,15 +36,18 @@ function my_bookmarks_index(): void
 
     $perPage = 10;
     $allTotal = tests_count_bookmarked_by_user_id($userId);
-    $total = $categoryName !== null ? tests_count_bookmarked_by_user_id($userId, $categoryName) : $allTotal;
+    $total = tests_count_bookmarked_by_user_id($userId, $categoryName, $search);
     $pages = max(1, (int)ceil($total / $perPage));
     if ($page > $pages) {
         $page = $pages;
     }
     $offset = ($page - 1) * $perPage;
 
-    $tests = tests_list_bookmarked_by_user_id_paginated($userId, $perPage, $offset, $categoryName, $sort);
+    $tests = tests_list_bookmarked_by_user_id_paginated($userId, $perPage, $offset, $categoryName, $sort, $search);
     $pagerQuery = [];
+    if ($search !== '') {
+        $pagerQuery['search'] = $search;
+    }
     if ($categorySlug !== '') {
         $pagerQuery['category'] = $categorySlug;
     }
@@ -58,6 +66,7 @@ function my_bookmarks_index(): void
         'selected_category_slug' => $categorySlug,
         'sort_options' => $sortOptions,
         'selected_sort' => $sort,
+        'search' => $search,
         'pagination' => [
             'page' => $page,
             'pages' => $pages,

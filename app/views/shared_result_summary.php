@@ -13,10 +13,7 @@ $finishedAt = (string)($attempt['finished_at'] ?? '');
 $correct = (int)($attempt['correct_count'] ?? 0);
 $total = (int)($attempt['total_questions'] ?? 0);
 $percent = (float)($attempt['percent'] ?? 0);
-$label = trim((string)($attempt['result_label_snapshot'] ?? ''));
-if ($label === '') {
-    $label = $percent >= 90 ? 'Отлично' : ($percent >= 80 ? 'Хорошо' : ($percent >= 60 ? 'Удовлетворительно' : 'Плохо'));
-}
+$label = test_attempt_result_label_from_snapshot($attempt);
 $testId = (int)($attempt['test_id'] ?? 0);
 $canPassTest = $testId > 0
     && empty($attempt['test_deleted_at'])

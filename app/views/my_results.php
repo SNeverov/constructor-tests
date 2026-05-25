@@ -227,22 +227,16 @@
             <?php foreach ($rows as $row): ?>
                 <?php
                 $percent = (float)($row['percent'] ?? 0);
-                $rateLabel = trim((string)($row['result_label_snapshot'] ?? ''));
-                if ($rateLabel === '') {
-                    $rateLabel = 'Плохо';
-                }
+                $rateLabel = test_attempt_result_label_from_snapshot($row);
                 $rateClass = 'score-pill--bad';
                 $itemToneClass = 'result-item--bad';
                 if ($percent >= 90.0) {
-                    $rateLabel = trim((string)($row['result_label_snapshot'] ?? '')) !== '' ? $rateLabel : 'Отлично';
                     $rateClass = 'score-pill--excellent';
                     $itemToneClass = 'result-item--excellent';
                 } elseif ($percent >= 80.0) {
-                    $rateLabel = trim((string)($row['result_label_snapshot'] ?? '')) !== '' ? $rateLabel : 'Хорошо';
                     $rateClass = 'score-pill--good';
                     $itemToneClass = 'result-item--good';
                 } elseif ($percent >= 60.0) {
-                    $rateLabel = trim((string)($row['result_label_snapshot'] ?? '')) !== '' ? $rateLabel : 'Удовлетворительно';
                     $rateClass = 'score-pill--ok';
                     $itemToneClass = 'result-item--ok';
                 }
@@ -312,14 +306,13 @@
                                 <span>Правильно</span>
                             </div>
                             <div class="result-stat">
+                                <span class="result-stat__icon result-stat__icon--time" aria-hidden="true"></span>
+                                <strong><?= htmlspecialchars($durationText, ENT_QUOTES, 'UTF-8') ?></strong>
+                            </div>
+                            <div class="result-stat">
                                 <span class="result-stat__icon result-stat__icon--wrong" aria-hidden="true"></span>
                                 <strong><?= (int)($row['wrong_count'] ?? 0) ?></strong>
                                 <span>Неправильно</span>
-                            </div>
-                            <div class="result-stat">
-                                <span class="result-stat__icon result-stat__icon--time" aria-hidden="true"></span>
-                                <strong><?= htmlspecialchars($durationText, ENT_QUOTES, 'UTF-8') ?></strong>
-                                <!-- <span>Время</span> -->
                             </div>
                         </div>
 

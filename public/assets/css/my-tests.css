@@ -4,7 +4,7 @@
     font-size: 14px;
 }
 
-.my-tests-page .home-filter-panel--results {
+.home-filter-panel--results {
     display: block;
     margin: 0 0 14px;
     padding: 14px;
@@ -14,19 +14,19 @@
     box-shadow: 0 8px 22px rgba(15, 23, 42, .06);
 }
 
-.my-tests-page .home-filter-panel--results .home-filter-controls {
+.home-filter-panel--results .home-filter-controls {
     display: grid;
     grid-template-columns: minmax(240px, 1fr) minmax(190px, 240px) minmax(170px, 220px) auto;
     align-items: end;
     gap: 10px;
 }
 
-.my-tests-page .home-filter-search {
+.home-filter-panel--results .home-filter-search {
     min-width: 0;
     display: grid;
 }
 
-.my-tests-page .home-filter-search .input {
+.home-filter-panel--results .home-filter-search .input {
     height: 36px;
     min-height: 36px;
     padding-top: 6px;
@@ -35,36 +35,37 @@
     border-radius: var(--btn-border-radius, 8px);
     background: var(--color-surface, #FFFFFF);
     color: var(--color-text, #0F172A);
+    font-size: 13px;
     font-weight: 700;
     transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
 }
 
-.my-tests-page .home-filter-search .input::placeholder {
+.home-filter-panel--results .home-filter-search .input::placeholder {
     color: var(--color-text-muted, #94A3B8);
     font-weight: 600;
 }
 
-.my-tests-page .home-filter-search .input:hover {
+.home-filter-panel--results .home-filter-search .input:hover {
     border-color: var(--btn-outline-border, #BFE7DF);
     background: var(--btn-outline-bg-hover, #F0FDFA);
 }
 
-.my-tests-page .home-filter-search .input:focus,
-.my-tests-page .home-filter-search .input:focus-visible {
+.home-filter-panel--results .home-filter-search .input:focus,
+.home-filter-panel--results .home-filter-search .input:focus-visible {
     outline: none;
     border-color: var(--color-primary, #0D9488);
     box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.18);
 }
 
-.my-tests-page .home-filter-panel--results .home-category-filter,
-.my-tests-page .home-filter-panel--results .home-sort-filter {
+.home-filter-panel--results .home-category-filter,
+.home-filter-panel--results .home-sort-filter {
     width: auto;
     min-width: 0;
     flex: none;
 }
 
-.my-tests-page .home-filter-panel--results .home-category-filter__trigger,
-.my-tests-page .home-filter-panel--results .home-sort-filter__trigger {
+.home-filter-panel--results .home-category-filter__trigger,
+.home-filter-panel--results .home-sort-filter__trigger {
     min-height: 36px;
     height: 36px;
     border-color: var(--color-border, #E2E8F0);
@@ -72,83 +73,59 @@
     background: var(--color-surface, #FFFFFF);
     color: var(--color-text, #0F172A);
     box-shadow: none;
-    font-size: 14px;
+    font-size: 13px;
 }
 
-.my-tests-page .home-filter-panel--results .home-category-filter__trigger:hover,
-.my-tests-page .home-filter-panel--results .home-category-filter.is-open .home-category-filter__trigger,
-.my-tests-page .home-filter-panel--results .home-sort-filter__trigger:hover,
-.my-tests-page .home-filter-panel--results .home-sort-filter.is-open .home-sort-filter__trigger {
+.home-filter-panel--results .home-category-filter__trigger:hover,
+.home-filter-panel--results .home-category-filter.is-open .home-category-filter__trigger,
+.home-filter-panel--results .home-sort-filter__trigger:hover,
+.home-filter-panel--results .home-sort-filter.is-open .home-sort-filter__trigger {
     border-color: var(--btn-outline-border, #BFE7DF);
     background: var(--btn-outline-bg-hover, #F0FDFA);
     box-shadow: none;
 }
 
-.my-tests-page .home-filter-panel--results .home-category-filter__trigger:focus-visible,
-.my-tests-page .home-filter-panel--results .home-sort-filter__trigger:focus-visible {
+.home-filter-panel--results .home-category-filter__trigger:focus-visible,
+.home-filter-panel--results .home-sort-filter__trigger:focus-visible {
     outline: none;
     border-color: var(--color-primary, #0D9488);
     box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.18);
 }
 
-.my-tests-page .home-filter-panel--results .home-category-filter__trigger-text.is-placeholder {
+.home-filter-panel--results .home-category-filter__trigger-text.is-placeholder {
     color: var(--color-text-muted, #94A3B8);
     font-weight: 600;
 }
 
-.my-tests-page .home-filter-panel--results .home-category-filter__trigger-count {
+.home-filter-panel--results .home-category-filter__trigger-count {
     background: var(--color-primary-soft-alt, #F0FDFA);
     color: var(--color-primary-hover, #0F766E);
 }
 
-.my-tests-page .home-filter-panel--results .home-category-filter__chevron,
-.my-tests-page .home-filter-panel--results .home-sort-filter__chevron {
+.home-filter-panel--results .home-category-filter__chevron,
+.home-filter-panel--results .home-sort-filter__chevron {
     color: var(--color-primary, #0D9488);
 }
 
-.my-tests-page .home-filter-panel--results .home-sort-filter__trigger {
+.home-filter-panel--results .home-sort-filter__trigger {
     justify-content: space-between;
 }
 
-.my-tests-page .home-filter-panel--results .home-sort-filter__trigger span {
+.home-filter-panel--results .home-sort-filter__trigger span {
     color: var(--color-text-muted, #94A3B8);
     font-weight: 600;
 }
 
-.my-tests-page .home-filter-panel--results .home-sort-filter__trigger strong {
+.home-filter-panel--results .home-sort-filter__trigger strong {
     color: var(--color-text, #0F172A);
     font-weight: 800;
 }
 
-.my-tests-page .home-filter-panel--results .home-category-filter__panel,
-.my-tests-page .home-filter-panel--results .home-sort-filter__panel {
-    top: calc(100% + 12px);
-    border-color: rgba(15, 118, 110, .18);
-    border-radius: 12px;
-    box-shadow:
-        0 16px 36px rgba(15, 23, 42, .14),
-        0 4px 14px rgba(15, 118, 110, .10);
-}
-
-.my-tests-page .home-filter-panel--results .home-category-filter__actions {
+.home-filter-panel--results .home-category-filter__actions {
     display: none;
 }
 
-.my-tests-page .home-filter-panel--results .home-category-filter__search {
-    min-height: 36px;
-    border-color: var(--color-border, #E2E8F0);
-    border-radius: var(--btn-border-radius, 8px);
-    background: var(--color-surface, #FFFFFF);
-    color: var(--color-text, #0F172A);
-    font-weight: 700;
-}
-
-.my-tests-page .home-filter-panel--results .home-category-filter__search::placeholder {
-    color: var(--color-text-muted, #94A3B8);
-    font-weight: 600;
-}
-
-.my-tests-page .home-filter-panel--results .home-filter-apply {
+.home-filter-panel--results .home-filter-apply {
     min-height: 36px;
     border-radius: var(--btn-border-radius, 8px);
     background: var(--btn-primary-bg, #0D9488);
@@ -156,12 +133,12 @@
     font-weight: var(--btn-font-weight, 600);
 }
 
-.my-tests-page .home-filter-panel--results .home-filter-apply:hover,
-.my-tests-page .home-filter-panel--results .home-filter-apply:focus-visible {
+.home-filter-panel--results .home-filter-apply:hover,
+.home-filter-panel--results .home-filter-apply:focus-visible {
     background: var(--btn-primary-bg-hover, #0F766E);
 }
 
-.my-tests-page .home-filter-actions {
+.home-filter-panel--results .home-filter-actions {
     display: flex;
     gap: 8px;
     align-items: end;
@@ -170,7 +147,7 @@
     flex-wrap: nowrap;
 }
 
-.my-tests-page .home-filter-actions .btn {
+.home-filter-panel--results .home-filter-actions .btn {
     white-space: nowrap;
 }
 
@@ -1227,11 +1204,11 @@
 }
 
 @media (max-width: 1180px) {
-    .my-tests-page .home-filter-panel--results .home-filter-controls {
+    .home-filter-panel--results .home-filter-controls {
         grid-template-columns: minmax(220px, 1fr) minmax(170px, 220px) minmax(160px, 200px);
     }
 
-    .my-tests-page .home-filter-actions {
+    .home-filter-panel--results .home-filter-actions {
         grid-column: 1 / -1;
         justify-content: flex-start;
     }
@@ -1242,15 +1219,15 @@
 }
 
 @media (max-width: 720px) {
-    .my-tests-page .home-filter-panel--results .home-filter-controls {
+    .home-filter-panel--results .home-filter-controls {
         grid-template-columns: 1fr 1fr;
     }
 
-    .my-tests-page .home-filter-search {
+    .home-filter-panel--results .home-filter-search {
         grid-column: 1 / -1;
     }
 
-    .my-tests-page .home-filter-actions {
+    .home-filter-panel--results .home-filter-actions {
         grid-column: 1 / -1;
     }
 
@@ -1447,16 +1424,16 @@
 }
 
 @media (max-width: 560px) {
-    .my-tests-page .home-filter-panel--results .home-filter-controls {
+    .home-filter-panel--results .home-filter-controls {
         grid-template-columns: 1fr;
     }
 
-    .my-tests-page .home-filter-actions {
+    .home-filter-panel--results .home-filter-actions {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .my-tests-page .home-filter-actions .btn {
+    .home-filter-panel--results .home-filter-actions .btn {
         width: 100%;
         min-width: 0;
         padding-inline: 10px;

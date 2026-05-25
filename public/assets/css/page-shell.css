@@ -438,13 +438,23 @@
 }
 
 .scroll-top .scroll-top__icon {
-    width: 20px;
-    height: 20px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 2.4;
-    stroke-linecap: round;
-    stroke-linejoin: round;
+    width: 22px;
+    height: 22px;
+}
+
+#scrollTopBtn {
+    background: #ECFDF5;
+    border-color: #BFE7DF;
+    color: #0D9488;
+    box-shadow:
+        0 4px 16px rgba(13, 148, 136, 0.18),
+        0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+#scrollTopBtn:hover {
+    background: #F0FDFA;
+    border-color: #0D9488;
+    color: #0F766E;
 }
 
 @media (max-width: 640px) {
@@ -458,8 +468,8 @@
     }
 
     .scroll-top .scroll-top__icon {
-        width: 18px;
-        height: 18px;
+        width: 20px;
+        height: 20px;
     }
 }
 

@@ -4,38 +4,249 @@
   "use strict";
 
 	function flipAnimateList(items, firstRects) {
-		// после изменения DOM: считаем новые позиции и анимируем разницу
 		items.forEach((el) => {
 			const first = firstRects.get(el);
 			if (!first) return;
-
 			const last = el.getBoundingClientRect();
 			const dx = first.left - last.left;
 			const dy = first.top - last.top;
-
 			if (dx === 0 && dy === 0) return;
-
+			el.style.transition = "none";
 			el.style.transform = `translate(${dx}px, ${dy}px)`;
-			el.style.transition = "transform 0ms";
 		});
 
-		// в следующий кадр включаем плавный переход обратно к transform: none
 		requestAnimationFrame(() => {
-			items.forEach((el) => {
-			if (!firstRects.has(el)) return;
-			el.style.transition = "transform 380ms cubic-bezier(.22,.61,.36,1)";
-			el.style.transform = "";
+			requestAnimationFrame(() => {
+				items.forEach((el) => {
+					if (!firstRects.has(el)) return;
+					el.style.transition = "transform 380ms cubic-bezier(.22,.61,.36,1)";
+					el.style.transform = "";
+				});
+				setTimeout(() => {
+					items.forEach((el) => {
+						el.style.transition = "";
+						el.style.transform = "";
+					});
+				}, 420);
 			});
-
-			// чистим инлайны после окончания
-			setTimeout(() => {
-			items.forEach((el) => {
-				el.style.transition = "";
-				el.style.transform = "";
-			});
-			}, 420);
 		});
 	}
+
+	function isTrashRestoreForm(form) {
+		if (!(form instanceof HTMLFormElement)) return false;
+		try {
+			const url = new URL(form.action, window.location.href);
+			return form.method.toLowerCase() === "post"
+				&& /^\/my\/tests\/\d+\/restore$/.test(url.pathname);
+		} catch (e) { return false; }
+	}
+
+	function isTrashDestroyForm(form) {
+		if (!(form instanceof HTMLFormElement)) return false;
+		try {
+			const url = new URL(form.action, window.location.href);
+			return form.method.toLowerCase() === "post"
+				&& /^\/my\/tests\/\d+\/destroy$/.test(url.pathname);
+		} catch (e) { return false; }
+	}
+
+	function refreshTrashList() {
+		return fetch(window.location.href, {
+			method: "GET",
+			credentials: "same-origin",
+			headers: { "X-Requested-With": "XMLHttpRequest" }
+		})
+			.then((r) => { if (!r.ok) throw new Error(); return r.text(); })
+			.then((html) => {
+				const doc = new DOMParser().parseFromString(html, "text/html");
+				const cur  = document.querySelector(".my-tests-trash-page [data-list-content]");
+				const next = doc.querySelector(".my-tests-trash-page [data-list-content]");
+				if (cur && next) cur.replaceWith(next);
+
+				const curMeta  = document.querySelector(".my-tests-trash-page .results-meta");
+				const nextMeta = doc.querySelector(".my-tests-trash-page .results-meta");
+				if (curMeta && nextMeta) curMeta.replaceWith(nextMeta);
+				else if (curMeta && !nextMeta) curMeta.remove();
+
+				fitAllTooltips();
+			});
+	}
+
+	function submitTrashActionViaAjax(form, card, successMsg) {
+		const button = form.querySelector("button, input[type='submit']");
+		if (button) button.disabled = true;
+
+		fetch(form.action, {
+			method: "POST",
+			body: new FormData(form),
+			credentials: "same-origin",
+			headers: {
+				"X-Requested-With": "XMLHttpRequest",
+				"Accept": "application/json"
+			}
+		})
+			.then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+			.then((payload) => {
+				if (!payload || !payload.ok) throw new Error((payload && payload.message) || "failed");
+				updateHeaderCounters(payload);
+				broadcastHeaderCounters(payload);
+
+				// Фиксируем высоту контейнера чтобы страница не схлопывалась
+				// пока карточка выходит из потока (position: absolute)
+				const listContent = document.querySelector(".my-tests-trash-page [data-list-content]");
+				if (listContent) listContent.style.minHeight = listContent.offsetHeight + "px";
+
+				animateCardRemoval(card, () => {
+					refreshTrashList().finally(() => {
+						// Отпускаем высоту после того как новый контент встал
+						if (listContent) listContent.style.minHeight = "";
+					});
+				});
+				toastShow(payload.message || successMsg, "success", 8000);
+			})
+			.catch(() => { form.submit(); })
+			.finally(() => { if (button) button.disabled = false; });
+	}
+
+	function isMyTestsSoftDeleteForm(form) {
+		if (!(form instanceof HTMLFormElement)) return false;
+		try {
+			const url = new URL(form.action, window.location.href);
+			return form.method.toLowerCase() === "post"
+				&& /^\/my\/tests\/\d+\/delete$/.test(url.pathname);
+		} catch (e) {
+			return false;
+		}
+	}
+
+	function setHeaderBadge(selector, value, labelPrefix) {
+		const badge = document.querySelector(selector);
+		if (!badge) return;
+		const safe = Number.isFinite(Number(value)) && Number(value) > 0 ? Math.floor(Number(value)) : 0;
+		badge.textContent = String(safe);
+		badge.setAttribute("aria-label", `${labelPrefix}: ${safe}`);
+		badge.classList.toggle("is-hidden", safe <= 0);
+	}
+
+	function updateHeaderCounters(payload) {
+		if (!payload) return;
+		if (payload.bookmarks_count !== undefined) {
+			setHeaderBadge("[data-header-bookmarks-badge]", payload.bookmarks_count, "В закладках");
+		}
+		if (payload.trash_count !== undefined) {
+			setHeaderBadge("[data-header-trash-badge]", payload.trash_count, "В корзине");
+		}
+	}
+
+	function broadcastHeaderCounters(payload) {
+		if (!payload || !("BroadcastChannel" in window)) return;
+		try {
+			const channel = new BroadcastChannel("qp-header-counters");
+			channel.postMessage({
+				type: payload.type || "test-soft-deleted",
+				test_id: Number(payload.test_id || 0),
+				bookmarks_count: Number(payload.bookmarks_count || 0),
+				trash_count: Number(payload.trash_count || 0)
+			});
+			channel.close();
+		} catch (e) {}
+	}
+
+	function refreshMyTestsList() {
+		return fetch(window.location.href, {
+			method: "GET",
+			credentials: "same-origin",
+			headers: {
+				"X-Requested-With": "XMLHttpRequest"
+			}
+		})
+			.then((response) => {
+				if (!response.ok) throw new Error(`HTTP ${response.status}`);
+				return response.text();
+			})
+			.then((html) => {
+				const doc = new DOMParser().parseFromString(html, "text/html");
+				const currentContent = document.querySelector(".my-tests-page [data-list-content]");
+				const nextContent = doc.querySelector(".my-tests-page [data-list-content]");
+				if (currentContent && nextContent) {
+					currentContent.replaceWith(nextContent);
+				}
+
+				const currentMeta = document.querySelector(".my-tests-page .results-meta");
+				const nextMeta = doc.querySelector(".my-tests-page .results-meta");
+				if (currentMeta && nextMeta) {
+					currentMeta.replaceWith(nextMeta);
+				} else if (currentMeta && !nextMeta) {
+					currentMeta.remove();
+				}
+
+				fitAllTooltips();
+			});
+	}
+
+	function animateCardRemoval(card, onDone) {
+		if (!card) return;
+		const list = card.parentElement;
+		const others = list
+			? Array.from(list.querySelectorAll(".test-card")).filter(el => el !== card)
+			: [];
+		const firstRects = new Map();
+		others.forEach(el => firstRects.set(el, el.getBoundingClientRect()));
+
+		card.classList.add("ui-removing");
+
+		setTimeout(() => {
+			if (list) list.style.position = "relative";
+			card.style.position = "absolute";
+			card.style.pointerEvents = "none";
+
+			flipAnimateList(others, firstRects);
+
+			setTimeout(() => {
+				card.remove();
+				if (typeof onDone === "function") onDone();
+			}, 430);
+		}, 260);
+	}
+
+	function submitSoftDeleteViaAjax(form, card) {
+		const button = form.querySelector("button, input[type='submit']");
+		if (button) button.disabled = true;
+
+		fetch(form.action, {
+			method: "POST",
+			body: new FormData(form),
+			credentials: "same-origin",
+			headers: {
+				"X-Requested-With": "XMLHttpRequest",
+				"Accept": "application/json"
+			}
+		})
+			.then((response) => {
+				if (!response.ok) throw new Error(`HTTP ${response.status}`);
+				return response.json();
+			})
+			.then((payload) => {
+				if (!payload || !payload.ok) {
+					throw new Error((payload && payload.message) || "delete failed");
+				}
+
+				updateHeaderCounters(payload);
+				broadcastHeaderCounters(payload);
+				animateCardRemoval(card, () => {
+					refreshMyTestsList().catch(() => {});
+				});
+				toastShow(payload.message || "Тест отправлен в корзину", "success", 8000);
+			})
+			.catch(() => {
+				form.submit();
+			})
+			.finally(() => {
+				if (button) button.disabled = false;
+			});
+	}
+
+
 
 
   // ---------- Toast ----------
@@ -172,14 +383,23 @@
   window.addEventListener("resize", fitAllTooltips);
   window.addEventListener("scroll", fitAllTooltips, { passive: true });
 
+  const TOAST_ICONS = {
+    success: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+    danger:  `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+    warning: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="8" x2="12" y2="13"/><circle cx="12" cy="17" r="0.5" fill="currentColor"/></svg>`,
+  };
+
   function toastShow(text, type = "success", timeoutMs = 8000) {
     const toast = document.createElement("div");
     toast.className = `ui-toast ui-toast--${type}`;
+    const icon = TOAST_ICONS[type] || TOAST_ICONS.success;
 
     toast.innerHTML = `
-      <div class="ui-toast__dot" aria-hidden="true"></div>
+      <div class="ui-toast__dot" aria-hidden="true">${icon}</div>
       <div class="ui-toast__text"></div>
-      <button type="button" class="ui-toast__close" aria-label="Закрыть">✕</button>
+      <button type="button" class="ui-toast__close" aria-label="Закрыть">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     `;
 
     const textEl = toast.querySelector(".ui-toast__text");
@@ -314,34 +534,44 @@
 
 		// --- АНИМАЦИЯ УДАЛЕНИЯ КАРТОЧКИ ---
 		const card = form.closest(".test-card");
+		if (card && isMyTestsSoftDeleteForm(form)) {
+			submitSoftDeleteViaAjax(form, card);
+			return;
+		}
+		if (card && isTrashDestroyForm(form)) {
+			submitTrashActionViaAjax(form, card, "Тест удалён навсегда");
+			return;
+		}
+
 			if (card) {
 				const list = card.parentElement;
 
-				// Берём все карточки в этом списке (кроме удаляемой) и фиксируем их позиции
+				// Фиксируем позиции соседних карточек ДО анимации
 				const others = list
-				? Array.from(list.querySelectorAll(".test-card")).filter((el) => el !== card)
-				: [];
-
+					? Array.from(list.querySelectorAll(".test-card")).filter(el => el !== card)
+					: [];
 				const firstRects = new Map();
-				others.forEach((el) => firstRects.set(el, el.getBoundingClientRect()));
+				others.forEach(el => firstRects.set(el, el.getBoundingClientRect()));
 
 				// Запускаем exit-анимацию удаляемой карточки
 				card.classList.add("ui-removing");
 
-				// Через 260ms (длительность exit-анимации) прячем карточку из потока
 				setTimeout(() => {
-				card.style.display = "none";
+					// position:absolute убирает карточку из grid-потока без разрушения
+					// compositor-слоя (в отличие от display:none) — это устраняет моргание
+					if (list) list.style.position = 'relative';
+					card.style.position = 'absolute';
+					card.style.pointerEvents = 'none';
 
-				// FLIP: остальные карточки плавно "подъезжают" на новое место
-				flipAnimateList(others, firstRects);
+					// FLIP: плавно перемещаем соседние карточки на новые места
+					flipAnimateList(others, firstRects);
 
-				// И уже после старта анимации — реально отправляем форму
-				setTimeout(() => {
-					try {
-						sessionStorage.setItem("uiScroll:/my/tests", String(window.scrollY || 0));
-					} catch (e) {}
-					form.submit();
-					}, 120);
+					setTimeout(() => {
+						try {
+							sessionStorage.setItem("uiScroll:/my/tests", String(window.scrollY || 0));
+						} catch (e) {}
+						form.submit();
+					}, 430);
 				}, 260);
 			} else {
 				form.submit();
@@ -349,6 +579,17 @@
 
 	});
 
+
+  // ---------- Trash restore (no confirm needed) ----------
+  document.addEventListener("submit", (e) => {
+    const form = e.target;
+    if (!(form instanceof HTMLFormElement)) return;
+    if (!isTrashRestoreForm(form)) return;
+    const card = form.closest(".test-card");
+    if (!card) return;
+    e.preventDefault();
+    submitTrashActionViaAjax(form, card, "Тест восстановлен");
+  });
 
   // ---------- Flash toast from server ----------
   // layout.php может поставить: <body data-toast='{"type":"success","text":"..."}'>

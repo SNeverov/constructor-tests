@@ -87,7 +87,7 @@ function tests_normalize_upload_path(mixed $raw): ?string
     return $value;
 }
 
-function tests_collect_form_payload(array $source, bool $strictValidation = true): array
+function tests_collect_form_payload(array $source, bool $strictValidation = true, bool $includeQuestions = true): array
 {
     $errors = [];
     $maxInputAnswerLen = 1000;
@@ -168,6 +168,31 @@ function tests_collect_form_payload(array $source, bool $strictValidation = true
         if ($strictValidation) {
             $errors[] = $e->getMessage();
         }
+    }
+
+    if (!$includeQuestions) {
+        $showAnswers = test_answers_mode_from_value($source['show_answers'] ?? test_answers_mode_after_finish());
+        $shuffleQuestions = test_bool_setting($source['shuffle_questions'] ?? 0);
+        $shuffleAnswers = test_bool_setting($source['shuffle_answers'] ?? 0);
+        return [
+            'payload' => [
+                'title' => $title,
+                'description' => $description,
+                'access_level' => $accessLevel,
+                'category_names' => $categoryNames,
+                'time_limit_sec' => $timeLimitSec,
+                'cover_image' => tests_normalize_upload_path($source['cover_image'] ?? null),
+                'show_answers' => $showAnswers,
+                'shuffle_questions' => $shuffleQuestions,
+                'shuffle_answers' => $shuffleAnswers,
+                'attempt_limit' => $attemptLimit,
+                'result_mode' => $resultMode,
+                'pass_percent' => $passPercent,
+                'grade_scale' => $gradeScale,
+                'questions' => [],
+            ],
+            'errors' => $errors,
+        ];
     }
 
     $rawQuestions = $source['questions'] ?? [];
@@ -553,7 +578,7 @@ function my_tests_index(): void
         $page = 1;
     }
 
-    $perPage = 10;
+    $perPage = 12;
     $allTotal = tests_count_active_by_user_id($userId);
     $total = tests_count_active_by_user_id($userId, $categoryName, $search);
     $pages = max(1, (int)ceil($total / $perPage));
@@ -605,7 +630,7 @@ function my_tests_create_form(): void
     view_render('test_create', [
         'title' => 'Создать тест',
         'styles' => ['/assets/css/cropper.min.css', '/assets/css/test-create.css'],
-        'submit_label' => 'Опубликовать',
+        'submit_label' => 'Перейти к вопросам',
     ]);
 }
 
@@ -632,7 +657,7 @@ function my_tests_edit_form(int $testId): void
         'styles' => ['/assets/css/cropper.min.css', '/assets/css/test-create.css'],
         'is_edit' => true,
         'form_action' => '/my/tests/' . $testId,
-        'submit_label' => tests_is_draft_row($test) ? 'Опубликовать' : 'Сохранить изменения',
+        'submit_label' => 'Перейти к вопросам',
         'old' => $old,
     ]);
 }
@@ -680,7 +705,9 @@ function my_tests_draft_save(): void
             (array)($payload['grade_scale'] ?? test_default_grade_scale())
         );
         test_categories_replace_by_test_id($testId, (array)$payload['category_names']);
-        tests_replace_questions_payload($testId, (array)$payload['questions']);
+        if (array_key_exists('questions', $_POST)) {
+            tests_replace_questions_payload($testId, (array)$payload['questions']);
+        }
 
         $pdo->commit();
         tests_payload_cache_invalidate($testId);
@@ -732,32 +759,34 @@ function my_tests_draft_update(int $testId): void
     $pdo = db();
 
     try {
-        $normalized = tests_collect_form_payload($_POST, false);
+        $hasSettings = array_key_exists('title', $_POST);
+        $hasQuestions = array_key_exists('questions', $_POST);
+
+        $normalized = tests_collect_form_payload($_POST, false, $hasQuestions);
         $payload = $normalized['payload'];
 
         $pdo->beginTransaction();
-        tests_update_by_id_and_user_id(
-            $testId,
-            $userId,
-            (string)$payload['title'],
-            (string)$payload['description'],
-            (string)$payload['access_level'],
-            (array)$payload['category_names'],
-            $payload['cover_image'],
-            $payload['time_limit_sec'],
-            test_status_draft(),
-            null,
-            true,
-            (int)($payload['show_answers'] ?? 0),
-            (int)($payload['shuffle_questions'] ?? 0),
-            (int)($payload['shuffle_answers'] ?? 0),
-            $payload['attempt_limit'] ?? null,
-            (string)($payload['result_mode'] ?? test_result_mode_scale()),
-            (int)($payload['pass_percent'] ?? 60),
-            (array)($payload['grade_scale'] ?? test_default_grade_scale())
-        );
-        test_categories_replace_by_test_id($testId, (array)$payload['category_names']);
-        tests_replace_questions_payload($testId, (array)$payload['questions']);
+
+        if ($hasSettings) {
+            tests_update_by_id_and_user_id(
+                $testId, $userId,
+                (string)$payload['title'], (string)$payload['description'],
+                (string)$payload['access_level'], (array)$payload['category_names'],
+                $payload['cover_image'], $payload['time_limit_sec'],
+                test_status_draft(), null, true,
+                (int)($payload['show_answers'] ?? 0),
+                (int)($payload['shuffle_questions'] ?? 0),
+                (int)($payload['shuffle_answers'] ?? 0),
+                $payload['attempt_limit'] ?? null,
+                (string)($payload['result_mode'] ?? test_result_mode_scale()),
+                (int)($payload['pass_percent'] ?? 60),
+                (array)($payload['grade_scale'] ?? test_default_grade_scale())
+            );
+            test_categories_replace_by_test_id($testId, (array)$payload['category_names']);
+        }
+        if ($hasQuestions) {
+            tests_replace_questions_payload($testId, (array)$payload['questions']);
+        }
 
         $pdo->commit();
         tests_payload_cache_invalidate($testId);
@@ -788,74 +817,88 @@ function my_tests_store(): void
 {
     auth_required();
 
-    $normalized = tests_collect_form_payload($_POST, true);
+    $normalized = tests_collect_form_payload($_POST, true, false);
     $payload = $normalized['payload'];
     $errors = $normalized['errors'];
 
+    $oldData = [
+        'title'            => $_POST['title'] ?? '',
+        'description'      => $_POST['description'] ?? '',
+        'access_level'     => $_POST['access_level'] ?? 'public',
+        'category_names'   => $_POST['category_names'] ?? [],
+        'time_limit'       => $_POST['time_limit'] ?? '',
+        'cover_image'      => $_POST['cover_image'] ?? null,
+        'show_answers'     => test_answers_mode_from_value($_POST['show_answers'] ?? test_answers_mode_after_finish()),
+        'shuffle_questions' => test_bool_setting($_POST['shuffle_questions'] ?? 0),
+        'shuffle_answers'  => test_bool_setting($_POST['shuffle_answers'] ?? 0),
+        'attempt_limit'    => normalize_test_attempt_limit($_POST['attempt_limit'] ?? null, false),
+        'result_mode'      => test_result_mode_from_value($_POST['result_mode'] ?? test_result_mode_scale()),
+        'pass_percent'     => test_normalize_pass_percent($_POST['pass_percent'] ?? 60, false),
+        'grade_scale'      => test_normalize_grade_scale($_POST['grade_scale'] ?? null, false),
+        'status'           => test_status_draft(),
+    ];
+
     if (!empty($errors)) {
-        tests_render_form_with_errors('Создать тест', $errors, [
-            'title' => $_POST['title'] ?? '',
-            'description' => $_POST['description'] ?? '',
-            'access_level' => $_POST['access_level'] ?? 'public',
-            'category_names' => $_POST['category_names'] ?? [],
-            'time_limit' => $_POST['time_limit'] ?? '',
-            'cover_image' => $_POST['cover_image'] ?? null,
-            'show_answers' => test_answers_mode_from_value($_POST['show_answers'] ?? test_answers_mode_after_finish()),
-            'shuffle_questions' => test_bool_setting($_POST['shuffle_questions'] ?? 0),
-            'shuffle_answers' => test_bool_setting($_POST['shuffle_answers'] ?? 0),
-            'attempt_limit' => normalize_test_attempt_limit($_POST['attempt_limit'] ?? null, false),
-            'result_mode' => test_result_mode_from_value($_POST['result_mode'] ?? test_result_mode_scale()),
-            'pass_percent' => test_normalize_pass_percent($_POST['pass_percent'] ?? 60, false),
-            'grade_scale' => test_normalize_grade_scale($_POST['grade_scale'] ?? null, false),
-            'questions' => $_POST['questions'] ?? [],
-            'status' => test_status_draft(),
-        ], false, null, 'Опубликовать');
+        tests_render_form_with_errors('Создать тест', $errors, $oldData, false, null, 'Далее: вопросы');
         return;
     }
 
     $user = auth_user();
     $userId = (int)($user['id'] ?? 0);
 
+    $draftTestId = (int)($_POST['draft_test_id'] ?? 0);
+    $existingDraft = $draftTestId > 0
+        ? tests_find_active_by_id_and_user_id($draftTestId, $userId)
+        : null;
+
     $pdo = db();
     try {
         $pdo->beginTransaction();
 
-        $testId = tests_create(
-            $userId,
-            (string)$payload['title'],
-            (string)$payload['description'],
-            (string)$payload['access_level'],
-            (array)$payload['category_names'],
-            $payload['cover_image'],
-            $payload['time_limit_sec'],
-            test_status_published(),
-            date('Y-m-d H:i:s'),
-            date('Y-m-d H:i:s'),
-            (int)($payload['show_answers'] ?? 0),
-            (int)($payload['shuffle_questions'] ?? 0),
-            (int)($payload['shuffle_answers'] ?? 0),
-            $payload['attempt_limit'] ?? null,
-            (string)($payload['result_mode'] ?? test_result_mode_scale()),
-            (int)($payload['pass_percent'] ?? 60),
-            (array)($payload['grade_scale'] ?? test_default_grade_scale())
-        );
-        test_categories_replace_by_test_id($testId, (array)$payload['category_names']);
-        tests_replace_questions_payload($testId, (array)$payload['questions']);
+        if ($existingDraft !== null && tests_is_draft_row($existingDraft)) {
+            tests_update_by_id_and_user_id(
+                $draftTestId, $userId,
+                (string)$payload['title'], (string)$payload['description'],
+                (string)$payload['access_level'], (array)$payload['category_names'],
+                $payload['cover_image'], $payload['time_limit_sec'],
+                test_status_draft(), null, true,
+                (int)($payload['show_answers'] ?? 0),
+                (int)($payload['shuffle_questions'] ?? 0),
+                (int)($payload['shuffle_answers'] ?? 0),
+                $payload['attempt_limit'] ?? null,
+                (string)($payload['result_mode'] ?? test_result_mode_scale()),
+                (int)($payload['pass_percent'] ?? 60),
+                (array)($payload['grade_scale'] ?? test_default_grade_scale())
+            );
+            test_categories_replace_by_test_id($draftTestId, (array)$payload['category_names']);
+            $testId = $draftTestId;
+        } else {
+            $testId = tests_create(
+                $userId,
+                (string)$payload['title'], (string)$payload['description'],
+                (string)$payload['access_level'], (array)$payload['category_names'],
+                $payload['cover_image'], $payload['time_limit_sec'],
+                test_status_draft(), null, date('Y-m-d H:i:s'),
+                (int)($payload['show_answers'] ?? 0),
+                (int)($payload['shuffle_questions'] ?? 0),
+                (int)($payload['shuffle_answers'] ?? 0),
+                $payload['attempt_limit'] ?? null,
+                (string)($payload['result_mode'] ?? test_result_mode_scale()),
+                (int)($payload['pass_percent'] ?? 60),
+                (array)($payload['grade_scale'] ?? test_default_grade_scale())
+            );
+            test_categories_replace_by_test_id($testId, (array)$payload['category_names']);
+        }
 
         $pdo->commit();
         tests_payload_cache_invalidate($testId);
-        flash_set('toast', ['type' => 'success', 'text' => 'Тест опубликован']);
-        redirect('/my/tests');
+        redirect('/my/tests/' . $testId . '/questions');
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-
         http_response_code(500);
-        view_render('error', [
-            'title' => 'Ошибка',
-            'message' => 'Не удалось опубликовать тест. Попробуйте ещё раз.',
-        ]);
+        view_render('error', ['title' => 'Ошибка', 'message' => 'Не удалось сохранить тест. Попробуйте ещё раз.']);
     }
 }
 
@@ -874,7 +917,7 @@ function my_tests_update(int $testId): void
         return;
     }
 
-    $normalized = tests_collect_form_payload($_POST, true);
+    $normalized = tests_collect_form_payload($_POST, true, false);
     $payload = $normalized['payload'];
     $errors = $normalized['errors'];
 
@@ -894,11 +937,10 @@ function my_tests_update(int $testId): void
             'result_mode' => test_result_mode_from_value($_POST['result_mode'] ?? test_result_mode_scale()),
             'pass_percent' => test_normalize_pass_percent($_POST['pass_percent'] ?? 60, false),
             'grade_scale' => test_normalize_grade_scale($_POST['grade_scale'] ?? null, false),
-            'questions' => $_POST['questions'] ?? [],
             'status' => (string)($existingTest['status'] ?? test_status_published()),
             'published_at' => (string)($existingTest['published_at'] ?? ''),
             'last_saved_at' => (string)($existingTest['last_saved_at'] ?? ''),
-        ], true, $testId, tests_is_draft_row($existingTest) ? 'Опубликовать' : 'Сохранить изменения');
+        ], true, $testId, 'Далее: вопросы');
         return;
     }
 
@@ -906,21 +948,13 @@ function my_tests_update(int $testId): void
     try {
         $pdo->beginTransaction();
 
-        $publishedAt = tests_is_draft_row($existingTest)
-            ? date('Y-m-d H:i:s')
-            : ((string)($existingTest['published_at'] ?? '') !== '' ? (string)$existingTest['published_at'] : date('Y-m-d H:i:s'));
-
         tests_update_by_id_and_user_id(
-            $testId,
-            $userId,
-            (string)$payload['title'],
-            (string)$payload['description'],
-            (string)$payload['access_level'],
-            (array)$payload['category_names'],
-            $payload['cover_image'],
-            $payload['time_limit_sec'],
-            test_status_published(),
-            $publishedAt,
+            $testId, $userId,
+            (string)$payload['title'], (string)$payload['description'],
+            (string)$payload['access_level'], (array)$payload['category_names'],
+            $payload['cover_image'], $payload['time_limit_sec'],
+            (string)($existingTest['status'] ?? test_status_published()),
+            ($existingTest['published_at'] ?? null) ?: null,
             true,
             (int)($payload['show_answers'] ?? 0),
             (int)($payload['shuffle_questions'] ?? 0),
@@ -931,25 +965,150 @@ function my_tests_update(int $testId): void
             (array)($payload['grade_scale'] ?? test_default_grade_scale())
         );
         test_categories_replace_by_test_id($testId, (array)$payload['category_names']);
+
+        $pdo->commit();
+        tests_payload_cache_invalidate($testId);
+        redirect('/my/tests/' . $testId . '/questions');
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        http_response_code(500);
+        view_render('error', ['title' => 'Ошибка', 'message' => 'Не удалось сохранить настройки. Попробуйте ещё раз.']);
+    }
+}
+
+function my_tests_questions_form(int $testId): void
+{
+    auth_required();
+
+    $user = auth_user();
+    $userId = (int)($user['id'] ?? 0);
+    $test = tests_find_active_by_id_and_user_id($testId, $userId);
+
+    if ($test === null) {
+        http_response_code(404);
+        view_render('404', ['title' => '404']);
+        return;
+    }
+
+    $old = test_form_old_from_db($test);
+    $isDraft = tests_is_draft_row($test);
+
+    view_render('test_questions', [
+        'title'         => 'Вопросы теста',
+        'styles'        => ['/assets/css/test-create.css'],
+        'test_id'       => $testId,
+        'test_title'    => (string)($test['title'] ?? ''),
+        'test_status'   => (string)($test['status'] ?? test_status_draft()),
+        'is_draft'      => $isDraft,
+        'last_saved_at' => trim((string)($test['last_saved_at'] ?? '')),
+        'submit_label'  => $isDraft ? 'Опубликовать' : 'Сохранить изменения',
+        'form_action'   => '/my/tests/' . $testId . '/questions',
+        'settings_url'  => '/my/tests/' . $testId . '/edit',
+        'draft_url'     => '/my/tests/' . $testId . '/draft',
+        'old_questions' => $old['questions'],
+    ]);
+}
+
+function my_tests_questions_store(int $testId): void
+{
+    auth_required();
+
+    $user = auth_user();
+    $userId = (int)($user['id'] ?? 0);
+    $existingTest = tests_find_active_by_id_and_user_id($testId, $userId);
+
+    if ($existingTest === null) {
+        http_response_code(404);
+        view_render('404', ['title' => '404']);
+        return;
+    }
+
+    $existingCategories = test_category_display_names($existingTest['category_names'] ?? ($existingTest['category_name'] ?? null));
+    $source = array_merge([
+        'title'            => $existingTest['title'] ?? '',
+        'description'      => $existingTest['description'] ?? '',
+        'access_level'     => $existingTest['access_level'] ?? 'public',
+        'category_names'   => $existingCategories,
+        'time_limit'       => format_time_limit_hms(test_time_limit_sec_from_row($existingTest)),
+        'show_answers'     => $existingTest['show_answers'] ?? test_answers_mode_after_finish(),
+        'shuffle_questions' => $existingTest['shuffle_questions'] ?? 0,
+        'shuffle_answers'  => $existingTest['shuffle_answers'] ?? 0,
+        'attempt_limit'    => test_attempt_limit_from_row($existingTest),
+        'result_mode'      => $existingTest['result_mode'] ?? test_result_mode_scale(),
+        'pass_percent'     => $existingTest['pass_percent'] ?? 60,
+        'grade_scale'      => test_normalize_grade_scale($existingTest['grade_scale_json'] ?? null, false),
+        'cover_image'      => $existingTest['cover_image'] ?? null,
+    ], $_POST);
+
+    $normalized = tests_collect_form_payload($source, true, true);
+    $payload    = $normalized['payload'];
+    $errors     = $normalized['errors'];
+
+    if (!empty($errors)) {
+        $isDraft = tests_is_draft_row($existingTest);
+        view_render('test_questions', [
+            'title'         => 'Вопросы теста',
+            'styles'        => ['/assets/css/test-create.css'],
+            'errors'        => $errors,
+            'test_id'       => $testId,
+            'test_title'    => (string)($existingTest['title'] ?? ''),
+            'test_status'   => (string)($existingTest['status'] ?? test_status_draft()),
+            'is_draft'      => $isDraft,
+            'last_saved_at' => trim((string)($existingTest['last_saved_at'] ?? '')),
+            'submit_label'  => $isDraft ? 'Опубликовать' : 'Сохранить изменения',
+            'form_action'   => '/my/tests/' . $testId . '/questions',
+            'settings_url'  => '/my/tests/' . $testId . '/edit',
+            'draft_url'     => '/my/tests/' . $testId . '/draft',
+            'old_questions' => $_POST['questions'] ?? [],
+        ]);
+        return;
+    }
+
+    $pdo = db();
+    try {
+        $pdo->beginTransaction();
+
+        $isDraft = tests_is_draft_row($existingTest);
+        $publishedAt = $isDraft
+            ? date('Y-m-d H:i:s')
+            : ((string)($existingTest['published_at'] ?? '') !== '' ? (string)$existingTest['published_at'] : date('Y-m-d H:i:s'));
+
+        $existingCategoryName = (string)($existingTest['category_name'] ?? '');
+        $existingCategories = $existingCategoryName !== '' ? [$existingCategoryName] : [];
+
+        tests_update_by_id_and_user_id(
+            $testId, $userId,
+            (string)($existingTest['title'] ?? ''),
+            (string)($existingTest['description'] ?? ''),
+            (string)($existingTest['access_level'] ?? 'public'),
+            $existingCategories,
+            $existingTest['cover_image'] ?? null,
+            test_time_limit_sec_from_row($existingTest),
+            test_status_published(),
+            $publishedAt,
+            true,
+            (int)($existingTest['show_answers'] ?? 0),
+            (int)($existingTest['shuffle_questions'] ?? 0),
+            (int)($existingTest['shuffle_answers'] ?? 0),
+            test_attempt_limit_from_row($existingTest),
+            (string)($existingTest['result_mode'] ?? test_result_mode_scale()),
+            (int)($existingTest['pass_percent'] ?? 60),
+            test_normalize_grade_scale($existingTest['grade_scale_json'] ?? null, false)
+        );
         tests_replace_questions_payload($testId, (array)$payload['questions']);
 
         $pdo->commit();
         tests_payload_cache_invalidate($testId);
-        flash_set('toast', [
-            'type' => 'success',
-            'text' => tests_is_draft_row($existingTest) ? 'Черновик опубликован' : 'Тест обновлён',
-        ]);
+        flash_set('toast', ['type' => 'success', 'text' => $isDraft ? 'Тест опубликован' : 'Тест обновлён']);
         redirect('/my/tests');
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-
         http_response_code(500);
-        view_render('error', [
-            'title' => 'Ошибка',
-            'message' => 'Не удалось сохранить изменения теста. Попробуйте ещё раз.',
-        ]);
+        view_render('error', ['title' => 'Ошибка', 'message' => 'Не удалось сохранить вопросы. Попробуйте ещё раз.']);
     }
 }
 
@@ -963,6 +1122,13 @@ function my_tests_delete(int $testId): void
     try {
         $deleted = tests_delete_by_id_and_user_id($testId, $userId);
     } catch (Throwable $e) {
+        if (tests_request_is_ajax()) {
+            tests_json_response([
+                'ok' => false,
+                'message' => 'Не удалось отправить тест в корзину. Попробуйте ещё раз.',
+            ], 500);
+        }
+
         http_response_code(500);
         view_render('error', [
             'title' => 'Ошибка',
@@ -972,6 +1138,13 @@ function my_tests_delete(int $testId): void
     }
 
     if (!$deleted) {
+        if (tests_request_is_ajax()) {
+            tests_json_response([
+                'ok' => false,
+                'message' => 'Нельзя удалить этот тест (нет прав или тест не найден).',
+            ], 403);
+        }
+
         http_response_code(403);
         view_render('error', [
             'title' => 'Ошибка 403',
@@ -980,12 +1153,26 @@ function my_tests_delete(int $testId): void
         return;
     }
 
+    $bookmarksCount = tests_count_bookmarked_by_user_id($userId);
+    $trashCount = tests_trash_count_by_user_id($userId);
+
+    if (tests_request_is_ajax()) {
+        tests_json_response([
+            'ok' => true,
+            'type' => 'test-soft-deleted',
+            'test_id' => $testId,
+            'message' => 'Тест отправлен в корзину',
+            'bookmarks_count' => $bookmarksCount,
+            'trash_count' => $trashCount,
+        ]);
+    }
+
 	flash_set('toast', ['type' => 'success', 'text' => 'Тест отправлен в корзину']);
     flash_set('sync_event', [
         'type' => 'test-soft-deleted',
         'test_id' => $testId,
-        'bookmarks_count' => tests_count_bookmarked_by_user_id($userId),
-        'trash_count' => tests_trash_count_by_user_id($userId),
+        'bookmarks_count' => $bookmarksCount,
+        'trash_count' => $trashCount,
     ]);
     redirect('/my/tests');
 }
@@ -1021,15 +1208,6 @@ function test_show(int $testId, ?string $requestedSlug = null): void
     }
 
     $questionsCount = questions_count_by_test_id($testId);
-    $ratingCount = (int)($test['rating_count'] ?? 0);
-    $ratingSum = (int)($test['rating_sum'] ?? 0);
-    $ratingAvg = $ratingCount > 0 ? ($ratingSum / $ratingCount) : 0.0;
-    $userRating = null;
-    $canRate = false;
-    if ($viewerId !== null && $viewerId > 0) {
-        $userRating = test_rating_find_by_test_id_and_user_id($testId, $viewerId);
-        $canRate = attempts_has_finished_by_test_id_and_user_id($testId, $viewerId);
-    }
 
     // Проверяем незавершённую попытку для этого теста (из сессии)
     $hasActiveAttempt = false;
@@ -1046,16 +1224,12 @@ function test_show(int $testId, ?string $requestedSlug = null): void
     }
 
     view_render('test_show', [
-        'title' => (string)($test['title'] ?? 'Тест'),
-        'test' => $test,
-        'questions_count' => $questionsCount,
-        'rating_count' => $ratingCount,
-        'rating_avg' => $ratingAvg,
-        'user_rating' => $userRating,
-        'can_rate' => $canRate,
+        'title'             => (string)($test['title'] ?? 'Тест'),
+        'test'              => $test,
+        'questions_count'   => $questionsCount,
         'has_active_attempt' => $hasActiveAttempt,
-        'styles' => ['/assets/css/test-show.css'],
-		'scripts' => ['/assets/js/copy-link.js', '/assets/js/test-rating.js'],
+        'styles'            => ['/assets/css/test-show.css'],
+        'scripts'           => ['/assets/js/copy-link.js'],
     ]);
 }
 
@@ -1071,7 +1245,7 @@ function my_tests_trash_index(): void
         $page = 1;
     }
 
-    $perPage = 10;
+    $perPage = 12;
     $total = tests_trash_count_by_user_id($userId);
     $pages = max(1, (int)ceil($total / $perPage));
     if ($page > $pages) {
@@ -1089,7 +1263,8 @@ function my_tests_trash_index(): void
             'pages' => $pages,
             'total' => $total,
         ],
-        'styles' => ['/assets/css/my-tests.css', '/assets/css/my-tests-trash.css'],
+        'scripts' => [],
+        'styles'  => ['/assets/css/my-tests.css', '/assets/css/my-tests-trash.css'],
     ]);
 }
 
@@ -1112,12 +1287,23 @@ function my_tests_restore(int $testId): void
     }
 
     if (!$restored) {
+        if (tests_request_is_ajax()) {
+            tests_json_response(['ok' => false, 'message' => 'Нет прав или тест не найден'], 403);
+        }
         http_response_code(403);
         view_render('error', [
             'title' => 'Ошибка 403',
             'message' => 'Нельзя восстановить этот тест (нет прав или тест не найден).',
         ]);
         return;
+    }
+
+    if (tests_request_is_ajax()) {
+        tests_json_response([
+            'ok'          => true,
+            'message'     => 'Тест восстановлен',
+            'trash_count' => tests_trash_count_by_user_id($userId),
+        ]);
     }
 
     flash_set('toast', ['type' => 'success', 'text' => 'Тест восстановлен']);
@@ -1143,12 +1329,23 @@ function my_tests_destroy(int $testId): void
     }
 
     if (!$deleted) {
+        if (tests_request_is_ajax()) {
+            tests_json_response(['ok' => false, 'message' => 'Нет прав или тест не найден'], 403);
+        }
         http_response_code(403);
         view_render('error', [
             'title' => 'Ошибка 403',
             'message' => 'Нельзя удалить этот тест навсегда (нет прав или тест не найден).',
         ]);
         return;
+    }
+
+    if (tests_request_is_ajax()) {
+        tests_json_response([
+            'ok'          => true,
+            'message'     => 'Тест удалён навсегда',
+            'trash_count' => tests_trash_count_by_user_id($userId),
+        ]);
     }
 
     flash_set('toast', ['type' => 'success', 'text' => 'Тест удалён навсегда']);
